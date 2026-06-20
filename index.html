@@ -1,0 +1,1299 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agenda Corretor</title>
+<style>
+  :root {
+    --primary: #1a56db;
+    --primary-dark: #1040b0;
+    --accent: #f59e0b;
+    --danger: #ef4444;
+    --success: #22c55e;
+    --bg: #f0f4ff;
+    --card: #ffffff;
+    --text: #1e293b;
+    --muted: #64748b;
+    --border: #e2e8f0;
+    --radius: 12px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+  }
+
+  /* Header */
+  .header {
+    background: linear-gradient(135deg, var(--primary) 0%, #3b82f6 100%);
+    color: white;
+    padding: 16px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    box-shadow: 0 4px 20px rgba(26,86,219,0.3);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .header h1 { font-size: 1.2rem; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+  .header-date { font-size: 0.85rem; opacity: 0.85; }
+
+  /* Tabs */
+  .tabs {
+    display: flex;
+    background: white;
+    border-bottom: 2px solid var(--border);
+    position: sticky;
+    top: 60px;
+    z-index: 99;
+  }
+  .tab {
+    flex: 1;
+    padding: 12px 8px;
+    text-align: center;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--muted);
+    cursor: pointer;
+    border-bottom: 3px solid transparent;
+    transition: all 0.2s;
+  }
+  .tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+
+  /* Views */
+  .view { display: none; padding: 16px; max-width: 700px; margin: 0 auto; }
+  .view.active { display: block; }
+
+  /* Cards */
+  .card {
+    background: var(--card);
+    border-radius: var(--radius);
+    padding: 16px;
+    margin-bottom: 12px;
+    box-shadow: 0 1px 6px rgba(0,0,0,0.07);
+    border: 1px solid var(--border);
+  }
+
+  /* Agenda */
+  .day-header {
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: var(--muted);
+    letter-spacing: 0.05em;
+    margin: 20px 0 8px;
+  }
+  .event-item {
+    background: var(--card);
+    border-radius: var(--radius);
+    padding: 12px 14px;
+    margin-bottom: 8px;
+    border-left: 4px solid var(--primary);
+    box-shadow: 0 1px 6px rgba(0,0,0,0.07);
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+    cursor: pointer;
+    transition: transform 0.15s, box-shadow 0.15s;
+  }
+  .event-item:hover { transform: translateX(2px); box-shadow: 0 3px 12px rgba(0,0,0,0.1); }
+  .event-item.type-reuniao { border-left-color: #8b5cf6; }
+  .event-item.type-vistoria { border-left-color: #f59e0b; }
+  .event-item.type-cartorio { border-left-color: #ef4444; }
+  .event-item.type-cliente { border-left-color: #22c55e; }
+  .event-item.type-loteamento { border-left-color: #0ea5e9; }
+  .event-info { flex: 1; min-width: 0; }
+  .event-time { font-size: 0.75rem; font-weight: 700; color: var(--primary); }
+  .event-title { font-size: 0.95rem; font-weight: 600; margin: 2px 0; }
+  .event-desc { font-size: 0.8rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .event-type-badge {
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 999px;
+    white-space: nowrap;
+    color: white;
+  }
+  .badge-reuniao { background: #8b5cf6; }
+  .badge-vistoria { background: #f59e0b; }
+  .badge-cartorio { background: #ef4444; }
+  .badge-cliente { background: #22c55e; }
+  .badge-loteamento { background: #0ea5e9; }
+  .badge-lembrete { background: #f97316; }
+  .badge-outro { background: #64748b; }
+  .event-actions { display: flex; gap: 6px; flex-shrink: 0; }
+  .btn-icon {
+    width: 30px; height: 30px;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    font-size: 0.9rem;
+    display: flex; align-items: center; justify-content: center;
+    transition: background 0.15s;
+  }
+  .btn-edit { background: #eff6ff; color: var(--primary); }
+  .btn-edit:hover { background: #dbeafe; }
+  .btn-delete { background: #fff5f5; color: var(--danger); }
+  .btn-delete:hover { background: #fee2e2; }
+  .btn-ics { background: #f0fdf4; color: #16a34a; }
+  .btn-ics:hover { background: #dcfce7; }
+
+  /* Empty state */
+  .empty-state {
+    text-align: center;
+    padding: 48px 20px;
+    color: var(--muted);
+  }
+  .empty-state .icon { font-size: 3rem; margin-bottom: 12px; }
+  .empty-state p { font-size: 0.9rem; }
+
+  /* FAB */
+  .fab {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    width: 56px; height: 56px;
+    border-radius: 50%;
+    background: var(--primary);
+    color: white;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    box-shadow: 0 4px 20px rgba(26,86,219,0.4);
+    transition: transform 0.2s, box-shadow 0.2s;
+    z-index: 200;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .fab:hover { transform: scale(1.08); box-shadow: 0 6px 28px rgba(26,86,219,0.5); }
+
+  /* Modal */
+  .modal-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 300;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal {
+    background: white;
+    border-radius: 16px;
+    padding: 24px;
+    width: 100%;
+    max-width: 480px;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+  }
+  .modal h2 { font-size: 1.1rem; margin-bottom: 18px; color: var(--text); }
+
+  /* Form */
+  .form-group { margin-bottom: 14px; }
+  .form-group label { display: block; font-size: 0.82rem; font-weight: 600; color: var(--muted); margin-bottom: 5px; }
+  .form-group input, .form-group textarea, .form-group select {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1.5px solid var(--border);
+    border-radius: 8px;
+    font-size: 0.9rem;
+    font-family: inherit;
+    transition: border-color 0.15s;
+    color: var(--text);
+  }
+  .form-group input:focus, .form-group textarea:focus, .form-group select:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(26,86,219,0.1);
+  }
+  .form-group textarea { resize: vertical; min-height: 80px; }
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .btn-row { display: flex; gap: 10px; margin-top: 18px; }
+  .btn {
+    padding: 10px 20px;
+    border-radius: 8px;
+    border: none;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+    flex: 1;
+  }
+  .btn-primary { background: var(--primary); color: white; }
+  .btn-primary:hover { background: var(--primary-dark); }
+  .btn-secondary { background: var(--border); color: var(--muted); }
+  .btn-secondary:hover { background: #cbd5e1; }
+  .btn-danger { background: var(--danger); color: white; }
+
+  /* Mensagens (Chat) */
+  .chat-container { display: flex; flex-direction: column; height: calc(100vh - 130px); }
+  .chat-messages { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+  .msg {
+    max-width: 80%;
+    padding: 10px 14px;
+    border-radius: 16px;
+    font-size: 0.9rem;
+    line-height: 1.4;
+    position: relative;
+  }
+  .msg-user { background: var(--primary); color: white; align-self: flex-end; border-bottom-right-radius: 4px; }
+  .msg-assistant { background: white; color: var(--text); align-self: flex-start; border-bottom-left-radius: 4px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); border: 1px solid var(--border); }
+  .msg-time { font-size: 0.68rem; opacity: 0.7; margin-top: 3px; }
+  .msg-audio { display: flex; align-items: center; gap: 8px; }
+  .msg-audio .audio-icon { font-size: 1.2rem; }
+  .chat-input-area {
+    background: white;
+    border-top: 1px solid var(--border);
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    max-width: 700px;
+    width: 100%;
+    margin: 0 auto;
+  }
+  .chat-input {
+    flex: 1;
+    padding: 10px 14px;
+    border-radius: 22px;
+    border: 1.5px solid var(--border);
+    font-size: 0.9rem;
+    font-family: inherit;
+    resize: none;
+    max-height: 100px;
+    overflow-y: auto;
+  }
+  .chat-input:focus { outline: none; border-color: var(--primary); }
+  .btn-send, .btn-mic {
+    width: 42px; height: 42px;
+    border-radius: 50%;
+    border: none;
+    cursor: pointer;
+    font-size: 1.1rem;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.15s;
+    flex-shrink: 0;
+  }
+  .btn-send { background: var(--primary); color: white; }
+  .btn-send:hover { background: var(--primary-dark); }
+  .btn-mic { background: var(--border); color: var(--muted); }
+  .btn-mic.recording { background: var(--danger); color: white; animation: pulse 1s infinite; }
+  @keyframes pulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.08)} }
+
+  /* Lembretes */
+  .reminder-item {
+    background: var(--card);
+    border-radius: var(--radius);
+    padding: 12px 14px;
+    margin-bottom: 8px;
+    border-left: 4px solid var(--accent);
+    box-shadow: 0 1px 6px rgba(0,0,0,0.07);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  .reminder-item.done { opacity: 0.5; }
+  .reminder-item.done .reminder-title { text-decoration: line-through; }
+  .reminder-check {
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    border: 2px solid var(--accent);
+    cursor: pointer;
+    flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.15s;
+  }
+  .reminder-check.checked { background: var(--accent); border-color: var(--accent); color: white; }
+  .reminder-info { flex: 1; min-width: 0; }
+  .reminder-title { font-size: 0.92rem; font-weight: 600; }
+  .reminder-when { font-size: 0.75rem; color: var(--muted); margin-top: 2px; }
+  .reminder-overdue { color: var(--danger) !important; font-weight: 600; }
+
+  /* Nav indicator */
+  .tab-badge {
+    display: inline-block;
+    background: var(--danger);
+    color: white;
+    font-size: 0.65rem;
+    font-weight: 700;
+    width: 16px; height: 16px;
+    border-radius: 50%;
+    text-align: center;
+    line-height: 16px;
+    margin-left: 4px;
+    vertical-align: top;
+  }
+
+  /* Typing indicator */
+  .typing-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); margin: 0 2px; animation: typingBounce 1.2s infinite; }
+  .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+  .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes typingBounce { 0%,80%,100%{transform:translateY(0)} 40%{transform:translateY(-6px)} }
+
+  /* Notification toast */
+  .toast-container { position: fixed; top: 80px; right: 16px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; }
+  .toast {
+    background: white;
+    border-radius: 10px;
+    padding: 12px 16px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+    border-left: 4px solid var(--accent);
+    font-size: 0.85rem;
+    max-width: 280px;
+    animation: slideIn 0.3s ease;
+  }
+  @keyframes slideIn { from{transform:translateX(100%);opacity:0} to{transform:translateX(0);opacity:1} }
+  .toast-title { font-weight: 700; margin-bottom: 2px; }
+
+  /* Calendar mini */
+  .mini-cal { margin-bottom: 16px; }
+  .cal-nav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .cal-nav button { background: none; border: none; cursor: pointer; font-size: 1.1rem; color: var(--primary); padding: 4px 8px; }
+  .cal-nav span { font-weight: 700; font-size: 0.95rem; }
+  .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+  .cal-cell {
+    aspect-ratio: 1;
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: background 0.15s;
+    position: relative;
+  }
+  .cal-cell:hover { background: #eff6ff; }
+  .cal-cell.header { font-weight: 700; font-size: 0.72rem; color: var(--muted); cursor: default; }
+  .cal-cell.other-month { color: #cbd5e1; }
+  .cal-cell.today { background: var(--primary); color: white; font-weight: 700; }
+  .cal-cell.selected:not(.today) { background: #eff6ff; color: var(--primary); font-weight: 700; }
+  .cal-cell.has-event::after {
+    content: '';
+    position: absolute;
+    bottom: 3px;
+    width: 4px; height: 4px;
+    border-radius: 50%;
+    background: var(--accent);
+  }
+  .cal-cell.today.has-event::after { background: white; }
+
+  /* Audio transcript badge */
+  .transcript-bubble {
+    background: #f0fdf4;
+    border: 1px solid #bbf7d0;
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 0.8rem;
+    color: #166534;
+    margin-top: 6px;
+  }
+  .transcript-bubble strong { display: block; margin-bottom: 2px; font-size: 0.72rem; color: #15803d; }
+
+  @media (max-width: 480px) {
+    .form-row { grid-template-columns: 1fr; }
+    .modal { padding: 18px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- Header -->
+<div class="header">
+  <h1>🏢 Agenda Corretor</h1>
+  <div class="header-date" id="headerDate"></div>
+</div>
+
+<!-- Tabs -->
+<div class="tabs">
+  <div class="tab active" onclick="switchTab('agenda')" id="tab-agenda">📅 Agenda</div>
+  <div class="tab" onclick="switchTab('mensagens')" id="tab-mensagens">💬 Mensagens</div>
+  <div class="tab" onclick="switchTab('lembretes')" id="tab-lembretes">🔔 Lembretes <span class="tab-badge" id="reminderBadge" style="display:none">0</span></div>
+</div>
+
+<!-- AGENDA VIEW -->
+<div class="view active" id="view-agenda">
+  <div class="card mini-cal" id="miniCal"></div>
+  <div style="display:flex;justify-content:flex-end;margin-bottom:8px">
+    <button onclick="exportMonthIcs()" style="background:#f0fdf4;color:#16a34a;border:1.5px solid #bbf7d0;border-radius:8px;padding:7px 14px;font-size:0.82rem;font-weight:600;cursor:pointer;">📆 Exportar mês p/ Apple Calendar</button>
+  </div>
+  <div id="agendaList"></div>
+</div>
+
+<!-- MENSAGENS VIEW -->
+<div class="view" id="view-mensagens">
+  <div class="chat-container">
+    <div class="chat-messages" id="chatMessages"></div>
+    <div class="chat-input-area">
+      <textarea class="chat-input" id="chatInput" placeholder="Digite uma mensagem ou comando..." rows="1" onkeydown="handleChatKey(event)"></textarea>
+      <button class="btn-mic" id="btnMic" onclick="toggleRecording()" title="Gravar áudio">🎤</button>
+      <button class="btn-send" onclick="sendMessage()" title="Enviar">➤</button>
+    </div>
+  </div>
+</div>
+
+<!-- LEMBRETES VIEW -->
+<div class="view" id="view-lembretes">
+  <div id="reminderList"></div>
+</div>
+
+<!-- FAB -->
+<button class="fab" id="fabBtn" onclick="openEventModal()" title="Novo evento">＋</button>
+
+<!-- EVENT MODAL -->
+<div class="modal-overlay" id="eventModal">
+  <div class="modal">
+    <h2 id="modalTitle">Novo Evento</h2>
+    <div class="form-group">
+      <label>Título *</label>
+      <input type="text" id="evTitle" placeholder="Ex: Visita ao imóvel na Rua das Flores">
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Data *</label>
+        <input type="date" id="evDate">
+      </div>
+      <div class="form-group">
+        <label>Hora</label>
+        <input type="time" id="evTime">
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Tipo</label>
+      <select id="evType">
+        <option value="cliente">👤 Cliente</option>
+        <option value="reuniao">🤝 Reunião</option>
+        <option value="vistoria">🏠 Vistoria</option>
+        <option value="cartorio">📋 Cartório</option>
+        <option value="loteamento">🗺️ Loteamento</option>
+        <option value="lembrete">🔔 Lembrete</option>
+        <option value="outro">📌 Outro</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Descrição</label>
+      <textarea id="evDesc" placeholder="Detalhes, endereço, contato..."></textarea>
+    </div>
+    <div class="form-group">
+      <label>Lembrar antes</label>
+      <select id="evReminder">
+        <option value="">Sem lembrete</option>
+        <option value="5">5 minutos antes</option>
+        <option value="15">15 minutos antes</option>
+        <option value="30">30 minutos antes</option>
+        <option value="60">1 hora antes</option>
+        <option value="1440">1 dia antes</option>
+      </select>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-secondary" onclick="closeEventModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveEvent()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- REMINDER MODAL -->
+<div class="modal-overlay" id="reminderModal">
+  <div class="modal">
+    <h2>Novo Lembrete</h2>
+    <div class="form-group">
+      <label>Lembrete *</label>
+      <input type="text" id="remTitle" placeholder="Ex: Ligar para o cliente João">
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Data</label>
+        <input type="date" id="remDate">
+      </div>
+      <div class="form-group">
+        <label>Hora</label>
+        <input type="time" id="remTime">
+      </div>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-secondary" onclick="closeReminderModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveReminder()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ===== STATE =====
+let events = JSON.parse(localStorage.getItem('corretor_events') || '[]');
+let reminders = JSON.parse(localStorage.getItem('corretor_reminders') || '[]');
+let messages = JSON.parse(localStorage.getItem('corretor_messages') || '[]');
+let editingEventId = null;
+let currentCalMonth = new Date();
+let selectedCalDate = new Date();
+let mediaRecorder = null;
+let isRecording = false;
+let recognition = null;
+
+// ===== INIT =====
+document.addEventListener('DOMContentLoaded', () => {
+  updateHeaderDate();
+  renderCalendar();
+  renderAgenda();
+  renderReminders();
+  renderMessages();
+  checkReminderBadge();
+  requestNotificationPermission();
+  setInterval(checkDueReminders, 60000);
+  checkDueReminders();
+
+  // Auto-resize textarea
+  const chatInput = document.getElementById('chatInput');
+  chatInput.addEventListener('input', () => {
+    chatInput.style.height = 'auto';
+    chatInput.style.height = Math.min(chatInput.scrollHeight, 100) + 'px';
+  });
+});
+
+function updateHeaderDate() {
+  const now = new Date();
+  const opts = { weekday: 'long', day: 'numeric', month: 'long' };
+  document.getElementById('headerDate').textContent = now.toLocaleDateString('pt-BR', opts);
+}
+
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  document.getElementById('view-' + name).classList.add('active');
+
+  const fab = document.getElementById('fabBtn');
+  if (name === 'agenda') {
+    fab.style.display = 'flex';
+    fab.title = 'Novo evento';
+    fab.onclick = openEventModal;
+  } else if (name === 'lembretes') {
+    fab.style.display = 'flex';
+    fab.title = 'Novo lembrete';
+    fab.onclick = openReminderModal;
+  } else {
+    fab.style.display = 'none';
+  }
+}
+
+// ===== SAVE =====
+function saveData() {
+  localStorage.setItem('corretor_events', JSON.stringify(events));
+  localStorage.setItem('corretor_reminders', JSON.stringify(reminders));
+  localStorage.setItem('corretor_messages', JSON.stringify(messages));
+}
+
+// ===== CALENDAR =====
+function renderCalendar() {
+  const cal = document.getElementById('miniCal');
+  const year = currentCalMonth.getFullYear();
+  const month = currentCalMonth.getMonth();
+  const monthName = currentCalMonth.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+
+  // Build set of days with events
+  const eventDays = new Set();
+  events.forEach(e => {
+    const d = new Date(e.date + 'T12:00:00');
+    if (d.getFullYear() === year && d.getMonth() === month) {
+      eventDays.add(d.getDate());
+    }
+  });
+
+  const firstDay = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const today = new Date();
+
+  let html = `<div class="cal-nav">
+    <button onclick="prevMonth()">‹</button>
+    <span>${monthName}</span>
+    <button onclick="nextMonth()">›</button>
+  </div><div class="cal-grid">`;
+
+  const days = ['D','S','T','Q','Q','S','S'];
+  days.forEach(d => { html += `<div class="cal-cell header">${d}</div>`; });
+
+  for (let i = 0; i < firstDay; i++) {
+    const d = new Date(year, month, 1 - firstDay + i).getDate();
+    html += `<div class="cal-cell other-month">${d}</div>`;
+  }
+
+  for (let d = 1; d <= daysInMonth; d++) {
+    const isToday = d === today.getDate() && month === today.getMonth() && year === today.getFullYear();
+    const isSelected = d === selectedCalDate.getDate() && month === selectedCalDate.getMonth() && year === selectedCalDate.getFullYear();
+    const hasEv = eventDays.has(d);
+    let cls = 'cal-cell';
+    if (isToday) cls += ' today';
+    else if (isSelected) cls += ' selected';
+    if (hasEv) cls += ' has-event';
+    const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    html += `<div class="${cls}" onclick="selectCalDate('${dateStr}')">${d}</div>`;
+  }
+
+  html += '</div>';
+  cal.innerHTML = html;
+}
+
+function prevMonth() {
+  currentCalMonth.setMonth(currentCalMonth.getMonth() - 1);
+  renderCalendar();
+  renderAgenda();
+}
+
+function nextMonth() {
+  currentCalMonth.setMonth(currentCalMonth.getMonth() + 1);
+  renderCalendar();
+  renderAgenda();
+}
+
+function selectCalDate(dateStr) {
+  selectedCalDate = new Date(dateStr + 'T12:00:00');
+  currentCalMonth = new Date(selectedCalDate);
+  renderCalendar();
+  renderAgenda();
+}
+
+// ===== AGENDA =====
+function renderAgenda() {
+  const list = document.getElementById('agendaList');
+  const year = currentCalMonth.getFullYear();
+  const month = currentCalMonth.getMonth();
+
+  // Filter events for selected month
+  const monthEvents = events.filter(e => {
+    const d = new Date(e.date + 'T12:00:00');
+    return d.getFullYear() === year && d.getMonth() === month;
+  }).sort((a, b) => {
+    if (a.date !== b.date) return a.date.localeCompare(b.date);
+    return (a.time || '').localeCompare(b.time || '');
+  });
+
+  if (monthEvents.length === 0) {
+    list.innerHTML = `<div class="empty-state"><div class="icon">📅</div><p>Nenhum evento este mês.<br>Toque em + para adicionar.</p></div>`;
+    return;
+  }
+
+  let html = '';
+  let lastDate = '';
+  monthEvents.forEach(ev => {
+    if (ev.date !== lastDate) {
+      const d = new Date(ev.date + 'T12:00:00');
+      const label = d.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' });
+      html += `<div class="day-header">${label}</div>`;
+      lastDate = ev.date;
+    }
+    const typeLabels = {
+      cliente: 'Cliente', reuniao: 'Reunião', vistoria: 'Vistoria',
+      cartorio: 'Cartório', loteamento: 'Loteamento', lembrete: 'Lembrete', outro: 'Outro'
+    };
+    const typeLabel = typeLabels[ev.type] || 'Outro';
+    html += `<div class="event-item type-${ev.type}" onclick="editEvent('${ev.id}')">
+      <div class="event-info">
+        <div class="event-time">${ev.time || '–'}</div>
+        <div class="event-title">${ev.title}</div>
+        ${ev.desc ? `<div class="event-desc">${ev.desc}</div>` : ''}
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
+        <span class="event-type-badge badge-${ev.type}">${typeLabel}</span>
+        <div class="event-actions" onclick="event.stopPropagation()">
+          <button class="btn-icon btn-ics" onclick="exportEventIcs('${ev.id}')" title="Abrir no Apple Calendar">📆</button>
+          <button class="btn-icon btn-edit" onclick="editEvent('${ev.id}')">✏️</button>
+          <button class="btn-icon btn-delete" onclick="deleteEvent('${ev.id}')">🗑️</button>
+        </div>
+      </div>
+    </div>`;
+  });
+  list.innerHTML = html;
+}
+
+// ===== EVENT MODAL =====
+function openEventModal(prefillDate) {
+  editingEventId = null;
+  document.getElementById('modalTitle').textContent = 'Novo Evento';
+  document.getElementById('evTitle').value = '';
+  document.getElementById('evDate').value = prefillDate || formatDate(new Date());
+  document.getElementById('evTime').value = '';
+  document.getElementById('evType').value = 'cliente';
+  document.getElementById('evDesc').value = '';
+  document.getElementById('evReminder').value = '';
+  document.getElementById('eventModal').classList.add('open');
+  setTimeout(() => document.getElementById('evTitle').focus(), 100);
+}
+
+function editEvent(id) {
+  const ev = events.find(e => e.id === id);
+  if (!ev) return;
+  editingEventId = id;
+  document.getElementById('modalTitle').textContent = 'Editar Evento';
+  document.getElementById('evTitle').value = ev.title;
+  document.getElementById('evDate').value = ev.date;
+  document.getElementById('evTime').value = ev.time || '';
+  document.getElementById('evType').value = ev.type;
+  document.getElementById('evDesc').value = ev.desc || '';
+  document.getElementById('evReminder').value = ev.reminderMin || '';
+  document.getElementById('eventModal').classList.add('open');
+}
+
+function closeEventModal() {
+  document.getElementById('eventModal').classList.remove('open');
+}
+
+function saveEvent() {
+  const title = document.getElementById('evTitle').value.trim();
+  const date = document.getElementById('evDate').value;
+  if (!title || !date) { alert('Preencha título e data!'); return; }
+
+  const ev = {
+    id: editingEventId || genId(),
+    title,
+    date,
+    time: document.getElementById('evTime').value,
+    type: document.getElementById('evType').value,
+    desc: document.getElementById('evDesc').value.trim(),
+    reminderMin: document.getElementById('evReminder').value,
+    createdAt: new Date().toISOString()
+  };
+
+  if (editingEventId) {
+    const idx = events.findIndex(e => e.id === editingEventId);
+    events[idx] = ev;
+  } else {
+    events.push(ev);
+  }
+
+  saveData();
+  closeEventModal();
+  renderCalendar();
+  renderAgenda();
+  showToast('✅', 'Evento salvo!', ev.title);
+}
+
+function deleteEvent(id) {
+  if (!confirm('Excluir este evento?')) return;
+  events = events.filter(e => e.id !== id);
+  saveData();
+  renderCalendar();
+  renderAgenda();
+  showToast('🗑️', 'Evento excluído', '');
+}
+
+// ===== REMINDERS =====
+function openReminderModal(prefillTitle) {
+  document.getElementById('remTitle').value = prefillTitle || '';
+  document.getElementById('remDate').value = formatDate(new Date());
+  document.getElementById('remTime').value = '';
+  document.getElementById('reminderModal').classList.add('open');
+  setTimeout(() => document.getElementById('remTitle').focus(), 100);
+}
+
+function closeReminderModal() {
+  document.getElementById('reminderModal').classList.remove('open');
+}
+
+function saveReminder() {
+  const title = document.getElementById('remTitle').value.trim();
+  if (!title) { alert('Digite o lembrete!'); return; }
+
+  const rem = {
+    id: genId(),
+    title,
+    date: document.getElementById('remDate').value,
+    time: document.getElementById('remTime').value,
+    done: false,
+    createdAt: new Date().toISOString()
+  };
+
+  reminders.push(rem);
+  saveData();
+  closeReminderModal();
+  renderReminders();
+  checkReminderBadge();
+  showToast('🔔', 'Lembrete criado!', rem.title);
+}
+
+function renderReminders() {
+  const list = document.getElementById('reminderList');
+  if (reminders.length === 0) {
+    list.innerHTML = `<div class="empty-state"><div class="icon">🔔</div><p>Nenhum lembrete ainda.<br>Toque em + para criar.</p></div>`;
+    return;
+  }
+
+  const sorted = [...reminders].sort((a, b) => {
+    if (a.done !== b.done) return a.done ? 1 : -1;
+    const da = a.date + (a.time || '');
+    const db = b.date + (b.time || '');
+    return da.localeCompare(db);
+  });
+
+  const now = new Date();
+  let html = '';
+  sorted.forEach(r => {
+    const isOverdue = !r.done && r.date && new Date(r.date + 'T' + (r.time || '23:59') + ':00') < now;
+    const when = r.date ? new Date(r.date + 'T12:00:00').toLocaleDateString('pt-BR', { day: 'numeric', month: 'short' }) + (r.time ? ' às ' + r.time : '') : '';
+    html += `<div class="reminder-item ${r.done ? 'done' : ''}">
+      <div class="reminder-check ${r.done ? 'checked' : ''}" onclick="toggleReminder('${r.id}')">
+        ${r.done ? '✓' : ''}
+      </div>
+      <div class="reminder-info">
+        <div class="reminder-title">${r.title}</div>
+        ${when ? `<div class="reminder-when ${isOverdue ? 'reminder-overdue' : ''}">${isOverdue ? '⚠️ Atrasado — ' : ''}${when}</div>` : ''}
+      </div>
+      <button class="btn-icon btn-delete" onclick="deleteReminder('${r.id}')">🗑️</button>
+    </div>`;
+  });
+  list.innerHTML = html;
+}
+
+function toggleReminder(id) {
+  const r = reminders.find(r => r.id === id);
+  if (r) { r.done = !r.done; saveData(); renderReminders(); checkReminderBadge(); }
+}
+
+function deleteReminder(id) {
+  reminders = reminders.filter(r => r.id !== id);
+  saveData();
+  renderReminders();
+  checkReminderBadge();
+}
+
+function checkReminderBadge() {
+  const pending = reminders.filter(r => !r.done).length;
+  const badge = document.getElementById('reminderBadge');
+  badge.style.display = pending > 0 ? 'inline-block' : 'none';
+  badge.textContent = pending;
+}
+
+function checkDueReminders() {
+  const now = new Date();
+  reminders.forEach(r => {
+    if (r.done || r.notified || !r.date || !r.time) return;
+    const due = new Date(r.date + 'T' + r.time + ':00');
+    const diff = due - now;
+    if (diff >= 0 && diff <= 60000) {
+      r.notified = true;
+      saveData();
+      showToast('🔔', 'Lembrete!', r.title);
+      if (Notification.permission === 'granted') {
+        new Notification('🔔 Lembrete', { body: r.title });
+      }
+    }
+  });
+}
+
+// ===== CHAT / MESSAGES =====
+function renderMessages() {
+  const container = document.getElementById('chatMessages');
+  if (messages.length === 0) {
+    container.innerHTML = `<div class="msg msg-assistant">
+      <div>👋 Olá! Sou seu assistente de agenda.<br><br>Você pode me dizer coisas como:<br>
+      • <b>Agendar</b> reunião amanhã às 10h com João<br>
+      • <b>Lembrete</b> ligar para a construtora às 15h<br>
+      • <b>Cancelar</b> evento de hoje<br>
+      • Ou gravar um <b>🎤 áudio</b> com sua instrução!</div>
+      <div class="msg-time">${now()}</div>
+    </div>`;
+    return;
+  }
+  container.innerHTML = messages.map(m => renderMsg(m)).join('');
+  container.scrollTop = container.scrollHeight;
+}
+
+function renderMsg(m) {
+  const cls = m.role === 'user' ? 'msg-user' : 'msg-assistant';
+  let content = m.content;
+  if (m.type === 'audio') {
+    content = `<div class="msg-audio"><span class="audio-icon">🎤</span><span>${m.duration || ''}s de áudio</span></div>
+    ${m.transcript ? `<div class="transcript-bubble"><strong>Transcrição:</strong>${m.transcript}</div>` : ''}`;
+  }
+  return `<div class="msg ${cls}">${content}<div class="msg-time">${m.time || ''}</div></div>`;
+}
+
+function handleChatKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+}
+
+function sendMessage() {
+  const input = document.getElementById('chatInput');
+  const text = input.value.trim();
+  if (!text) return;
+
+  addMessage({ role: 'user', content: text, time: now() });
+  input.value = '';
+  input.style.height = 'auto';
+
+  processCommand(text);
+}
+
+function addMessage(msg) {
+  messages.push(msg);
+  saveData();
+  const container = document.getElementById('chatMessages');
+  container.innerHTML += renderMsg(msg);
+  container.scrollTop = container.scrollHeight;
+}
+
+function showTyping() {
+  const container = document.getElementById('chatMessages');
+  const div = document.createElement('div');
+  div.className = 'msg msg-assistant';
+  div.id = 'typingIndicator';
+  div.innerHTML = `<span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span>`;
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
+}
+
+function removeTyping() {
+  const el = document.getElementById('typingIndicator');
+  if (el) el.remove();
+}
+
+function processCommand(text) {
+  showTyping();
+  setTimeout(() => {
+    removeTyping();
+    const lower = text.toLowerCase();
+    let response = '';
+
+    // ===== SMART COMMAND PARSING =====
+
+    // LEMBRETE
+    if (/lembr[ae]/i.test(lower)) {
+      const extracted = extractReminder(text);
+      if (extracted) {
+        reminders.push(extracted);
+        saveData();
+        renderReminders();
+        checkReminderBadge();
+        response = `✅ Lembrete criado: <b>"${extracted.title}"</b>${extracted.date ? ` para ${formatDateDisplay(extracted.date)}` : ''}${extracted.time ? ' às ' + extracted.time : ''}.`;
+      } else {
+        response = `🔔 Para criar um lembrete, diga algo como: <b>"Lembrete: ligar para João amanhã às 14h"</b>`;
+      }
+    }
+
+    // AGENDAR / REUNIÃO / VISITA / VISTORIA / CARTÓRIO
+    else if (/agendar|agenda|reuni[aã]o|visita|vistoria|cart[oó]rio|marcar|compromisso|loteamento/i.test(lower)) {
+      const ev = extractEvent(text);
+      if (ev) {
+        events.push(ev);
+        saveData();
+        renderCalendar();
+        renderAgenda();
+        response = `📅 Evento criado: <b>"${ev.title}"</b>${ev.date ? ` em ${formatDateDisplay(ev.date)}` : ''}${ev.time ? ' às ' + ev.time : ''}.`;
+      } else {
+        response = `📅 Não entendi bem. Tente: <b>"Agendar reunião amanhã às 10h com João"</b>`;
+      }
+    }
+
+    // CANCELAR / EXCLUIR
+    else if (/cancelar|excluir|deletar|remover|apagar/i.test(lower)) {
+      response = `🗑️ Para excluir um evento, vá até a aba <b>Agenda</b> e toque no 🗑️ ao lado do evento.`;
+    }
+
+    // VER AGENDA / O QUE TEM HOJE
+    else if (/hoje|agenda|eventos|compromisso/i.test(lower)) {
+      const today = formatDate(new Date());
+      const todayEvs = events.filter(e => e.date === today);
+      if (todayEvs.length === 0) {
+        response = `📅 Você não tem eventos hoje. Que tal aproveitar para descansar? 😄`;
+      } else {
+        response = `📅 Seus eventos de hoje:<br>` + todayEvs.map(e => `• ${e.time || '–'} — <b>${e.title}</b>`).join('<br>');
+      }
+    }
+
+    // PRÓXIMOS EVENTOS
+    else if (/próxim|semana|amanhã/i.test(lower)) {
+      const upcoming = getUpcomingEvents(7);
+      if (upcoming.length === 0) {
+        response = `📅 Nenhum evento nos próximos 7 dias.`;
+      } else {
+        response = `📅 Próximos eventos:<br>` + upcoming.slice(0, 5).map(e => `• ${formatDateDisplay(e.date)} ${e.time || ''} — <b>${e.title}</b>`).join('<br>');
+      }
+    }
+
+    // AJUDA
+    else if (/ajuda|help|o que|como/i.test(lower)) {
+      response = `💡 <b>Comandos que entendo:</b><br>
+• "Agendar <b>reunião</b> amanhã às 10h com João"<br>
+• "Marcar <b>vistoria</b> sexta 14h Rua das Flores"<br>
+• "Lembrete: ligar para o cartório hoje às 9h"<br>
+• "O que tenho <b>hoje</b>?"<br>
+• "Ver eventos da <b>semana</b>"<br>
+• Ou grave um <b>🎤 áudio</b> descrevendo o que precisa!`;
+    }
+
+    else {
+      // Try to extract anyway
+      const ev = extractEvent(text);
+      if (ev) {
+        events.push(ev);
+        saveData();
+        renderCalendar();
+        renderAgenda();
+        response = `📅 Evento criado: <b>"${ev.title}"</b>${ev.date ? ` em ${formatDateDisplay(ev.date)}` : ''}${ev.time ? ' às ' + ev.time : ''}.`;
+      } else {
+        response = `🤔 Não entendi. Tente descrever um evento ou lembrete, ou diga "<b>ajuda</b>" para ver o que posso fazer.`;
+      }
+    }
+
+    addMessage({ role: 'assistant', content: response, time: now() });
+  }, 800);
+}
+
+// ===== NLP HELPERS =====
+function extractEvent(text) {
+  const title = text.replace(/^(agendar|marcar|criar|adicionar|nova?|compromisso|reunião com|visita|vistoria)\s*/i, '').trim();
+  const date = extractDate(text);
+  const time = extractTime(text);
+  const type = guessType(text);
+  if (!title) return null;
+  return { id: genId(), title: capitalize(title), date: date || formatDate(new Date()), time, type, desc: '', createdAt: new Date().toISOString() };
+}
+
+function extractReminder(text) {
+  let title = text.replace(/^lembr[ae][te]?\s*[:–-]?\s*/i, '').trim();
+  const date = extractDate(text);
+  const time = extractTime(text);
+  // Remove date/time from title
+  title = title
+    .replace(/\b(hoje|amanhã|segunda|terça|quarta|quinta|sexta|sábado|domingo)\b/gi, '')
+    .replace(/\b(próxim[ao])\s+\w+/gi, '')
+    .replace(/às?\s+\d{1,2}h(\d{2})?\b/gi, '')
+    .replace(/\d{1,2}:\d{2}/g, '')
+    .replace(/\s{2,}/g, ' ').trim();
+  if (!title) return null;
+  return { id: genId(), title: capitalize(title), date: date || formatDate(new Date()), time, done: false, createdAt: new Date().toISOString() };
+}
+
+function extractDate(text) {
+  const now = new Date();
+  const lower = text.toLowerCase();
+  if (/\bhoje\b/.test(lower)) return formatDate(now);
+  if (/\bamanh[aã]\b/.test(lower)) { const d = new Date(now); d.setDate(d.getDate()+1); return formatDate(d); }
+
+  const weekdays = { 'segunda':1,'terça':2,'quarta':3,'quinta':4,'sexta':5,'sábado':6,'domingo':0 };
+  for (const [name, wd] of Object.entries(weekdays)) {
+    if (lower.includes(name)) {
+      const d = new Date(now);
+      const diff = (wd - d.getDay() + 7) % 7 || 7;
+      d.setDate(d.getDate() + diff);
+      return formatDate(d);
+    }
+  }
+
+  // dd/mm ou dd/mm/yyyy
+  const dmMatch = text.match(/(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?/);
+  if (dmMatch) {
+    const day = dmMatch[1].padStart(2,'0');
+    const month = dmMatch[2].padStart(2,'0');
+    const year = dmMatch[3] ? (dmMatch[3].length===2?'20'+dmMatch[3]:dmMatch[3]) : now.getFullYear();
+    return `${year}-${month}-${day}`;
+  }
+
+  return null;
+}
+
+function extractTime(text) {
+  const m = text.match(/(\d{1,2})h(\d{2})?|\b(\d{1,2}):(\d{2})\b/i);
+  if (!m) return '';
+  if (m[1]) return `${m[1].padStart(2,'0')}:${(m[2]||'00').padStart(2,'0')}`;
+  return `${m[3].padStart(2,'0')}:${m[4]}`;
+}
+
+function guessType(text) {
+  const lower = text.toLowerCase();
+  if (/reuni[aã]o|reunião/.test(lower)) return 'reuniao';
+  if (/vistoria/.test(lower)) return 'vistoria';
+  if (/cart[oó]rio/.test(lower)) return 'cartorio';
+  if (/loteamento/.test(lower)) return 'loteamento';
+  if (/cliente|visita/.test(lower)) return 'cliente';
+  if (/lembr/.test(lower)) return 'lembrete';
+  return 'outro';
+}
+
+function getUpcomingEvents(days) {
+  const now = new Date();
+  const limit = new Date(now); limit.setDate(limit.getDate() + days);
+  return events.filter(e => {
+    const d = new Date(e.date + 'T12:00:00');
+    return d >= now && d <= limit;
+  }).sort((a,b) => a.date.localeCompare(b.date));
+}
+
+// ===== AUDIO RECORDING =====
+function toggleRecording() {
+  if (!isRecording) startRecording();
+  else stopRecording();
+}
+
+async function startRecording() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const btn = document.getElementById('btnMic');
+    btn.classList.add('recording');
+    btn.title = 'Parar gravação';
+    isRecording = true;
+    const startTime = Date.now();
+
+    // Speech Recognition (Web Speech API)
+    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+      recognition = new SR();
+      recognition.lang = 'pt-BR';
+      recognition.continuous = true;
+      recognition.interimResults = false;
+      let finalTranscript = '';
+
+      recognition.onresult = (e) => {
+        for (let i = e.resultIndex; i < e.results.length; i++) {
+          if (e.results[i].isFinal) finalTranscript += e.results[i][0].transcript + ' ';
+        }
+      };
+
+      recognition.onend = () => {
+        const duration = Math.round((Date.now() - startTime) / 1000);
+        stream.getTracks().forEach(t => t.stop());
+        isRecording = false;
+        btn.classList.remove('recording');
+        btn.title = 'Gravar áudio';
+
+        if (finalTranscript.trim()) {
+          addMessage({ role: 'user', type: 'audio', content: '', transcript: finalTranscript.trim(), duration, time: now() });
+          showTyping();
+          setTimeout(() => {
+            removeTyping();
+            processCommand(finalTranscript.trim());
+          }, 500);
+        } else {
+          addMessage({ role: 'user', type: 'audio', content: '', transcript: '(não foi possível transcrever)', duration, time: now() });
+          addMessage({ role: 'assistant', content: '🎤 Recebi seu áudio mas não consegui transcrever. Tente falar mais devagar ou use o texto.', time: now() });
+        }
+      };
+
+      recognition.start();
+      mediaRecorder = { stream, startTime, recognition };
+    } else {
+      // Fallback sem reconhecimento
+      stream.getTracks().forEach(t => t.stop());
+      isRecording = false;
+      btn.classList.remove('recording');
+      addMessage({ role: 'assistant', content: '😕 Seu navegador não suporta reconhecimento de voz. Use o Chrome ou Edge para essa função.', time: now() });
+    }
+  } catch (err) {
+    alert('Não foi possível acessar o microfone. Verifique as permissões.');
+    isRecording = false;
+    document.getElementById('btnMic').classList.remove('recording');
+  }
+}
+
+function stopRecording() {
+  if (mediaRecorder && mediaRecorder.recognition) {
+    mediaRecorder.recognition.stop();
+  }
+}
+
+// ===== NOTIFICATIONS =====
+function requestNotificationPermission() {
+  if ('Notification' in window && Notification.permission === 'default') {
+    Notification.requestPermission();
+  }
+}
+
+function showToast(icon, title, body) {
+  const container = document.getElementById('toastContainer');
+  const toast = document.createElement('div');
+  toast.className = 'toast';
+  toast.innerHTML = `<div class="toast-title">${icon} ${title}</div>${body ? `<div>${body}</div>` : ''}`;
+  container.appendChild(toast);
+  setTimeout(() => toast.remove(), 4000);
+}
+
+// ===== UTILS =====
+function genId() { return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
+function formatDate(d) { return d.toISOString().slice(0,10); }
+function formatDateDisplay(dateStr) {
+  const d = new Date(dateStr + 'T12:00:00');
+  return d.toLocaleDateString('pt-BR', { weekday: 'short', day: 'numeric', month: 'short' });
+}
+function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+function now() { return new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }); }
+
+// ===== ICS EXPORT =====
+function toIcsDate(dateStr, timeStr) {
+  const d = new Date(dateStr + 'T' + (timeStr || '00:00') + ':00');
+  const pad = n => String(n).padStart(2, '0');
+  return d.getFullYear() + pad(d.getMonth()+1) + pad(d.getDate()) + 'T' +
+         pad(d.getHours()) + pad(d.getMinutes()) + '00';
+}
+
+function buildIcs(evList) {
+  const lines = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//Agenda Corretor//PT',
+    'CALSCALE:GREGORIAN',
+    'METHOD:PUBLISH'
+  ];
+  evList.forEach(ev => {
+    const start = toIcsDate(ev.date, ev.time);
+    // If no time, make it an all-day event
+    const isAllDay = !ev.time;
+    const dtstart = isAllDay ? 'DTSTART;VALUE=DATE:' + ev.date.replace(/-/g,'') : 'DTSTART:' + start;
+    const dtend   = isAllDay
+      ? 'DTEND;VALUE=DATE:' + (() => { const d = new Date(ev.date+'T12:00:00'); d.setDate(d.getDate()+1); return formatDate(d).replace(/-/g,''); })()
+      : 'DTEND:' + toIcsDate(ev.date, ev.time ? addHour(ev.time) : '01:00');
+    lines.push(
+      'BEGIN:VEVENT',
+      'UID:' + ev.id + '@agenda-corretor',
+      dtstart,
+      dtend,
+      'SUMMARY:' + ev.title,
+      ev.desc ? 'DESCRIPTION:' + ev.desc.replace(/\n/g, '\\n') : '',
+      'END:VEVENT'
+    );
+  });
+  lines.push('END:VCALENDAR');
+  return lines.filter(Boolean).join('\r\n');
+}
+
+function addHour(timeStr) {
+  const [h, m] = timeStr.split(':').map(Number);
+  return String((h + 1) % 24).padStart(2, '0') + ':' + String(m).padStart(2, '0');
+}
+
+function downloadIcs(content, filename) {
+  const blob = new Blob([content], { type: 'text/calendar;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast('📆', 'Arquivo .ics baixado!', 'Abra-o para importar no Apple Calendar');
+}
+
+function exportEventIcs(id) {
+  const ev = events.find(e => e.id === id);
+  if (!ev) return;
+  downloadIcs(buildIcs([ev]), ev.title.slice(0, 30).replace(/[^a-zA-Z0-9]/g,'-') + '.ics');
+}
+
+function exportMonthIcs() {
+  const year = currentCalMonth.getFullYear();
+  const month = currentCalMonth.getMonth();
+  const monthEvents = events.filter(e => {
+    const d = new Date(e.date + 'T12:00:00');
+    return d.getFullYear() === year && d.getMonth() === month;
+  });
+  if (monthEvents.length === 0) { showToast('📅', 'Nenhum evento', 'Não há eventos neste mês para exportar'); return; }
+  const monthName = currentCalMonth.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }).replace(' de ', '-').replace(/\s/g,'-');
+  downloadIcs(buildIcs(monthEvents), 'agenda-' + monthName + '.ics');
+}
+</script>
+</body>
+</html>
