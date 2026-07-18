@@ -1,0 +1,1614 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Controle de Custos - Loteamento</title>
+<link rel="manifest" href="manifest.json">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Loteamento">
+<link rel="apple-touch-icon" href="../icon-192.png">
+<meta name="theme-color" content="#0f766e">
+<style>
+  :root {
+    --primary: #0f766e;
+    --primary-dark: #0b5750;
+    --accent: #f59e0b;
+    --danger: #ef4444;
+    --success: #22c55e;
+    --bg: #f0fbf9;
+    --card: #ffffff;
+    --text: #1e293b;
+    --muted: #64748b;
+    --border: #e2e8f0;
+    --radius: 12px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding-bottom: 80px;
+  }
+
+  .header {
+    background: linear-gradient(135deg, var(--primary) 0%, #14b8a6 100%);
+    color: white;
+    padding: 16px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    box-shadow: 0 4px 20px rgba(15,118,110,0.3);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    gap: 10px;
+  }
+  .header h1 { font-size: 1.15rem; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+  .header-link { color: white; text-decoration: none; font-size: 0.78rem; opacity: 0.9; border: 1px solid rgba(255,255,255,0.5); padding: 5px 10px; border-radius: 999px; white-space: nowrap; }
+  .header-link:hover { opacity: 1; background: rgba(255,255,255,0.1); }
+
+  .tabs {
+    display: flex;
+    background: white;
+    border-bottom: 2px solid var(--border);
+    position: sticky;
+    top: 58px;
+    z-index: 99;
+    overflow-x: auto;
+  }
+  .tab {
+    flex: 1;
+    min-width: 78px;
+    padding: 12px 6px;
+    text-align: center;
+    font-size: 0.76rem;
+    font-weight: 600;
+    color: var(--muted);
+    cursor: pointer;
+    border-bottom: 3px solid transparent;
+    transition: all 0.2s;
+    white-space: nowrap;
+  }
+  .tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+
+  .view { display: none; padding: 16px; max-width: 820px; margin: 0 auto; }
+  .view.active { display: block; }
+
+  .card {
+    background: var(--card);
+    border-radius: var(--radius);
+    padding: 16px;
+    margin-bottom: 12px;
+    box-shadow: 0 1px 6px rgba(0,0,0,0.07);
+    border: 1px solid var(--border);
+  }
+  .card h3 { font-size: 0.9rem; margin-bottom: 10px; color: var(--text); }
+
+  .filter-bar { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+  .filter-bar select, .filter-bar input { flex: 1; min-width: 130px; }
+
+  select, input, textarea {
+    padding: 9px 11px;
+    border: 1.5px solid var(--border);
+    border-radius: 8px;
+    font-size: 0.87rem;
+    font-family: inherit;
+    color: var(--text);
+    background: white;
+  }
+  select:focus, input:focus, textarea:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(15,118,110,0.1);
+  }
+
+  /* KPI grid */
+  .kpi-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 12px; }
+  .kpi-card {
+    background: var(--card);
+    border-radius: var(--radius);
+    padding: 14px;
+    border: 1px solid var(--border);
+    box-shadow: 0 1px 6px rgba(0,0,0,0.06);
+  }
+  .kpi-label { font-size: 0.72rem; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; }
+  .kpi-value { font-size: 1.25rem; font-weight: 700; margin-top: 4px; }
+  .kpi-total .kpi-value { color: var(--text); }
+  .kpi-pago .kpi-value { color: var(--success); }
+  .kpi-pendente .kpi-value { color: var(--accent); }
+  .kpi-atrasado .kpi-value { color: var(--danger); }
+
+  /* Legend for pie chart */
+  .legend { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
+  .legend-item { display: flex; align-items: center; gap: 8px; font-size: 0.8rem; }
+  .legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .legend-label { flex: 1; color: var(--text); }
+  .legend-value { font-weight: 700; color: var(--muted); font-size: 0.78rem; }
+
+  .empty-state { text-align: center; padding: 40px 20px; color: var(--muted); }
+  .empty-state .icon { font-size: 2.6rem; margin-bottom: 10px; }
+  .empty-state p { font-size: 0.88rem; }
+
+  /* Alert box */
+  .alert-box {
+    border-left: 4px solid var(--danger);
+    background: #fff5f5;
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin-bottom: 8px;
+    font-size: 0.82rem;
+  }
+  .alert-box b { color: var(--danger); }
+  .alert-box.warn { border-left-color: var(--accent); background: #fffbeb; }
+  .alert-box.warn b { color: #b45309; }
+
+  /* Lançamento item */
+  .lanc-item {
+    background: var(--card);
+    border-radius: var(--radius);
+    padding: 12px 14px;
+    margin-bottom: 8px;
+    border-left: 4px solid var(--primary);
+    box-shadow: 0 1px 6px rgba(0,0,0,0.07);
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+    cursor: pointer;
+  }
+  .lanc-info { flex: 1; min-width: 0; }
+  .lanc-desc { font-size: 0.92rem; font-weight: 600; }
+  .lanc-meta { font-size: 0.76rem; color: var(--muted); margin-top: 3px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .lanc-value { font-size: 1rem; font-weight: 700; white-space: nowrap; }
+  .cat-badge { font-size: 0.68rem; font-weight: 700; padding: 2px 8px; border-radius: 999px; color: white; white-space: nowrap; }
+  .status-badge { font-size: 0.68rem; font-weight: 700; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+  .status-pago { background: #dcfce7; color: #166534; }
+  .status-pendente { background: #fef3c7; color: #92400e; }
+  .status-atrasado { background: #fee2e2; color: #991b1b; }
+  .lanc-actions { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex-shrink: 0; }
+  .lanc-btns { display: flex; gap: 6px; }
+  .btn-icon {
+    width: 28px; height: 28px;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    font-size: 0.85rem;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .btn-edit { background: #ecfdf5; color: var(--primary); }
+  .btn-delete { background: #fff5f5; color: var(--danger); }
+  .btn-view { background: #eff6ff; color: #2563eb; }
+
+  /* Cadastro items */
+  .reg-item {
+    background: var(--card);
+    border-radius: var(--radius);
+    padding: 12px 14px;
+    margin-bottom: 8px;
+    box-shadow: 0 1px 6px rgba(0,0,0,0.07);
+    border: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  .reg-info { flex: 1; min-width: 0; }
+  .reg-title { font-size: 0.9rem; font-weight: 600; }
+  .reg-sub { font-size: 0.78rem; color: var(--muted); margin-top: 2px; }
+
+  .subtabs { display: flex; gap: 6px; margin-bottom: 14px; flex-wrap: wrap; }
+  .subtab {
+    padding: 7px 13px;
+    border-radius: 999px;
+    background: white;
+    border: 1.5px solid var(--border);
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--muted);
+    cursor: pointer;
+  }
+  .subtab.active { background: var(--primary); color: white; border-color: var(--primary); }
+
+  /* Orçamento progress */
+  .orc-item { background: var(--card); border-radius: var(--radius); padding: 12px 14px; margin-bottom: 8px; border: 1px solid var(--border); box-shadow: 0 1px 6px rgba(0,0,0,0.07); }
+  .orc-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; gap: 8px; }
+  .orc-title { font-size: 0.85rem; font-weight: 600; }
+  .orc-values { font-size: 0.76rem; color: var(--muted); }
+  .orc-bar-bg { background: var(--border); border-radius: 999px; height: 8px; overflow: hidden; }
+  .orc-bar-fill { height: 100%; border-radius: 999px; background: var(--success); transition: width 0.3s; }
+  .orc-bar-fill.over { background: var(--danger); }
+
+  /* FAB */
+  .fab {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    width: 56px; height: 56px;
+    border-radius: 50%;
+    background: var(--primary);
+    color: white;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    box-shadow: 0 4px 20px rgba(15,118,110,0.4);
+    z-index: 200;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  /* Modal */
+  .modal-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 300;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal {
+    background: white;
+    border-radius: 16px;
+    padding: 24px;
+    width: 100%;
+    max-width: 520px;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+  }
+  .modal h2 { font-size: 1.05rem; margin-bottom: 18px; color: var(--text); }
+
+  .form-group { margin-bottom: 14px; }
+  .form-group label { display: block; font-size: 0.8rem; font-weight: 600; color: var(--muted); margin-bottom: 5px; }
+  .form-group input, .form-group textarea, .form-group select { width: 100%; }
+  .form-group textarea { resize: vertical; min-height: 70px; }
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .btn-row { display: flex; gap: 10px; margin-top: 18px; }
+  .btn {
+    padding: 10px 18px;
+    border-radius: 8px;
+    border: none;
+    font-size: 0.88rem;
+    font-weight: 600;
+    cursor: pointer;
+    flex: 1;
+  }
+  .btn-primary { background: var(--primary); color: white; }
+  .btn-primary:hover { background: var(--primary-dark); }
+  .btn-secondary { background: var(--border); color: var(--muted); }
+  .btn-secondary:hover { background: #cbd5e1; }
+  .btn-danger { background: var(--danger); color: white; }
+  .btn-block { width: 100%; margin-top: 4px; }
+  .btn-outline { background: white; border: 1.5px solid var(--primary); color: var(--primary); }
+
+  .anexo-preview { display: flex; align-items: center; gap: 8px; font-size: 0.8rem; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 8px 10px; margin-top: 6px; }
+  .anexo-preview a { color: #166534; font-weight: 600; }
+  .anexo-preview button { margin-left: auto; background: none; border: none; color: var(--danger); cursor: pointer; font-size: 0.85rem; }
+
+  .toast-container { position: fixed; top: 70px; right: 16px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; }
+  .toast { background: white; border-radius: 10px; padding: 12px 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); border-left: 4px solid var(--primary); font-size: 0.85rem; max-width: 280px; animation: slideIn 0.3s ease; }
+  @keyframes slideIn { from{transform:translateX(100%);opacity:0} to{transform:translateX(0);opacity:1} }
+  .toast-title { font-weight: 700; margin-bottom: 2px; }
+
+  .report-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+  .report-table th, .report-table td { text-align: left; padding: 7px 6px; border-bottom: 1px solid var(--border); }
+  .report-table th { color: var(--muted); font-weight: 700; font-size: 0.7rem; text-transform: uppercase; }
+  .report-table tfoot td { font-weight: 700; border-top: 2px solid var(--border); border-bottom: none; }
+  .table-wrap { overflow-x: auto; }
+  .report-actions { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+  .report-actions .btn { flex: none; }
+
+  @media (max-width: 480px) {
+    .form-row { grid-template-columns: 1fr; }
+    .modal { padding: 18px; }
+    .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
+</head>
+<body>
+
+<div class="toast-container" id="toastContainer"></div>
+
+<div class="header">
+  <h1>🏗️ Controle de Custos</h1>
+  <a class="header-link" href="../index.html">📅 Agenda</a>
+</div>
+
+<div class="tabs">
+  <div class="tab active" onclick="switchTab('dashboard')" id="tab-dashboard">📊 Painel</div>
+  <div class="tab" onclick="switchTab('lancamentos')" id="tab-lancamentos">💰 Lançamentos</div>
+  <div class="tab" onclick="switchTab('orcamento')" id="tab-orcamento">📋 Orçamento</div>
+  <div class="tab" onclick="switchTab('cadastros')" id="tab-cadastros">🗂️ Cadastros</div>
+  <div class="tab" onclick="switchTab('relatorios')" id="tab-relatorios">📑 Relatórios</div>
+</div>
+
+<!-- DASHBOARD -->
+<div class="view active" id="view-dashboard">
+  <div class="filter-bar">
+    <select id="dashLoteamentoFilter" onchange="onDashFilterChange()"></select>
+  </div>
+
+  <div class="kpi-grid">
+    <div class="kpi-card kpi-total"><div class="kpi-label">Total Gasto</div><div class="kpi-value" id="kpiTotal">R$ 0,00</div></div>
+    <div class="kpi-card kpi-pago"><div class="kpi-label">Pago</div><div class="kpi-value" id="kpiPago">R$ 0,00</div></div>
+    <div class="kpi-card kpi-pendente"><div class="kpi-label">Pendente</div><div class="kpi-value" id="kpiPendente">R$ 0,00</div></div>
+    <div class="kpi-card kpi-atrasado"><div class="kpi-label">Atrasado</div><div class="kpi-value" id="kpiAtrasado">R$ 0,00</div></div>
+  </div>
+
+  <div class="card">
+    <h3>⚠️ Alertas de orçamento</h3>
+    <div id="orcamentoAlerts"></div>
+  </div>
+
+  <div class="card">
+    <h3>Gastos por categoria</h3>
+    <canvas id="pieChart" width="300" height="220" style="width:100%;max-width:300px;display:block;margin:0 auto;"></canvas>
+    <div class="legend" id="pieLegend"></div>
+  </div>
+
+  <div class="card">
+    <h3>Evolução mensal (últimos 6 meses)</h3>
+    <canvas id="barChart" width="600" height="180" style="width:100%;height:180px;"></canvas>
+  </div>
+
+  <div class="card">
+    <h3>📅 Próximos vencimentos</h3>
+    <div id="proximosVencimentos"></div>
+  </div>
+</div>
+
+<!-- LANÇAMENTOS -->
+<div class="view" id="view-lancamentos">
+  <div class="filter-bar">
+    <select id="lancFiltroLoteamento" onchange="renderLancamentos()"></select>
+    <select id="lancFiltroCategoria" onchange="renderLancamentos()"></select>
+    <select id="lancFiltroStatus" onchange="renderLancamentos()">
+      <option value="all">Todos os status</option>
+      <option value="pago">Pago</option>
+      <option value="pendente">Pendente</option>
+      <option value="atrasado">Atrasado</option>
+    </select>
+  </div>
+  <div id="lancamentosList"></div>
+</div>
+
+<!-- ORÇAMENTO -->
+<div class="view" id="view-orcamento">
+  <div class="filter-bar">
+    <select id="orcFiltroLoteamento" onchange="renderOrcamento()"></select>
+  </div>
+  <div id="orcamentoList"></div>
+</div>
+
+<!-- CADASTROS -->
+<div class="view" id="view-cadastros">
+  <div class="subtabs">
+    <div class="subtab active" onclick="switchCadastroSubTab('loteamentos')" id="subtab-loteamentos">Loteamentos</div>
+    <div class="subtab" onclick="switchCadastroSubTab('lotes')" id="subtab-lotes">Lotes</div>
+    <div class="subtab" onclick="switchCadastroSubTab('fornecedores')" id="subtab-fornecedores">Fornecedores</div>
+    <div class="subtab" onclick="switchCadastroSubTab('categorias')" id="subtab-categorias">Categorias</div>
+  </div>
+  <div id="cadastroLoteamentos" class="cadastro-panel"></div>
+  <div id="cadastroLotes" class="cadastro-panel" style="display:none"></div>
+  <div id="cadastroFornecedores" class="cadastro-panel" style="display:none"></div>
+  <div id="cadastroCategorias" class="cadastro-panel" style="display:none"></div>
+</div>
+
+<!-- RELATÓRIOS -->
+<div class="view" id="view-relatorios">
+  <div class="card">
+    <h3>Filtros do relatório</h3>
+    <div class="form-row">
+      <div class="form-group"><label>Loteamento</label><select id="relLoteamento"></select></div>
+      <div class="form-group"><label>Categoria</label><select id="relCategoria"></select></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Fornecedor</label><select id="relFornecedor"></select></div>
+      <div class="form-group"><label>Status</label>
+        <select id="relStatus">
+          <option value="all">Todos</option>
+          <option value="pago">Pago</option>
+          <option value="pendente">Pendente</option>
+          <option value="atrasado">Atrasado</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>De</label><input type="date" id="relDe"></div>
+      <div class="form-group"><label>Até</label><input type="date" id="relAte"></div>
+    </div>
+    <button class="btn btn-primary btn-block" onclick="gerarRelatorio()">Gerar relatório</button>
+  </div>
+  <div class="card" id="relResultCard" style="display:none">
+    <h3>Resultado</h3>
+    <div class="table-wrap"><table class="report-table" id="relTable"></table></div>
+    <div class="report-actions">
+      <button class="btn btn-outline" onclick="exportRelatorioCSV()">⬇️ Exportar CSV</button>
+      <button class="btn btn-outline" onclick="exportRelatorioPDF()">🖨️ Exportar PDF</button>
+    </div>
+  </div>
+</div>
+
+<!-- FAB -->
+<button class="fab" id="fabBtn" onclick="fabAction()" title="Adicionar">＋</button>
+
+<!-- MODAL: LANÇAMENTO -->
+<div class="modal-overlay" id="modalLancamento">
+  <div class="modal">
+    <h2 id="modalLancamentoTitle">Novo Lançamento</h2>
+    <div class="form-group"><label>Descrição *</label><input type="text" id="lcDescricao" placeholder="Ex: Compra de tubos de drenagem"></div>
+    <div class="form-row">
+      <div class="form-group"><label>Loteamento *</label><select id="lcLoteamento" onchange="onLcLoteamentoChange()"></select></div>
+      <div class="form-group"><label>Lote (opcional)</label><select id="lcLote"></select></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Categoria *</label><select id="lcCategoria"></select></div>
+      <div class="form-group"><label>Fornecedor</label><select id="lcFornecedor"></select></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Valor (R$) *</label><input type="number" id="lcValor" step="0.01" min="0" placeholder="0,00"></div>
+      <div class="form-group"><label>Forma de pagamento</label>
+        <select id="lcFormaPagamento">
+          <option>PIX</option><option>Boleto</option><option>Dinheiro</option><option>Cartão</option><option>Transferência</option><option>Cheque</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Data de competência *</label><input type="date" id="lcDataCompetencia"></div>
+      <div class="form-group"><label>Data de vencimento</label><input type="date" id="lcDataVencimento"></div>
+    </div>
+    <div class="form-group">
+      <label>Status</label>
+      <select id="lcStatus">
+        <option value="pendente">Pendente</option>
+        <option value="pago">Pago</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Anexo (nota fiscal / comprovante)</label>
+      <input type="file" id="lcAnexoInput" accept="image/*,.pdf" onchange="handleAnexoChange(event)">
+      <div id="lcAnexoPreview"></div>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-secondary" onclick="closeModal('modalLancamento')">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveLancamento()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: LOTEAMENTO -->
+<div class="modal-overlay" id="modalLoteamento">
+  <div class="modal">
+    <h2 id="modalLoteamentoTitle">Novo Loteamento</h2>
+    <div class="form-group"><label>Nome *</label><input type="text" id="ltNome" placeholder="Ex: Loteamento Vista Verde"></div>
+    <div class="form-group"><label>Localização</label><input type="text" id="ltLocal" placeholder="Cidade / bairro"></div>
+    <div class="form-row">
+      <div class="form-group"><label>Total de lotes</label><input type="number" id="ltTotalLotes" min="0"></div>
+      <div class="form-group"><label>Início da obra</label><input type="date" id="ltDataInicio"></div>
+    </div>
+    <div class="form-group">
+      <label>Status</label>
+      <select id="ltStatus">
+        <option value="planejamento">Planejamento</option>
+        <option value="em_obras">Em obras</option>
+        <option value="concluido">Concluído</option>
+      </select>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-secondary" onclick="closeModal('modalLoteamento')">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveLoteamento()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: LOTE -->
+<div class="modal-overlay" id="modalLote">
+  <div class="modal">
+    <h2 id="modalLoteTitle">Novo Lote</h2>
+    <div class="form-group"><label>Loteamento *</label><select id="ltLoteLoteamento"></select></div>
+    <div class="form-row">
+      <div class="form-group"><label>Quadra</label><input type="text" id="ltQuadra"></div>
+      <div class="form-group"><label>Número do lote *</label><input type="text" id="ltNumero"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Área (m²)</label><input type="number" id="ltArea" min="0" step="0.01"></div>
+      <div class="form-group"><label>Status</label>
+        <select id="ltLoteStatus">
+          <option value="disponivel">Disponível</option>
+          <option value="reservado">Reservado</option>
+          <option value="vendido">Vendido</option>
+        </select>
+      </div>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-secondary" onclick="closeModal('modalLote')">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveLote()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: FORNECEDOR -->
+<div class="modal-overlay" id="modalFornecedor">
+  <div class="modal">
+    <h2 id="modalFornecedorTitle">Novo Fornecedor</h2>
+    <div class="form-group"><label>Nome *</label><input type="text" id="fnNome" placeholder="Ex: Terraplanagem Silva Ltda"></div>
+    <div class="form-group"><label>CPF/CNPJ</label><input type="text" id="fnDocumento"></div>
+    <div class="form-group"><label>Contato</label><input type="text" id="fnContato" placeholder="Telefone ou e-mail"></div>
+    <div class="form-group"><label>Categoria principal</label><select id="fnCategoria"></select></div>
+    <div class="btn-row">
+      <button class="btn btn-secondary" onclick="closeModal('modalFornecedor')">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveFornecedor()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: CATEGORIA -->
+<div class="modal-overlay" id="modalCategoria">
+  <div class="modal">
+    <h2 id="modalCategoriaTitle">Nova Categoria</h2>
+    <div class="form-group"><label>Nome *</label><input type="text" id="ctNome"></div>
+    <div class="form-group"><label>Cor</label><input type="color" id="ctCor" value="#0f766e"></div>
+    <div class="btn-row">
+      <button class="btn btn-secondary" onclick="closeModal('modalCategoria')">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveCategoria()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: ORÇAMENTO -->
+<div class="modal-overlay" id="modalOrcamento">
+  <div class="modal">
+    <h2 id="modalOrcamentoTitle">Novo Orçamento</h2>
+    <div class="form-group"><label>Loteamento *</label><select id="orLoteamento"></select></div>
+    <div class="form-group"><label>Categoria *</label><select id="orCategoria"></select></div>
+    <div class="form-group"><label>Valor planejado (R$) *</label><input type="number" id="orValor" min="0" step="0.01"></div>
+    <div class="btn-row">
+      <button class="btn btn-secondary" onclick="closeModal('modalOrcamento')">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveOrcamento()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ===================== STATE & PERSISTENCE =====================
+function defaultCategorias() {
+  return [
+    { id: 'terraplanagem', nome: 'Terraplanagem', cor: '#92400e' },
+    { id: 'infraestrutura', nome: 'Infraestrutura (drenagem/pavimentação)', cor: '#0ea5e9' },
+    { id: 'rede-eletrica', nome: 'Rede Elétrica', cor: '#eab308' },
+    { id: 'agua-esgoto', nome: 'Água e Esgoto', cor: '#06b6d4' },
+    { id: 'documentacao', nome: 'Documentação e Cartório', cor: '#ef4444' },
+    { id: 'mao-de-obra', nome: 'Mão de Obra', cor: '#8b5cf6' },
+    { id: 'materiais', nome: 'Materiais', cor: '#f97316' },
+    { id: 'impostos', nome: 'Impostos e Taxas', cor: '#64748b' },
+    { id: 'projetos-licencas', nome: 'Projetos e Licenças', cor: '#14b8a6' },
+    { id: 'marketing-vendas', nome: 'Marketing e Vendas', cor: '#22c55e' },
+    { id: 'administrativo', nome: 'Administrativo', cor: '#6366f1' },
+    { id: 'manutencao', nome: 'Manutenção', cor: '#d946ef' }
+  ];
+}
+
+function loadDB() {
+  const raw = localStorage.getItem('lot_db');
+  const data = raw ? JSON.parse(raw) : {};
+  data.loteamentos = data.loteamentos || [];
+  data.lotes = data.lotes || [];
+  data.fornecedores = data.fornecedores || [];
+  data.categorias = (data.categorias && data.categorias.length) ? data.categorias : defaultCategorias();
+  data.lancamentos = data.lancamentos || [];
+  data.orcamentos = data.orcamentos || [];
+  return data;
+}
+
+let db = loadDB();
+function saveDB() { localStorage.setItem('lot_db', JSON.stringify(db)); }
+
+let state = {
+  filtroLoteamentoId: localStorage.getItem('lot_filtro') || 'all',
+  cadastroSubTab: 'loteamentos',
+  editingLancamentoId: null,
+  editingLoteamentoId: null,
+  editingLoteId: null,
+  editingFornecedorId: null,
+  editingCategoriaId: null,
+  editingOrcamentoId: null,
+  currentAnexo: null
+};
+
+// ===================== SERVICE WORKER =====================
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js'));
+}
+
+// ===================== INIT =====================
+document.addEventListener('DOMContentLoaded', () => {
+  refreshAllSelects();
+  switchTab('dashboard');
+});
+
+// ===================== UTILS =====================
+function genId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+function todayStr() { return new Date().toISOString().slice(0, 10); }
+function formatCurrency(v) { return (Number(v) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); }
+function formatDateDisplay(dateStr) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr + 'T12:00:00');
+  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+function getLoteamento(id) { return db.loteamentos.find(l => l.id === id); }
+function getLote(id) { return db.lotes.find(l => l.id === id); }
+function getCategoria(id) { return db.categorias.find(c => c.id === id); }
+function getFornecedor(id) { return db.fornecedores.find(f => f.id === id); }
+
+function statusOf(lc) {
+  if (lc.status === 'pago') return 'pago';
+  if (lc.dataVencimento && lc.dataVencimento < todayStr()) return 'atrasado';
+  return 'pendente';
+}
+
+function statusLabel(s) { return { pago: 'Pago', pendente: 'Pendente', atrasado: 'Atrasado' }[s] || s; }
+
+function showToast(icon, title, body) {
+  const container = document.getElementById('toastContainer');
+  const toast = document.createElement('div');
+  toast.className = 'toast';
+  toast.innerHTML = `<div class="toast-title">${icon} ${title}</div>${body ? `<div>${body}</div>` : ''}`;
+  container.appendChild(toast);
+  setTimeout(() => toast.remove(), 4000);
+}
+
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+
+// ===================== TABS =====================
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  document.getElementById('view-' + name).classList.add('active');
+
+  if (name === 'dashboard') renderDashboard();
+  else if (name === 'lancamentos') renderLancamentos();
+  else if (name === 'orcamento') renderOrcamento();
+  else if (name === 'cadastros') renderCadastros();
+  else if (name === 'relatorios') renderRelatoriosSetup();
+
+  const fab = document.getElementById('fabBtn');
+  fab.style.display = (name === 'dashboard' || name === 'relatorios') ? 'none' : 'flex';
+}
+
+function fabAction() {
+  const active = document.querySelector('.tab.active').id.replace('tab-', '');
+  if (active === 'lancamentos') openLancamentoModal();
+  else if (active === 'orcamento') openOrcamentoModal();
+  else if (active === 'cadastros') {
+    if (state.cadastroSubTab === 'loteamentos') openLoteamentoModal();
+    else if (state.cadastroSubTab === 'lotes') openLoteModal();
+    else if (state.cadastroSubTab === 'fornecedores') openFornecedorModal();
+    else if (state.cadastroSubTab === 'categorias') openCategoriaModal();
+  }
+}
+
+// ===================== SELECT POPULATION =====================
+function populateLoteamentoSelect(sel, includeAll) {
+  const current = sel.value;
+  sel.innerHTML = '';
+  if (includeAll) sel.innerHTML += `<option value="all">Todos os loteamentos</option>`;
+  db.loteamentos.forEach(l => { sel.innerHTML += `<option value="${l.id}">${l.nome}</option>`; });
+  if ([...sel.options].some(o => o.value === current)) sel.value = current;
+}
+
+function populateCategoriaSelect(sel, includeAll) {
+  const current = sel.value;
+  sel.innerHTML = '';
+  if (includeAll) sel.innerHTML += `<option value="all">Todas as categorias</option>`;
+  db.categorias.forEach(c => { sel.innerHTML += `<option value="${c.id}">${c.nome}</option>`; });
+  if ([...sel.options].some(o => o.value === current)) sel.value = current;
+}
+
+function populateFornecedorSelect(sel, includeNone) {
+  const current = sel.value;
+  sel.innerHTML = '';
+  if (includeNone) sel.innerHTML += `<option value="">— Nenhum —</option>`;
+  db.fornecedores.forEach(f => { sel.innerHTML += `<option value="${f.id}">${f.nome}</option>`; });
+  if ([...sel.options].some(o => o.value === current)) sel.value = current;
+}
+
+function populateLoteSelect(sel, loteamentoId, includeNone) {
+  sel.innerHTML = '';
+  if (includeNone) sel.innerHTML += `<option value="">— Nenhum lote específico —</option>`;
+  db.lotes.filter(l => l.loteamentoId === loteamentoId).forEach(l => {
+    sel.innerHTML += `<option value="${l.id}">Quadra ${l.quadra || '-'} / Lote ${l.numero}</option>`;
+  });
+}
+
+function refreshAllSelects() {
+  populateLoteamentoSelect(document.getElementById('dashLoteamentoFilter'), true);
+  document.getElementById('dashLoteamentoFilter').value = state.filtroLoteamentoId;
+  populateLoteamentoSelect(document.getElementById('lancFiltroLoteamento'), true);
+  populateCategoriaSelect(document.getElementById('lancFiltroCategoria'), true);
+  populateLoteamentoSelect(document.getElementById('orcFiltroLoteamento'), true);
+  populateLoteamentoSelect(document.getElementById('relLoteamento'), true);
+  populateCategoriaSelect(document.getElementById('relCategoria'), true);
+  populateFornecedorSelect(document.getElementById('relFornecedor'), true);
+  document.getElementById('relFornecedor').insertAdjacentHTML('afterbegin', '');
+}
+
+function onDashFilterChange() {
+  state.filtroLoteamentoId = document.getElementById('dashLoteamentoFilter').value;
+  localStorage.setItem('lot_filtro', state.filtroLoteamentoId);
+  renderDashboard();
+}
+
+// ===================== DASHBOARD =====================
+function lancamentosFiltrados(loteamentoId) {
+  if (!loteamentoId || loteamentoId === 'all') return db.lancamentos.slice();
+  return db.lancamentos.filter(l => l.loteamentoId === loteamentoId);
+}
+
+function renderDashboard() {
+  const list = lancamentosFiltrados(state.filtroLoteamentoId);
+  let total = 0, pago = 0, pendente = 0, atrasado = 0;
+  list.forEach(l => {
+    const v = Number(l.valor) || 0;
+    total += v;
+    const s = statusOf(l);
+    if (s === 'pago') pago += v;
+    else if (s === 'atrasado') atrasado += v;
+    else pendente += v;
+  });
+  document.getElementById('kpiTotal').textContent = formatCurrency(total);
+  document.getElementById('kpiPago').textContent = formatCurrency(pago);
+  document.getElementById('kpiPendente').textContent = formatCurrency(pendente);
+  document.getElementById('kpiAtrasado').textContent = formatCurrency(atrasado);
+
+  renderOrcamentoAlerts(list);
+  renderPieChart(list);
+  renderBarChart(list);
+  renderProximosVencimentos(list);
+}
+
+function renderOrcamentoAlerts(list) {
+  const box = document.getElementById('orcamentoAlerts');
+  const relevantOrc = db.orcamentos.filter(o => state.filtroLoteamentoId === 'all' || o.loteamentoId === state.filtroLoteamentoId);
+  if (relevantOrc.length === 0) {
+    box.innerHTML = `<p style="font-size:0.82rem;color:var(--muted)">Nenhum orçamento cadastrado ainda.</p>`;
+    return;
+  }
+  let html = '';
+  relevantOrc.forEach(o => {
+    const realizado = db.lancamentos
+      .filter(l => l.loteamentoId === o.loteamentoId && l.categoriaId === o.categoriaId)
+      .reduce((s, l) => s + (Number(l.valor) || 0), 0);
+    const cat = getCategoria(o.categoriaId);
+    const lot = getLoteamento(o.loteamentoId);
+    if (realizado > o.valorPlanejado) {
+      html += `<div class="alert-box"><b>Estourado:</b> ${cat ? cat.nome : ''} (${lot ? lot.nome : ''}) — gasto de ${formatCurrency(realizado)} contra orçamento de ${formatCurrency(o.valorPlanejado)}.</div>`;
+    } else if (o.valorPlanejado > 0 && realizado / o.valorPlanejado >= 0.9) {
+      html += `<div class="alert-box warn"><b>Atenção:</b> ${cat ? cat.nome : ''} (${lot ? lot.nome : ''}) já usou ${Math.round(realizado / o.valorPlanejado * 100)}% do orçamento.</div>`;
+    }
+  });
+  box.innerHTML = html || `<p style="font-size:0.82rem;color:var(--muted)">Nenhum alerta no momento. 👍</p>`;
+}
+
+function renderPieChart(list) {
+  const totals = {};
+  list.forEach(l => { totals[l.categoriaId] = (totals[l.categoriaId] || 0) + (Number(l.valor) || 0); });
+  const data = Object.entries(totals)
+    .map(([catId, value]) => { const c = getCategoria(catId); return { label: c ? c.nome : 'Sem categoria', color: c ? c.cor : '#94a3b8', value }; })
+    .filter(d => d.value > 0)
+    .sort((a, b) => b.value - a.value);
+
+  const canvas = document.getElementById('pieChart');
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  const legend = document.getElementById('pieLegend');
+
+  if (data.length === 0) {
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = '13px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Sem dados para exibir', canvas.width / 2, canvas.height / 2);
+    legend.innerHTML = '';
+    return;
+  }
+
+  const total = data.reduce((s, d) => s + d.value, 0);
+  const cx = canvas.width / 2, cy = canvas.height / 2, r = Math.min(cx, cy) - 10;
+  let start = -Math.PI / 2;
+  data.forEach(d => {
+    const slice = (d.value / total) * Math.PI * 2;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.arc(cx, cy, r, start, start + slice);
+    ctx.closePath();
+    ctx.fillStyle = d.color;
+    ctx.fill();
+    start += slice;
+  });
+  ctx.beginPath();
+  ctx.arc(cx, cy, r * 0.55, 0, Math.PI * 2);
+  ctx.fillStyle = '#ffffff';
+  ctx.fill();
+
+  legend.innerHTML = data.map(d => `
+    <div class="legend-item">
+      <span class="legend-dot" style="background:${d.color}"></span>
+      <span class="legend-label">${d.label}</span>
+      <span class="legend-value">${formatCurrency(d.value)} (${Math.round(d.value / total * 100)}%)</span>
+    </div>`).join('');
+}
+
+function renderBarChart(list) {
+  const months = [];
+  const now = new Date();
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    months.push({ key: d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'), label: d.toLocaleDateString('pt-BR', { month: 'short' }) });
+  }
+  const totals = months.map(m => list.filter(l => (l.dataCompetencia || '').startsWith(m.key)).reduce((s, l) => s + (Number(l.valor) || 0), 0));
+
+  const canvas = document.getElementById('barChart');
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  const max = Math.max(...totals, 1);
+  const padding = 24;
+  const chartW = canvas.width - padding * 2;
+  const chartH = canvas.height - padding * 2;
+  const barW = chartW / months.length * 0.55;
+  const gap = chartW / months.length;
+
+  months.forEach((m, i) => {
+    const h = (totals[i] / max) * chartH;
+    const x = padding + i * gap + (gap - barW) / 2;
+    const y = canvas.height - padding - h;
+    ctx.fillStyle = '#0f766e';
+    ctx.fillRect(x, y, barW, h);
+    ctx.fillStyle = '#64748b';
+    ctx.font = '10px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText(m.label, x + barW / 2, canvas.height - padding + 12);
+    if (totals[i] > 0) {
+      ctx.fillStyle = '#1e293b';
+      ctx.font = '9px system-ui';
+      ctx.fillText(formatCurrency(totals[i]).replace('R$', '').trim(), x + barW / 2, y - 4);
+    }
+  });
+}
+
+function renderProximosVencimentos(list) {
+  const box = document.getElementById('proximosVencimentos');
+  const pendentes = list
+    .filter(l => l.status !== 'pago' && l.dataVencimento)
+    .sort((a, b) => a.dataVencimento.localeCompare(b.dataVencimento))
+    .slice(0, 8);
+  if (pendentes.length === 0) {
+    box.innerHTML = `<p style="font-size:0.82rem;color:var(--muted)">Nenhum vencimento pendente. 👍</p>`;
+    return;
+  }
+  box.innerHTML = pendentes.map(l => {
+    const s = statusOf(l);
+    const cat = getCategoria(l.categoriaId);
+    return `<div class="lanc-item" onclick="editLancamento('${l.id}')">
+      <div class="lanc-info">
+        <div class="lanc-desc">${l.descricao}</div>
+        <div class="lanc-meta">
+          <span class="cat-badge" style="background:${cat ? cat.cor : '#94a3b8'}">${cat ? cat.nome : ''}</span>
+          <span>Vence em ${formatDateDisplay(l.dataVencimento)}</span>
+        </div>
+      </div>
+      <div class="lanc-actions">
+        <div class="lanc-value">${formatCurrency(l.valor)}</div>
+        <span class="status-badge status-${s}">${statusLabel(s)}</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ===================== LANÇAMENTOS =====================
+function renderLancamentos() {
+  const fLot = document.getElementById('lancFiltroLoteamento').value || 'all';
+  const fCat = document.getElementById('lancFiltroCategoria').value || 'all';
+  const fStatus = document.getElementById('lancFiltroStatus').value || 'all';
+
+  let list = db.lancamentos.slice();
+  if (fLot !== 'all') list = list.filter(l => l.loteamentoId === fLot);
+  if (fCat !== 'all') list = list.filter(l => l.categoriaId === fCat);
+  if (fStatus !== 'all') list = list.filter(l => statusOf(l) === fStatus);
+  list.sort((a, b) => (b.dataCompetencia || '').localeCompare(a.dataCompetencia || ''));
+
+  const container = document.getElementById('lancamentosList');
+  if (list.length === 0) {
+    container.innerHTML = `<div class="empty-state"><div class="icon">💰</div><p>Nenhum lançamento encontrado.<br>Toque em + para adicionar.</p></div>`;
+    return;
+  }
+
+  container.innerHTML = list.map(l => {
+    const cat = getCategoria(l.categoriaId);
+    const lot = getLoteamento(l.loteamentoId);
+    const forn = getFornecedor(l.fornecedorId);
+    const s = statusOf(l);
+    return `<div class="lanc-item" onclick="editLancamento('${l.id}')">
+      <div class="lanc-info">
+        <div class="lanc-desc">${l.descricao}</div>
+        <div class="lanc-meta">
+          <span class="cat-badge" style="background:${cat ? cat.cor : '#94a3b8'}">${cat ? cat.nome : 'Sem categoria'}</span>
+          <span>${lot ? lot.nome : ''}</span>
+          ${forn ? `<span>• ${forn.nome}</span>` : ''}
+          <span>• ${formatDateDisplay(l.dataCompetencia)}</span>
+          ${l.anexo ? '<span>📎</span>' : ''}
+        </div>
+      </div>
+      <div class="lanc-actions">
+        <div class="lanc-value">${formatCurrency(l.valor)}</div>
+        <span class="status-badge status-${s}">${statusLabel(s)}</span>
+        <div class="lanc-btns" onclick="event.stopPropagation()">
+          <button class="btn-icon btn-edit" onclick="editLancamento('${l.id}')">✏️</button>
+          <button class="btn-icon btn-delete" onclick="deleteLancamento('${l.id}')">🗑️</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function openLancamentoModal() {
+  state.editingLancamentoId = null;
+  state.currentAnexo = null;
+  document.getElementById('modalLancamentoTitle').textContent = 'Novo Lançamento';
+  document.getElementById('lcDescricao').value = '';
+  populateLoteamentoSelect(document.getElementById('lcLoteamento'), false);
+  populateCategoriaSelect(document.getElementById('lcCategoria'), false);
+  populateFornecedorSelect(document.getElementById('lcFornecedor'), true);
+  onLcLoteamentoChange();
+  document.getElementById('lcValor').value = '';
+  document.getElementById('lcFormaPagamento').value = 'PIX';
+  document.getElementById('lcDataCompetencia').value = todayStr();
+  document.getElementById('lcDataVencimento').value = '';
+  document.getElementById('lcStatus').value = 'pendente';
+  document.getElementById('lcAnexoInput').value = '';
+  document.getElementById('lcAnexoPreview').innerHTML = '';
+  if (db.loteamentos.length === 0) {
+    showToast('⚠️', 'Cadastre um loteamento primeiro', 'Vá em Cadastros > Loteamentos.');
+    return;
+  }
+  openModal('modalLancamento');
+}
+
+function onLcLoteamentoChange() {
+  const loteamentoId = document.getElementById('lcLoteamento').value;
+  populateLoteSelect(document.getElementById('lcLote'), loteamentoId, true);
+}
+
+function editLancamento(id) {
+  const l = db.lancamentos.find(x => x.id === id);
+  if (!l) return;
+  state.editingLancamentoId = id;
+  state.currentAnexo = l.anexo || null;
+  document.getElementById('modalLancamentoTitle').textContent = 'Editar Lançamento';
+  document.getElementById('lcDescricao').value = l.descricao;
+  populateLoteamentoSelect(document.getElementById('lcLoteamento'), false);
+  document.getElementById('lcLoteamento').value = l.loteamentoId;
+  populateLoteSelect(document.getElementById('lcLote'), l.loteamentoId, true);
+  document.getElementById('lcLote').value = l.loteId || '';
+  populateCategoriaSelect(document.getElementById('lcCategoria'), false);
+  document.getElementById('lcCategoria').value = l.categoriaId;
+  populateFornecedorSelect(document.getElementById('lcFornecedor'), true);
+  document.getElementById('lcFornecedor').value = l.fornecedorId || '';
+  document.getElementById('lcValor').value = l.valor;
+  document.getElementById('lcFormaPagamento').value = l.formaPagamento || 'PIX';
+  document.getElementById('lcDataCompetencia').value = l.dataCompetencia;
+  document.getElementById('lcDataVencimento').value = l.dataVencimento || '';
+  document.getElementById('lcStatus').value = l.status;
+  document.getElementById('lcAnexoInput').value = '';
+  renderAnexoPreview();
+  openModal('modalLancamento');
+}
+
+function handleAnexoChange(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  if (file.size > 1.5 * 1024 * 1024) {
+    showToast('⚠️', 'Arquivo muito grande', 'Escolha um arquivo de até 1,5MB.');
+    e.target.value = '';
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = () => {
+    state.currentAnexo = { name: file.name, type: file.type, dataUrl: reader.result };
+    renderAnexoPreview();
+  };
+  reader.readAsDataURL(file);
+}
+
+function renderAnexoPreview() {
+  const box = document.getElementById('lcAnexoPreview');
+  if (!state.currentAnexo) { box.innerHTML = ''; return; }
+  box.innerHTML = `<div class="anexo-preview">📎 <a href="${state.currentAnexo.dataUrl}" target="_blank">${state.currentAnexo.name}</a><button onclick="removeAnexo()">Remover</button></div>`;
+}
+
+function removeAnexo() { state.currentAnexo = null; renderAnexoPreview(); }
+
+function saveLancamento() {
+  const descricao = document.getElementById('lcDescricao').value.trim();
+  const loteamentoId = document.getElementById('lcLoteamento').value;
+  const categoriaId = document.getElementById('lcCategoria').value;
+  const valor = parseFloat(document.getElementById('lcValor').value);
+  const dataCompetencia = document.getElementById('lcDataCompetencia').value;
+
+  if (!descricao || !loteamentoId || !categoriaId || !valor || !dataCompetencia) {
+    alert('Preencha descrição, loteamento, categoria, valor e data de competência!');
+    return;
+  }
+
+  const lc = {
+    id: state.editingLancamentoId || genId(),
+    descricao,
+    loteamentoId,
+    loteId: document.getElementById('lcLote').value || null,
+    categoriaId,
+    fornecedorId: document.getElementById('lcFornecedor').value || null,
+    valor,
+    formaPagamento: document.getElementById('lcFormaPagamento').value,
+    dataCompetencia,
+    dataVencimento: document.getElementById('lcDataVencimento').value || null,
+    status: document.getElementById('lcStatus').value,
+    anexo: state.currentAnexo,
+    createdAt: new Date().toISOString()
+  };
+
+  if (state.editingLancamentoId) {
+    const idx = db.lancamentos.findIndex(x => x.id === state.editingLancamentoId);
+    db.lancamentos[idx] = lc;
+  } else {
+    db.lancamentos.push(lc);
+  }
+  saveDB();
+  closeModal('modalLancamento');
+  renderLancamentos();
+  showToast('✅', 'Lançamento salvo!', descricao);
+}
+
+function deleteLancamento(id) {
+  if (!confirm('Excluir este lançamento?')) return;
+  db.lancamentos = db.lancamentos.filter(l => l.id !== id);
+  saveDB();
+  renderLancamentos();
+  showToast('🗑️', 'Lançamento excluído', '');
+}
+
+// ===================== ORÇAMENTO =====================
+function renderOrcamento() {
+  const fLot = document.getElementById('orcFiltroLoteamento').value || 'all';
+  let list = db.orcamentos.slice();
+  if (fLot !== 'all') list = list.filter(o => o.loteamentoId === fLot);
+
+  const container = document.getElementById('orcamentoList');
+  if (list.length === 0) {
+    container.innerHTML = `<div class="empty-state"><div class="icon">📋</div><p>Nenhum orçamento cadastrado.<br>Toque em + para definir um orçamento por categoria.</p></div>`;
+    return;
+  }
+
+  container.innerHTML = list.map(o => {
+    const cat = getCategoria(o.categoriaId);
+    const lot = getLoteamento(o.loteamentoId);
+    const realizado = db.lancamentos
+      .filter(l => l.loteamentoId === o.loteamentoId && l.categoriaId === o.categoriaId)
+      .reduce((s, l) => s + (Number(l.valor) || 0), 0);
+    const pct = o.valorPlanejado > 0 ? Math.min(100, Math.round(realizado / o.valorPlanejado * 100)) : 0;
+    const over = realizado > o.valorPlanejado;
+    return `<div class="orc-item">
+      <div class="orc-head">
+        <div class="orc-title">${cat ? cat.nome : ''} — ${lot ? lot.nome : ''}</div>
+        <div class="lanc-btns">
+          <button class="btn-icon btn-edit" onclick="editOrcamento('${o.id}')">✏️</button>
+          <button class="btn-icon btn-delete" onclick="deleteOrcamento('${o.id}')">🗑️</button>
+        </div>
+      </div>
+      <div class="orc-values">${formatCurrency(realizado)} de ${formatCurrency(o.valorPlanejado)} ${over ? '(orçamento estourado)' : `(${pct}%)`}</div>
+      <div class="orc-bar-bg"><div class="orc-bar-fill ${over ? 'over' : ''}" style="width:${over ? 100 : pct}%"></div></div>
+    </div>`;
+  }).join('');
+}
+
+function openOrcamentoModal() {
+  state.editingOrcamentoId = null;
+  document.getElementById('modalOrcamentoTitle').textContent = 'Novo Orçamento';
+  populateLoteamentoSelect(document.getElementById('orLoteamento'), false);
+  populateCategoriaSelect(document.getElementById('orCategoria'), false);
+  document.getElementById('orValor').value = '';
+  if (db.loteamentos.length === 0) {
+    showToast('⚠️', 'Cadastre um loteamento primeiro', 'Vá em Cadastros > Loteamentos.');
+    return;
+  }
+  openModal('modalOrcamento');
+}
+
+function editOrcamento(id) {
+  const o = db.orcamentos.find(x => x.id === id);
+  if (!o) return;
+  state.editingOrcamentoId = id;
+  document.getElementById('modalOrcamentoTitle').textContent = 'Editar Orçamento';
+  populateLoteamentoSelect(document.getElementById('orLoteamento'), false);
+  document.getElementById('orLoteamento').value = o.loteamentoId;
+  populateCategoriaSelect(document.getElementById('orCategoria'), false);
+  document.getElementById('orCategoria').value = o.categoriaId;
+  document.getElementById('orValor').value = o.valorPlanejado;
+  openModal('modalOrcamento');
+}
+
+function saveOrcamento() {
+  const loteamentoId = document.getElementById('orLoteamento').value;
+  const categoriaId = document.getElementById('orCategoria').value;
+  const valorPlanejado = parseFloat(document.getElementById('orValor').value);
+  if (!loteamentoId || !categoriaId || !valorPlanejado) { alert('Preencha todos os campos!'); return; }
+
+  const existing = db.orcamentos.find(o => o.loteamentoId === loteamentoId && o.categoriaId === categoriaId && o.id !== state.editingOrcamentoId);
+  if (existing) { alert('Já existe um orçamento para esse loteamento e categoria. Edite o existente.'); return; }
+
+  const o = { id: state.editingOrcamentoId || genId(), loteamentoId, categoriaId, valorPlanejado };
+  if (state.editingOrcamentoId) {
+    const idx = db.orcamentos.findIndex(x => x.id === state.editingOrcamentoId);
+    db.orcamentos[idx] = o;
+  } else {
+    db.orcamentos.push(o);
+  }
+  saveDB();
+  closeModal('modalOrcamento');
+  renderOrcamento();
+  showToast('✅', 'Orçamento salvo!', '');
+}
+
+function deleteOrcamento(id) {
+  if (!confirm('Excluir este orçamento?')) return;
+  db.orcamentos = db.orcamentos.filter(o => o.id !== id);
+  saveDB();
+  renderOrcamento();
+  showToast('🗑️', 'Orçamento excluído', '');
+}
+
+// ===================== CADASTROS =====================
+function switchCadastroSubTab(name) {
+  state.cadastroSubTab = name;
+  document.querySelectorAll('.subtab').forEach(t => t.classList.remove('active'));
+  document.getElementById('subtab-' + name).classList.add('active');
+  document.querySelectorAll('.cadastro-panel').forEach(p => p.style.display = 'none');
+  document.getElementById('cadastro' + name.charAt(0).toUpperCase() + name.slice(1)).style.display = 'block';
+  renderCadastros();
+}
+
+function renderCadastros() {
+  renderCadastroLoteamentos();
+  renderCadastroLotes();
+  renderCadastroFornecedores();
+  renderCadastroCategorias();
+}
+
+function renderCadastroLoteamentos() {
+  const box = document.getElementById('cadastroLoteamentos');
+  if (db.loteamentos.length === 0) {
+    box.innerHTML = `<div class="empty-state"><div class="icon">🏗️</div><p>Nenhum loteamento cadastrado.<br>Toque em + para começar.</p></div>`;
+    return;
+  }
+  const statusLabels = { planejamento: 'Planejamento', em_obras: 'Em obras', concluido: 'Concluído' };
+  box.innerHTML = db.loteamentos.map(l => `
+    <div class="reg-item">
+      <div class="reg-info">
+        <div class="reg-title">${l.nome}</div>
+        <div class="reg-sub">${l.local || ''} • ${l.totalLotes || 0} lotes • ${statusLabels[l.status] || ''}</div>
+      </div>
+      <div class="lanc-btns">
+        <button class="btn-icon btn-edit" onclick="editLoteamento('${l.id}')">✏️</button>
+        <button class="btn-icon btn-delete" onclick="deleteLoteamento('${l.id}')">🗑️</button>
+      </div>
+    </div>`).join('');
+}
+
+function openLoteamentoModal() {
+  state.editingLoteamentoId = null;
+  document.getElementById('modalLoteamentoTitle').textContent = 'Novo Loteamento';
+  document.getElementById('ltNome').value = '';
+  document.getElementById('ltLocal').value = '';
+  document.getElementById('ltTotalLotes').value = '';
+  document.getElementById('ltDataInicio').value = '';
+  document.getElementById('ltStatus').value = 'planejamento';
+  openModal('modalLoteamento');
+}
+
+function editLoteamento(id) {
+  const l = getLoteamento(id);
+  if (!l) return;
+  state.editingLoteamentoId = id;
+  document.getElementById('modalLoteamentoTitle').textContent = 'Editar Loteamento';
+  document.getElementById('ltNome').value = l.nome;
+  document.getElementById('ltLocal').value = l.local || '';
+  document.getElementById('ltTotalLotes').value = l.totalLotes || '';
+  document.getElementById('ltDataInicio').value = l.dataInicio || '';
+  document.getElementById('ltStatus').value = l.status || 'planejamento';
+  openModal('modalLoteamento');
+}
+
+function saveLoteamento() {
+  const nome = document.getElementById('ltNome').value.trim();
+  if (!nome) { alert('Digite o nome do loteamento!'); return; }
+  const l = {
+    id: state.editingLoteamentoId || genId(),
+    nome,
+    local: document.getElementById('ltLocal').value.trim(),
+    totalLotes: parseInt(document.getElementById('ltTotalLotes').value) || 0,
+    dataInicio: document.getElementById('ltDataInicio').value || null,
+    status: document.getElementById('ltStatus').value
+  };
+  if (state.editingLoteamentoId) {
+    const idx = db.loteamentos.findIndex(x => x.id === state.editingLoteamentoId);
+    db.loteamentos[idx] = l;
+  } else {
+    db.loteamentos.push(l);
+  }
+  saveDB();
+  closeModal('modalLoteamento');
+  refreshAllSelects();
+  renderCadastros();
+  showToast('✅', 'Loteamento salvo!', nome);
+}
+
+function deleteLoteamento(id) {
+  const inUse = db.lotes.some(x => x.loteamentoId === id) || db.lancamentos.some(x => x.loteamentoId === id) || db.orcamentos.some(x => x.loteamentoId === id);
+  if (inUse) { alert('Não é possível excluir: existem lotes, lançamentos ou orçamentos vinculados a este loteamento.'); return; }
+  if (!confirm('Excluir este loteamento?')) return;
+  db.loteamentos = db.loteamentos.filter(l => l.id !== id);
+  saveDB();
+  refreshAllSelects();
+  renderCadastros();
+  showToast('🗑️', 'Loteamento excluído', '');
+}
+
+function renderCadastroLotes() {
+  const box = document.getElementById('cadastroLotes');
+  if (db.lotes.length === 0) {
+    box.innerHTML = `<div class="empty-state"><div class="icon">📐</div><p>Nenhum lote cadastrado.<br>Toque em + para adicionar.</p></div>`;
+    return;
+  }
+  const statusLabels = { disponivel: 'Disponível', reservado: 'Reservado', vendido: 'Vendido' };
+  box.innerHTML = db.lotes.map(l => {
+    const lot = getLoteamento(l.loteamentoId);
+    return `<div class="reg-item">
+      <div class="reg-info">
+        <div class="reg-title">Quadra ${l.quadra || '-'} / Lote ${l.numero}</div>
+        <div class="reg-sub">${lot ? lot.nome : ''} • ${l.area ? l.area + ' m²' : ''} • ${statusLabels[l.status] || ''}</div>
+      </div>
+      <div class="lanc-btns">
+        <button class="btn-icon btn-edit" onclick="editLote('${l.id}')">✏️</button>
+        <button class="btn-icon btn-delete" onclick="deleteLote('${l.id}')">🗑️</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function openLoteModal() {
+  state.editingLoteId = null;
+  document.getElementById('modalLoteTitle').textContent = 'Novo Lote';
+  populateLoteamentoSelect(document.getElementById('ltLoteLoteamento'), false);
+  document.getElementById('ltQuadra').value = '';
+  document.getElementById('ltNumero').value = '';
+  document.getElementById('ltArea').value = '';
+  document.getElementById('ltLoteStatus').value = 'disponivel';
+  if (db.loteamentos.length === 0) {
+    showToast('⚠️', 'Cadastre um loteamento primeiro', 'Vá na aba Loteamentos.');
+    return;
+  }
+  openModal('modalLote');
+}
+
+function editLote(id) {
+  const l = getLote(id);
+  if (!l) return;
+  state.editingLoteId = id;
+  document.getElementById('modalLoteTitle').textContent = 'Editar Lote';
+  populateLoteamentoSelect(document.getElementById('ltLoteLoteamento'), false);
+  document.getElementById('ltLoteLoteamento').value = l.loteamentoId;
+  document.getElementById('ltQuadra').value = l.quadra || '';
+  document.getElementById('ltNumero').value = l.numero;
+  document.getElementById('ltArea').value = l.area || '';
+  document.getElementById('ltLoteStatus').value = l.status;
+  openModal('modalLote');
+}
+
+function saveLote() {
+  const loteamentoId = document.getElementById('ltLoteLoteamento').value;
+  const numero = document.getElementById('ltNumero').value.trim();
+  if (!loteamentoId || !numero) { alert('Selecione o loteamento e informe o número do lote!'); return; }
+  const l = {
+    id: state.editingLoteId || genId(),
+    loteamentoId,
+    quadra: document.getElementById('ltQuadra').value.trim(),
+    numero,
+    area: parseFloat(document.getElementById('ltArea').value) || null,
+    status: document.getElementById('ltLoteStatus').value
+  };
+  if (state.editingLoteId) {
+    const idx = db.lotes.findIndex(x => x.id === state.editingLoteId);
+    db.lotes[idx] = l;
+  } else {
+    db.lotes.push(l);
+  }
+  saveDB();
+  closeModal('modalLote');
+  renderCadastros();
+  showToast('✅', 'Lote salvo!', '');
+}
+
+function deleteLote(id) {
+  const inUse = db.lancamentos.some(x => x.loteId === id);
+  if (inUse) { alert('Não é possível excluir: existem lançamentos vinculados a este lote.'); return; }
+  if (!confirm('Excluir este lote?')) return;
+  db.lotes = db.lotes.filter(l => l.id !== id);
+  saveDB();
+  renderCadastros();
+  showToast('🗑️', 'Lote excluído', '');
+}
+
+function renderCadastroFornecedores() {
+  const box = document.getElementById('cadastroFornecedores');
+  if (db.fornecedores.length === 0) {
+    box.innerHTML = `<div class="empty-state"><div class="icon">🧰</div><p>Nenhum fornecedor cadastrado.<br>Toque em + para adicionar.</p></div>`;
+    return;
+  }
+  box.innerHTML = db.fornecedores.map(f => {
+    const cat = getCategoria(f.categoriaId);
+    return `<div class="reg-item">
+      <div class="reg-info">
+        <div class="reg-title">${f.nome}</div>
+        <div class="reg-sub">${f.documento || ''} ${f.contato ? '• ' + f.contato : ''} ${cat ? '• ' + cat.nome : ''}</div>
+      </div>
+      <div class="lanc-btns">
+        <button class="btn-icon btn-edit" onclick="editFornecedor('${f.id}')">✏️</button>
+        <button class="btn-icon btn-delete" onclick="deleteFornecedor('${f.id}')">🗑️</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function openFornecedorModal() {
+  state.editingFornecedorId = null;
+  document.getElementById('modalFornecedorTitle').textContent = 'Novo Fornecedor';
+  document.getElementById('fnNome').value = '';
+  document.getElementById('fnDocumento').value = '';
+  document.getElementById('fnContato').value = '';
+  populateCategoriaSelect(document.getElementById('fnCategoria'), true);
+  openModal('modalFornecedor');
+}
+
+function editFornecedor(id) {
+  const f = getFornecedor(id);
+  if (!f) return;
+  state.editingFornecedorId = id;
+  document.getElementById('modalFornecedorTitle').textContent = 'Editar Fornecedor';
+  document.getElementById('fnNome').value = f.nome;
+  document.getElementById('fnDocumento').value = f.documento || '';
+  document.getElementById('fnContato').value = f.contato || '';
+  populateCategoriaSelect(document.getElementById('fnCategoria'), true);
+  document.getElementById('fnCategoria').value = f.categoriaId || 'all';
+  openModal('modalFornecedor');
+}
+
+function saveFornecedor() {
+  const nome = document.getElementById('fnNome').value.trim();
+  if (!nome) { alert('Digite o nome do fornecedor!'); return; }
+  const catVal = document.getElementById('fnCategoria').value;
+  const f = {
+    id: state.editingFornecedorId || genId(),
+    nome,
+    documento: document.getElementById('fnDocumento').value.trim(),
+    contato: document.getElementById('fnContato').value.trim(),
+    categoriaId: catVal === 'all' ? null : catVal
+  };
+  if (state.editingFornecedorId) {
+    const idx = db.fornecedores.findIndex(x => x.id === state.editingFornecedorId);
+    db.fornecedores[idx] = f;
+  } else {
+    db.fornecedores.push(f);
+  }
+  saveDB();
+  closeModal('modalFornecedor');
+  renderCadastros();
+  showToast('✅', 'Fornecedor salvo!', nome);
+}
+
+function deleteFornecedor(id) {
+  const inUse = db.lancamentos.some(x => x.fornecedorId === id);
+  if (inUse) { alert('Não é possível excluir: existem lançamentos vinculados a este fornecedor.'); return; }
+  if (!confirm('Excluir este fornecedor?')) return;
+  db.fornecedores = db.fornecedores.filter(f => f.id !== id);
+  saveDB();
+  renderCadastros();
+  showToast('🗑️', 'Fornecedor excluído', '');
+}
+
+function renderCadastroCategorias() {
+  const box = document.getElementById('cadastroCategorias');
+  box.innerHTML = db.categorias.map(c => `
+    <div class="reg-item">
+      <div class="reg-info" style="display:flex;align-items:center;gap:8px">
+        <span class="legend-dot" style="background:${c.cor};width:14px;height:14px"></span>
+        <span class="reg-title">${c.nome}</span>
+      </div>
+      <div class="lanc-btns">
+        <button class="btn-icon btn-edit" onclick="editCategoria('${c.id}')">✏️</button>
+        <button class="btn-icon btn-delete" onclick="deleteCategoria('${c.id}')">🗑️</button>
+      </div>
+    </div>`).join('');
+}
+
+function openCategoriaModal() {
+  state.editingCategoriaId = null;
+  document.getElementById('modalCategoriaTitle').textContent = 'Nova Categoria';
+  document.getElementById('ctNome').value = '';
+  document.getElementById('ctCor').value = '#0f766e';
+  openModal('modalCategoria');
+}
+
+function editCategoria(id) {
+  const c = getCategoria(id);
+  if (!c) return;
+  state.editingCategoriaId = id;
+  document.getElementById('modalCategoriaTitle').textContent = 'Editar Categoria';
+  document.getElementById('ctNome').value = c.nome;
+  document.getElementById('ctCor').value = c.cor;
+  openModal('modalCategoria');
+}
+
+function saveCategoria() {
+  const nome = document.getElementById('ctNome').value.trim();
+  if (!nome) { alert('Digite o nome da categoria!'); return; }
+  const c = { id: state.editingCategoriaId || genId(), nome, cor: document.getElementById('ctCor').value };
+  if (state.editingCategoriaId) {
+    const idx = db.categorias.findIndex(x => x.id === state.editingCategoriaId);
+    db.categorias[idx] = c;
+  } else {
+    db.categorias.push(c);
+  }
+  saveDB();
+  closeModal('modalCategoria');
+  refreshAllSelects();
+  renderCadastros();
+  showToast('✅', 'Categoria salva!', nome);
+}
+
+function deleteCategoria(id) {
+  const inUse = db.lancamentos.some(x => x.categoriaId === id) || db.orcamentos.some(x => x.categoriaId === id);
+  if (inUse) { alert('Não é possível excluir: existem lançamentos ou orçamentos vinculados a esta categoria.'); return; }
+  if (!confirm('Excluir esta categoria?')) return;
+  db.categorias = db.categorias.filter(c => c.id !== id);
+  saveDB();
+  refreshAllSelects();
+  renderCadastros();
+  showToast('🗑️', 'Categoria excluída', '');
+}
+
+// ===================== RELATÓRIOS =====================
+let ultimoRelatorio = [];
+
+function renderRelatoriosSetup() {
+  populateLoteamentoSelect(document.getElementById('relLoteamento'), true);
+  populateCategoriaSelect(document.getElementById('relCategoria'), true);
+  populateFornecedorSelect(document.getElementById('relFornecedor'), true);
+  document.getElementById('relFornecedor').insertAdjacentHTML('afterbegin', '<option value="all" selected>Todos os fornecedores</option>');
+}
+
+function gerarRelatorio() {
+  const fLot = document.getElementById('relLoteamento').value;
+  const fCat = document.getElementById('relCategoria').value;
+  const fForn = document.getElementById('relFornecedor').value;
+  const fStatus = document.getElementById('relStatus').value;
+  const de = document.getElementById('relDe').value;
+  const ate = document.getElementById('relAte').value;
+
+  let list = db.lancamentos.slice();
+  if (fLot !== 'all') list = list.filter(l => l.loteamentoId === fLot);
+  if (fCat !== 'all') list = list.filter(l => l.categoriaId === fCat);
+  if (fForn && fForn !== 'all') list = list.filter(l => l.fornecedorId === fForn);
+  if (fStatus !== 'all') list = list.filter(l => statusOf(l) === fStatus);
+  if (de) list = list.filter(l => l.dataCompetencia >= de);
+  if (ate) list = list.filter(l => l.dataCompetencia <= ate);
+  list.sort((a, b) => a.dataCompetencia.localeCompare(b.dataCompetencia));
+
+  ultimoRelatorio = list;
+  document.getElementById('relResultCard').style.display = list.length ? 'block' : 'block';
+
+  const table = document.getElementById('relTable');
+  if (list.length === 0) {
+    table.innerHTML = `<tr><td style="padding:12px;color:var(--muted)">Nenhum lançamento encontrado para os filtros selecionados.</td></tr>`;
+    return;
+  }
+
+  let total = 0;
+  const rows = list.map(l => {
+    const cat = getCategoria(l.categoriaId);
+    const lot = getLoteamento(l.loteamentoId);
+    const forn = getFornecedor(l.fornecedorId);
+    total += Number(l.valor) || 0;
+    return `<tr>
+      <td>${formatDateDisplay(l.dataCompetencia)}</td>
+      <td>${l.descricao}</td>
+      <td>${lot ? lot.nome : ''}</td>
+      <td>${cat ? cat.nome : ''}</td>
+      <td>${forn ? forn.nome : ''}</td>
+      <td>${statusLabel(statusOf(l))}</td>
+      <td>${formatCurrency(l.valor)}</td>
+    </tr>`;
+  }).join('');
+
+  table.innerHTML = `
+    <thead><tr><th>Data</th><th>Descrição</th><th>Loteamento</th><th>Categoria</th><th>Fornecedor</th><th>Status</th><th>Valor</th></tr></thead>
+    <tbody>${rows}</tbody>
+    <tfoot><tr><td colspan="6">Total</td><td>${formatCurrency(total)}</td></tr></tfoot>`;
+}
+
+function exportRelatorioCSV() {
+  if (ultimoRelatorio.length === 0) { showToast('⚠️', 'Nada para exportar', 'Gere o relatório primeiro.'); return; }
+  const header = ['Data', 'Descrição', 'Loteamento', 'Categoria', 'Fornecedor', 'Status', 'Valor'];
+  const lines = [header.join(';')];
+  ultimoRelatorio.forEach(l => {
+    const cat = getCategoria(l.categoriaId);
+    const lot = getLoteamento(l.loteamentoId);
+    const forn = getFornecedor(l.fornecedorId);
+    lines.push([
+      formatDateDisplay(l.dataCompetencia),
+      `"${(l.descricao || '').replace(/"/g, '""')}"`,
+      lot ? lot.nome : '',
+      cat ? cat.nome : '',
+      forn ? forn.nome : '',
+      statusLabel(statusOf(l)),
+      (Number(l.valor) || 0).toFixed(2).replace('.', ',')
+    ].join(';'));
+  });
+  const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'relatorio-custos.csv';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast('⬇️', 'CSV exportado!', '');
+}
+
+function exportRelatorioPDF() {
+  if (ultimoRelatorio.length === 0) { showToast('⚠️', 'Nada para exportar', 'Gere o relatório primeiro.'); return; }
+  const total = ultimoRelatorio.reduce((s, l) => s + (Number(l.valor) || 0), 0);
+  const rows = ultimoRelatorio.map(l => {
+    const cat = getCategoria(l.categoriaId);
+    const lot = getLoteamento(l.loteamentoId);
+    const forn = getFornecedor(l.fornecedorId);
+    return `<tr><td>${formatDateDisplay(l.dataCompetencia)}</td><td>${l.descricao}</td><td>${lot ? lot.nome : ''}</td><td>${cat ? cat.nome : ''}</td><td>${forn ? forn.nome : ''}</td><td>${statusLabel(statusOf(l))}</td><td>${formatCurrency(l.valor)}</td></tr>`;
+  }).join('');
+  const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Relatório de Custos</title>
+    <style>
+      body{font-family:system-ui,sans-serif;padding:24px;color:#1e293b}
+      h1{font-size:1.2rem;margin-bottom:4px}
+      p.sub{color:#64748b;font-size:0.85rem;margin-bottom:16px}
+      table{width:100%;border-collapse:collapse;font-size:0.8rem}
+      th,td{padding:6px 8px;border-bottom:1px solid #e2e8f0;text-align:left}
+      th{background:#f0fbf9}
+      tfoot td{font-weight:700;border-top:2px solid #1e293b}
+    </style></head><body>
+    <h1>Relatório de Custos - Loteamento</h1>
+    <p class="sub">Gerado em ${new Date().toLocaleString('pt-BR')}</p>
+    <table><thead><tr><th>Data</th><th>Descrição</th><th>Loteamento</th><th>Categoria</th><th>Fornecedor</th><th>Status</th><th>Valor</th></tr></thead>
+    <tbody>${rows}</tbody>
+    <tfoot><tr><td colspan="6">Total</td><td>${formatCurrency(total)}</td></tr></tfoot></table>
+    </body></html>`;
+  const w = window.open('', '_blank');
+  if (!w) { showToast('⚠️', 'Bloqueado pelo navegador', 'Permita pop-ups para exportar o PDF.'); return; }
+  w.document.write(html);
+  w.document.close();
+  w.focus();
+  setTimeout(() => w.print(), 300);
+}
+</script>
+</body>
+</html>
