@@ -173,7 +173,7 @@
   @media (min-width: 900px) {
     .sheet { position: static; display: none; width: 340px; flex-shrink: 0; max-height: none; border-radius: 0; transform: none; transition: none; border-left: 1px solid var(--border); box-shadow: none; background: #fff; }
     .sheet.open { display: block; }
-    .tool { flex: 0 0 120px; }
+    .tool { flex: 0 0 110px; }
     .bar { justify-content: center; }
   }
 
@@ -289,6 +289,7 @@
     <button class="tool" id="tool-door" data-action="tool-door"><span class="ic">🚪</span>Porta</button>
     <button class="tool" id="tool-window" data-action="tool-window"><span class="ic">🪟</span>Janela</button>
     <button class="tool" data-action="pick-furn"><span class="ic">🛋️</span>Móveis</button>
+    <button class="tool" id="tool-measure" data-action="tool-measure"><span class="ic">📏</span>Medir</button>
     <button class="tool" data-action="summary"><span class="ic">📋</span>Resumo</button>
   </div>
 </div>
@@ -359,6 +360,28 @@ const FURN = [
   { k:'cadeira',       n:'Cadeira',           w:0.45,h:0.45, cat:'outros' },
   { k:'planta',        n:'Planta / vaso',     w:0.5, h:0.5,  cat:'outros' },
   { k:'escada',        n:'Escada',            w:1.0, h:3.0,  cat:'outros' },
+  { k:'cama_king',     n:'Cama king',         w:1.95,h:2.05, cat:'quarto' },
+  { k:'beliche',       n:'Beliche',           w:0.9, h:1.9,  cat:'quarto' },
+  { k:'penteadeira',   n:'Penteadeira',       w:1.0, h:0.45, cat:'quarto' },
+  { k:'sofa_canto',    n:'Sofá de canto (L)', w:2.4, h:1.6,  cat:'sala' },
+  { k:'mesa8',         n:'Mesa 8 lugares',    w:3.2, h:2.0,  cat:'sala' },
+  { k:'mesa_redonda',  n:'Mesa redonda',      w:1.9, h:1.9,  cat:'sala' },
+  { k:'aparador',      n:'Aparador',          w:1.2, h:0.4,  cat:'sala' },
+  { k:'puff',          n:'Puff',              w:0.5, h:0.5,  cat:'sala' },
+  { k:'lareira',       n:'Lareira',           w:1.2, h:0.5,  cat:'sala' },
+  { k:'micro_ondas',   n:'Micro-ondas',       w:0.5, h:0.4,  cat:'cozinha' },
+  { k:'lava_loucas',   n:'Lava-louças',       w:0.6, h:0.6,  cat:'cozinha' },
+  { k:'freezer',       n:'Freezer',           w:0.7, h:0.7,  cat:'cozinha' },
+  { k:'bide',          n:'Bidê',              w:0.4, h:0.55, cat:'banheiro' },
+  { k:'lavatorio_duplo', n:'Bancada 2 cubas', w:1.2, h:0.5,  cat:'banheiro' },
+  { k:'secadora',      n:'Secadora',          w:0.6, h:0.6,  cat:'servico' },
+  { k:'tabua_passar',  n:'Tábua de passar',   w:1.2, h:0.4,  cat:'servico' },
+  { k:'moto',          n:'Moto',              w:0.8, h:2.1,  cat:'outros' },
+  { k:'bicicleta',     n:'Bicicleta',         w:0.6, h:1.8,  cat:'outros' },
+  { k:'espreguicadeira', n:'Espreguiçadeira', w:0.7, h:1.9,  cat:'outros' },
+  { k:'arvore',        n:'Árvore',            w:1.5, h:1.5,  cat:'outros' },
+  { k:'banco',         n:'Banco',             w:1.5, h:0.45, cat:'outros' },
+  { k:'ar_condicionado', n:'Ar-condicionado', w:0.9, h:0.3,  cat:'outros' },
 ];
 
 /* Modelos prontos: cômodos referenciados por chave; portas/janelas apontam para a chave */
@@ -462,11 +485,57 @@ function bounds(p) {
   const add = (x, y, w, h) => { x1 = Math.min(x1, x); y1 = Math.min(y1, y); x2 = Math.max(x2, x + w); y2 = Math.max(y2, y + h); };
   p.rooms.forEach(r => add(r.x, r.y, r.w, r.h));
   p.furniture.forEach(f => { const s = Math.max(f.w, f.h); add(f.x + f.w / 2 - s / 2, f.y + f.h / 2 - s / 2, s, s); });
+  (p.measures || []).forEach(m => { add(m.x1, m.y1, 0, 0); add(m.x2, m.y2, 0, 0); });
   if (x1 === Infinity) return { x: 0, y: 0, w: 6, h: 6, empty: true };
   return { x: x1, y: y1, w: x2 - x1, h: y2 - y1 };
 }
 function roomArea(r) { return r.w * r.h; }
 function totalArea(p) { return p.rooms.reduce((s, r) => s + roomArea(r), 0); }
+/* Cômodos em L/U: várias partes retangulares com o mesmo "group" */
+function groupOf(p, r) { return r.group ? p.rooms.filter(q => q.group === r.group) : [r]; }
+function groupArea(p, r) { return groupOf(p, r).reduce((s, q) => s + roomArea(q), 0); }
+function groupBounds(p, r) { return bounds({ rooms: groupOf(p, r), furniture: [] }); }
+/* Trechos de parede entre partes do mesmo cômodo (são apagados no desenho) */
+function sharedSegments(p) {
+  const out = [], eps = 0.011;
+  for (let i = 0; i < p.rooms.length; i++) for (let j = i + 1; j < p.rooms.length; j++) {
+    const a = p.rooms[i], b = p.rooms[j];
+    if (!a.group || a.group !== b.group) continue;
+    for (const [l, r] of [[a, b], [b, a]]) {
+      if (Math.abs(l.x + l.w - r.x) < eps) {
+        const y1 = Math.max(l.y, r.y) + WALL / 2, y2 = Math.min(l.y + l.h, r.y + r.h) - WALL / 2;
+        if (y2 > y1) out.push({ x: r.x - WALL / 2, y: y1, w: WALL, h: y2 - y1, color: l.color });
+      }
+      if (Math.abs(l.y + l.h - r.y) < eps) {
+        const x1 = Math.max(l.x, r.x) + WALL / 2, x2 = Math.min(l.x + l.w, r.x + r.w) - WALL / 2;
+        if (x2 > x1) out.push({ x: x1, y: r.y - WALL / 2, w: x2 - x1, h: WALL, color: l.color });
+      }
+    }
+  }
+  return out;
+}
+/* Medições livres */
+function distToSeg(pt, x1, y1, x2, y2) {
+  const dx = x2 - x1, dy = y2 - y1, l2 = dx * dx + dy * dy;
+  const t = l2 ? clamp(((pt.x - x1) * dx + (pt.y - y1) * dy) / l2, 0, 1) : 0;
+  return Math.hypot(pt.x - (x1 + dx * t), pt.y - (y1 + dy * t));
+}
+function measureAt(p, pt, tol) {
+  let best = null;
+  for (const m of (p.measures || [])) { const d = distToSeg(pt, m.x1, m.y1, m.x2, m.y2); if (d <= tol && (!best || d < best.d)) best = { m, d }; }
+  return best && best.m;
+}
+/* Ponto "grudado": canto de cômodo, depois parede, depois grade */
+function snapPoint(p, pt, tol) {
+  let best = null;
+  for (const r of p.rooms) for (const [x, y] of [[r.x, r.y], [r.x + r.w, r.y], [r.x, r.y + r.h], [r.x + r.w, r.y + r.h]]) {
+    const d = Math.hypot(pt.x - x, pt.y - y); if (d <= tol && (!best || d < best.d)) best = { x, y, d };
+  }
+  if (best) return { x: best.x, y: best.y };
+  const wall = nearestWall(p, pt, tol);
+  if (wall) { const g = sideGeom(wall.room, wall.side); return { x: r2(g.sx + g.dx * wall.u), y: r2(g.sy + g.dy * wall.u) }; }
+  return { x: snap(pt.x), y: snap(pt.y) };
+}
 
 /* Parede mais próxima de um ponto (para colocar portas/janelas) */
 function nearestWall(p, pt, tol, onlyRoom) {
@@ -539,8 +608,9 @@ function furnInner(f) {
   const shade = 'fill="rgba(0,0,0,0.05)"';
   let s = R(0, 0, w, h, 'rx="0.04"');
   switch (f.k) {
-    case 'cama_casal': case 'cama_solteiro': case 'berco': {
-      const n = f.k === 'cama_casal' ? 2 : 1, pw = (w - 0.1 * (n + 1)) / n, ph = Math.min(0.35, h * 0.2);
+    case 'cama_casal': case 'cama_king': case 'cama_solteiro': case 'berco': case 'beliche': {
+      if (f.k === 'beliche') s += R(0.06, 0.06, w - 0.12, h - 0.12, 'stroke-dasharray="0.05 0.05" fill="none"');
+      const n = (f.k === 'cama_casal' || f.k === 'cama_king') ? 2 : 1, pw = (w - 0.1 * (n + 1)) / n, ph = Math.min(0.35, h * 0.2);
       for (let i = 0; i < n; i++) s += R(0.1 + i * (pw + 0.1), 0.08, pw, ph, 'rx="0.05"');
       const by = ph + 0.3; s += R(0, by, w, h - by, shade); s += L(0, by, w, by);
       break; }
@@ -583,6 +653,44 @@ function furnInner(f) {
     case 'escrivaninha': s += R(w * 0.35, h * 0.15, w * 0.3, h * 0.12, 'fill="#374151"'); break;
     case 'cadeira': s += R(0, 0, w, h * 0.15, shade); break;
     case 'planta': s = C(w / 2, h / 2, w / 2); for (let i = 0; i < 6; i++) { const a = i * Math.PI / 3; s += L(w / 2, h / 2, w / 2 + Math.cos(a) * w / 2, h / 2 + Math.sin(a) * h / 2); } break;
+    case 'penteadeira': s += E(w / 2, 0.1, w * 0.25, 0.06) + R(w * 0.3, 0.2, w * 0.4, h - 0.28, 'rx="0.03"'); break;
+    case 'sofa_canto': {
+      const d = Math.min(0.9, h * 0.55, w * 0.4);
+      s = `<path d="M0 0 H${w} V${h} H${w - d} V${d} H0 Z" stroke-linejoin="round"/>`;
+      s += R(0, 0, w - 0.05, 0.2, shade) + R(w - 0.2, 0.2, 0.2, h - 0.2, shade);
+      const seats = Math.max(1, Math.round((w - d) / 0.7)), cw = (w - d) / seats;
+      for (let i = 1; i <= seats; i++) s += L(i * cw, 0.2, i * cw, d);
+      for (let y = d + (h - d) / 2; y < h - 0.2; y += (h - d) / 2) s += L(w - d, y, w - 0.2, y);
+      break; }
+    case 'mesa8': {
+      const tw = 2.2, th = 1.0, cs = 0.42, tx = (w - tw) / 2, ty = (h - th) / 2;
+      s = R(tx, ty, tw, th, 'rx="0.05"');
+      const chair = (cx, cy) => R(cx - cs / 2, cy - cs / 2, cs, cs, 'rx="0.08"');
+      for (let i = 0; i < 3; i++) { const cx = tx + tw * (i + 1) / 4; s += chair(cx, ty - cs / 2 - 0.03) + chair(cx, ty + th + cs / 2 + 0.03); }
+      s += chair(tx - cs / 2 - 0.03, h / 2) + chair(tx + tw + cs / 2 + 0.03, h / 2);
+      break; }
+    case 'mesa_redonda': {
+      const r = Math.min(w, h) / 2 - 0.48, cs = 0.42, cx = w / 2, cy = h / 2;
+      s = C(cx, cy, r);
+      const chair = (x, y) => R(x - cs / 2, y - cs / 2, cs, cs, 'rx="0.1"');
+      s += chair(cx, cy - r - cs / 2 - 0.03) + chair(cx, cy + r + cs / 2 + 0.03) + chair(cx - r - cs / 2 - 0.03, cy) + chair(cx + r + cs / 2 + 0.03, cy);
+      break; }
+    case 'aparador': s += L(w / 2, 0, w / 2, h); break;
+    case 'puff': s = R(0, 0, w, h, 'rx="0.12"'); break;
+    case 'lareira': s += R(0.15, 0.12, w - 0.3, h - 0.24, shade) + `<path d="M${w / 2 - 0.12} ${h - 0.16} Q${w / 2} ${0.1} ${w / 2 + 0.12} ${h - 0.16}" fill="none"/>`; break;
+    case 'micro_ondas': s += R(0.06, 0.06, w * 0.62, h - 0.12, 'rx="0.02"') + C(w * 0.84, h * 0.35, 0.03, 'fill="#374151"'); break;
+    case 'lava_loucas': s += R(0.06, 0.06, w - 0.12, h - 0.12, 'rx="0.03"') + L(0.06, 0.2, w - 0.06, 0.2); break;
+    case 'freezer': s += R(0.06, 0.06, w - 0.12, h - 0.12, 'rx="0.03"') + L(0.06, h / 2, w - 0.06, h / 2, 'stroke-dasharray="0.05 0.05"'); break;
+    case 'bide': s = E(w / 2, h * 0.6, w / 2, h * 0.4); s += R(0.04, 0, w - 0.08, h * 0.25, 'rx="0.04"'); break;
+    case 'lavatorio_duplo': s += E(w * 0.27, h / 2, w * 0.17, h * 0.3) + E(w * 0.73, h / 2, w * 0.17, h * 0.3) + C(w * 0.27, h * 0.14, 0.025, 'fill="#374151"') + C(w * 0.73, h * 0.14, 0.025, 'fill="#374151"'); break;
+    case 'secadora': s += C(w / 2, h / 2, Math.min(w, h) * 0.34) + L(w / 2 - 0.12, h / 2, w / 2 + 0.12, h / 2); break;
+    case 'tabua_passar': s = `<path d="M0.2 0 H${w} V${h} H0.2 A${h / 2} ${h / 2} 0 0 1 0.2 0 Z"/>`; break;
+    case 'moto': s = R(w * 0.3, 0, w * 0.4, h, 'rx="0.2"'); s += R(0, h * 0.28, w, 0.1, 'rx="0.05"') + R(w * 0.35, 0.1, w * 0.3, 0.3, 'rx="0.1"') + R(w * 0.35, h - 0.4, w * 0.3, 0.3, 'rx="0.1"'); break;
+    case 'bicicleta': s = R(w * 0.35, 0.05, w * 0.3, 0.7, 'rx="0.15"') + R(w * 0.35, h - 0.75, w * 0.3, 0.7, 'rx="0.15"'); s += L(w / 2, 0.4, w / 2, h - 0.4) + L(0, h * 0.33, w, h * 0.33) + R(w * 0.3, h * 0.55, w * 0.4, 0.12, 'rx="0.05"'); break;
+    case 'espreguicadeira': s = R(0, 0, w, h, 'rx="0.08"'); for (let i = 1; i < 6; i++) s += L(0.05, i * h / 6, w - 0.05, i * h / 6); s += R(0.06, 0.06, w - 0.12, h * 0.22, 'rx="0.06"'); break;
+    case 'arvore': s = C(w / 2, h / 2, w / 2) + C(w / 2, h / 2, w * 0.3, 'stroke-dasharray="0.06 0.06"') + C(w / 2, h / 2, 0.06, 'fill="#374151"'); break;
+    case 'banco': s += L(0, h / 3, w, h / 3) + L(0, 2 * h / 3, w, 2 * h / 3); break;
+    case 'ar_condicionado': for (let i = 1; i < 4; i++) s += L(0.06, i * h / 4, w - 0.06, i * h / 4); break;
     case 'escada': { const n = Math.max(3, Math.round(h / 0.28)); for (let i = 1; i < n; i++) s += L(0, i * h / n, w, i * h / n); s += L(w / 2, h - 0.1, w / 2, 0.25, 'stroke-width="0.04"') + `<path d="M${w / 2 - 0.12} 0.35 L${w / 2} 0.12 L${w / 2 + 0.12} 0.35" fill="none" stroke-width="0.04"/>`; break; }
   }
   return s;
@@ -642,21 +750,32 @@ function planSVG(p, opts = {}) {
   for (const r of p.rooms) {
     s += `<rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" fill="${r.color || '#fff'}" stroke="${WALL_COLOR}" stroke-width="${WALL}" stroke-linejoin="miter"/>`;
   }
-  // Portas/janelas
+  // Apaga a parede entre partes do mesmo cômodo (formato L/U)
+  const shared = sharedSegments(p);
+  for (const c of shared) s += `<rect x="${c.x}" y="${c.y}" width="${c.w}" height="${c.h}" fill="${c.color || '#fff'}"/>`;
+  // Portas/janelas (as que ficam sobre uma parede apagada não são desenhadas)
   for (const o of p.openings) {
     const r = p.rooms.find(r => r.id === o.roomId); if (!r) continue;
+    if (shared.length && openingOnShared(o, r, shared)) continue;
     s += openingSVG(o, r, opts.sel && opts.sel.type === 'opening' && opts.sel.id === o.id);
   }
   // Móveis
   for (const f of p.furniture) {
     const selected = opts.sel && opts.sel.type === 'furn' && opts.sel.id === f.id;
-    s += `<g transform="translate(${f.x + f.w / 2} ${f.y + f.h / 2}) rotate(${f.rot || 0}) translate(${-f.w / 2} ${-f.h / 2})" fill="#fff" stroke="#374151" stroke-width="0.03" stroke-linejoin="round">${furnInner(f)}`;
+    s += `<g transform="translate(${f.x + f.w / 2} ${f.y + f.h / 2}) rotate(${f.rot || 0}) scale(${f.flip ? -1 : 1} 1) translate(${-f.w / 2} ${-f.h / 2})" fill="#fff" stroke="#374151" stroke-width="0.03" stroke-linejoin="round">${furnInner(f)}`;
     if (selected) s += `<rect x="-0.08" y="-0.08" width="${f.w + 0.16}" height="${f.h + 0.16}" fill="rgba(109,40,217,0.1)" stroke="${SEL_COLOR}" stroke-width="0.035" stroke-dasharray="0.12 0.08" rx="0.06"/>`;
     s += `</g>`;
   }
   // Rótulos
   if (!opts.thumb) {
-    for (const r of p.rooms) {
+    const labeled = new Set();
+    for (let r of p.rooms) {
+      if (r.group) {
+        if (labeled.has(r.group)) continue;
+        labeled.add(r.group);
+        r = groupOf(p, r).reduce((a, b) => roomArea(b) > roomArea(a) ? b : a); // rótulo na maior parte
+      }
+      const grouped = !!r.group;
       const base = clamp(Math.min(r.w, r.h) / 6, 0.11, 0.28);
       const fs = Math.min(base, (r.w * 0.92) / (Math.max(3, r.name.length) * 0.58));
       const cx = r.x + r.w / 2, cy = r.y + r.h / 2;
@@ -664,12 +783,16 @@ function planSVG(p, opts = {}) {
       s += `<g font-family="Segoe UI, system-ui, sans-serif" text-anchor="middle" fill="#1e293b" pointer-events="none">`;
       s += `<text x="${cx}" y="${cy + (showMore ? -fs * 0.5 : fs * 0.35)}" font-size="${fs}" font-weight="700">${esc(r.name)}</text>`;
       if (showMore) {
-        s += `<text x="${cx}" y="${cy + fs * 0.65}" font-size="${fs * 0.8}" fill="#475569">${fmt(roomArea(r))} m²</text>`;
-        s += `<text x="${cx}" y="${cy + fs * 1.6}" font-size="${fs * 0.62}" fill="#64748b">${fmt(r.w)} × ${fmt(r.h)}</text>`;
+        s += `<text x="${cx}" y="${cy + fs * 0.65}" font-size="${fs * 0.8}" fill="#475569">${fmt(grouped ? groupArea(p, r) : roomArea(r))} m²</text>`;
+        s += `<text x="${cx}" y="${cy + fs * 1.6}" font-size="${fs * 0.62}" fill="#64748b">${grouped ? `formato L • ${groupOf(p, r).length} partes` : `${fmt(r.w)} × ${fmt(r.h)}`}</text>`;
       }
       s += `</g>`;
     }
   }
+  // Medições
+  if (!opts.thumb) for (const m of (p.measures || [])) s += measureSVG(m, opts.sel && opts.sel.type === 'measure' && opts.sel.id === m.id, opts.handleSize);
+  if (opts.preview) s += measureSVG(opts.preview, false);
+  if (opts.pending) s += `<circle cx="${opts.pending.x}" cy="${opts.pending.y}" r="${(opts.handleSize || 0.2) * 0.45}" fill="#0f766e" stroke="#fff" stroke-width="0.03"/>`;
   // Cotas gerais
   if (opts.overallDims && p.rooms.length) {
     const b = bounds({ rooms: p.rooms, furniture: [] });
@@ -681,6 +804,7 @@ function planSVG(p, opts = {}) {
     const r = p.rooms.find(r => r.id === opts.sel.id);
     if (r) {
       const hs = opts.handleSize || 0.2;
+      if (r.group) for (const q of groupOf(p, r)) if (q.id !== r.id) s += `<rect x="${q.x}" y="${q.y}" width="${q.w}" height="${q.h}" fill="rgba(109,40,217,0.06)" stroke="${SEL_COLOR}" stroke-width="${hs * 0.12}" stroke-dasharray="${hs * 0.5} ${hs * 0.5}"/>`;
       s += `<rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" fill="none" stroke="${SEL_COLOR}" stroke-width="${hs * 0.25}" stroke-dasharray="${hs} ${hs * 0.6}"/>`;
       s += dimLine(r.x, r.y, r.x + r.w, r.y, fmt(r.w), -0.4, false);
       s += dimLine(r.x, r.y, r.x, r.y + r.h, fmt(r.h), -0.4, true);
@@ -690,6 +814,25 @@ function planSVG(p, opts = {}) {
     }
   }
   return s;
+}
+function openingOnShared(o, r, shared) {
+  const g = sideGeom(r, o.side); const e = 0.02;
+  const ax = g.sx + g.dx * o.t, ay = g.sy + g.dy * o.t, bx = ax + g.dx * o.w, by = ay + g.dy * o.w;
+  return shared.some(c => ax >= c.x - WALL - e && bx <= c.x + c.w + WALL + e && ay >= c.y - WALL - e && by <= c.y + c.h + WALL + e
+    && (g.dx ? Math.abs(ay - (c.y + c.h / 2)) < e : Math.abs(ax - (c.x + c.w / 2)) < e));
+}
+function measureSVG(m, selected, hs) {
+  const dx = m.x2 - m.x1, dy = m.y2 - m.y1, len = Math.hypot(dx, dy);
+  if (len < 0.01) return '';
+  const c = selected ? SEL_COLOR : '#0f766e', tk = 0.14, ux = dx / len, uy = dy / len, nx = -uy * tk, ny = ux * tk;
+  let ang = Math.atan2(dy, dx) * 180 / Math.PI; if (ang > 90 || ang < -90) ang += 180;
+  let s = `<g stroke="${c}" stroke-width="0.03" fill="${c}">`;
+  if (selected) s += `<line x1="${m.x1}" y1="${m.y1}" x2="${m.x2}" y2="${m.y2}" stroke="rgba(109,40,217,0.18)" stroke-width="0.2"/>`;
+  s += `<line x1="${m.x1}" y1="${m.y1}" x2="${m.x2}" y2="${m.y2}"/>`;
+  s += `<line x1="${m.x1 + nx}" y1="${m.y1 + ny}" x2="${m.x1 - nx}" y2="${m.y1 - ny}"/><line x1="${m.x2 + nx}" y1="${m.y2 + ny}" x2="${m.x2 - nx}" y2="${m.y2 - ny}"/>`;
+  s += `<text transform="translate(${(m.x1 + m.x2) / 2} ${(m.y1 + m.y2) / 2}) rotate(${ang})" y="-0.09" text-anchor="middle" font-size="0.24" font-weight="600" font-family="Segoe UI, system-ui, sans-serif" paint-order="stroke" stroke="#fff" stroke-width="0.08" stroke-linejoin="round">${fmt(len)} m</text>`;
+  if (selected && hs) for (const [x, y] of [[m.x1, m.y1], [m.x2, m.y2]]) s += `<circle cx="${x}" cy="${y}" r="${hs / 2}" fill="#fff" stroke="${SEL_COLOR}" stroke-width="${hs * 0.15}"/>`;
+  return s + '</g>';
 }
 function roomHandles(r) {
   return [
@@ -723,6 +866,8 @@ let sel = null;             // { type:'room'|'opening'|'furn', id }
 let tool = 'select';        // 'select' | 'door' | 'window'
 let vb = { x: -1, y: -1, w: 12, h: 12 };
 let undoStack = [], redoStack = [], lastJSON = '';
+let pendingStart = null;      // 1º ponto da medição por toques
+let previewMeasure = null;    // medição sendo arrastada
 const svg = $('#canvas');
 const wrap = $('#canvas-wrap');
 
@@ -750,7 +895,8 @@ function fitView() {
 }
 
 function openProject(p) {
-  proj = p; sel = null; tool = 'select';
+  proj = p; sel = null; tool = 'select'; pendingStart = null; previewMeasure = null;
+  if (!p.measures) p.measures = [];
   undoStack = []; redoStack = []; lastJSON = JSON.stringify(p);
   $('#screen-home').classList.remove('active'); $('#screen-editor').classList.add('active');
   $('#ed-title').textContent = p.name;
@@ -781,10 +927,11 @@ function updateToolbar() {
   $('#btn-undo').disabled = !undoStack.length; $('#btn-redo').disabled = !redoStack.length;
   $('#tool-door').classList.toggle('active', tool === 'door');
   $('#tool-window').classList.toggle('active', tool === 'window');
+  $('#tool-measure').classList.toggle('active', tool === 'measure');
 }
 function findSel() {
   if (!sel || !proj) return null;
-  const list = sel.type === 'room' ? proj.rooms : sel.type === 'opening' ? proj.openings : proj.furniture;
+  const list = sel.type === 'room' ? proj.rooms : sel.type === 'opening' ? proj.openings : sel.type === 'measure' ? (proj.measures || []) : proj.furniture;
   return list.find(o => o.id === sel.id) || null;
 }
 function select(type, id) { sel = type ? { type, id } : null; renderCanvas(); renderSheet(); }
@@ -793,7 +940,7 @@ function renderCanvas() {
   if (!proj) return;
   const r = rect(); const hs = pxToWorld(16);
   const grid = { x: Math.floor(vb.x) - 1, y: Math.floor(vb.y) - 1, w: Math.ceil(vb.w) + 3, h: Math.ceil(vb.h) + 3 };
-  svg.innerHTML = planSVG(proj, { sel, handleSize: hs, grid, overallDims: proj.rooms.length > 1 });
+  svg.innerHTML = planSVG(proj, { sel, handleSize: hs, grid, overallDims: proj.rooms.length > 1, preview: previewMeasure, pending: pendingStart });
   const eh = $('#empty-hint'); if (eh) eh.hidden = proj.rooms.length > 0 || proj.furniture.length > 0;
 }
 
@@ -823,7 +970,7 @@ function addFurniture(k) {
   let cx = vb.x + vb.w / 2, cy = vb.y + vb.h / 2;
   const cur = sel && sel.type === 'room' ? findSel() : null;
   if (cur) { cx = cur.x + cur.w / 2; cy = cur.y + cur.h / 2; }
-  const f = { id: uid(), kind: k, name: d.n, x: snap(cx - d.w / 2), y: snap(cy - d.h / 2), w: d.w, h: d.h, rot: 0 };
+  const f = { id: uid(), kind: k, name: d.n, x: r2(snap(cx - d.w / 2)), y: r2(snap(cy - d.h / 2)), w: d.w, h: d.h, rot: 0 };
   proj.furniture.push(f); pushUndo(prev); sel = { type: 'furn', id: f.id }; commit(); renderSheet();
   showHint('Arraste para posicionar. Gire pelo painel abaixo.');
 }
@@ -838,22 +985,62 @@ function placeOpening(kind, pt) {
 }
 function deleteSel() {
   const o = findSel(); if (!o) return; const prev = lastJSON;
-  if (sel.type === 'room') { proj.rooms = proj.rooms.filter(r => r.id !== o.id); proj.openings = proj.openings.filter(x => x.roomId !== o.id); }
+  if (sel.type === 'room') { proj.rooms = proj.rooms.filter(r => r.id !== o.id); proj.openings = proj.openings.filter(x => x.roomId !== o.id); fixGroup(o.group); }
   else if (sel.type === 'opening') proj.openings = proj.openings.filter(x => x.id !== o.id);
+  else if (sel.type === 'measure') proj.measures = proj.measures.filter(x => x.id !== o.id);
   else proj.furniture = proj.furniture.filter(x => x.id !== o.id);
   pushUndo(prev); sel = null; commit(); renderSheet();
 }
 function duplicateSel() {
   const o = findSel(); if (!o) return; const prev = lastJSON;
   if (sel.type === 'room') {
-    const c = { ...o, id: uid(), name: uniqueName(o.name.replace(/\s\d+$/, '')), x: o.x + o.w };
-    proj.rooms.push(c);
-    proj.openings.filter(x => x.roomId === o.id).forEach(x => proj.openings.push({ ...x, id: uid(), roomId: c.id }));
-    sel = { type: 'room', id: c.id }; ensureVisible(c);
+    const parts = groupOf(proj, o); const gb = groupBounds(proj, o); const g = o.group ? uid() : null; let first = null;
+    const name = uniqueName(o.name.replace(/\s\d+$/, ''));
+    for (const q of parts) {
+      const c = { ...q, id: uid(), name, x: r2(q.x + gb.w), group: g }; proj.rooms.push(c); if (q.id === o.id) first = c;
+      proj.openings.filter(x => x.roomId === q.id).forEach(x => proj.openings.push({ ...x, id: uid(), roomId: c.id }));
+    }
+    sel = { type: 'room', id: first.id }; ensureVisible(first);
   } else if (sel.type === 'furn') {
     const c = { ...o, id: uid(), x: o.x + 0.3, y: o.y + 0.3 }; proj.furniture.push(c); sel = { type: 'furn', id: c.id };
   } else return;
   pushUndo(prev); commit(); renderSheet();
+}
+/* Grupo com uma parte só deixa de ser grupo */
+function fixGroup(g) {
+  if (!g) return; const parts = proj.rooms.filter(r => r.group === g);
+  if (parts.length <= 1) parts.forEach(r => { delete r.group; });
+}
+/* Amplia o cômodo com uma nova parte (formato L) */
+function extendRoom() {
+  const r = findSel(); if (!r || sel.type !== 'room') return; const prev = lastJSON;
+  if (!r.group) r.group = uid();
+  const w = Math.max(1, snap(r.w / 2)), h = Math.max(1, snap(r.h / 2));
+  const c = { id: uid(), type: r.type, name: r.name, color: r.color, group: r.group, x: r2(r.x + r.w), y: r2(r.y + r.h - h), w, h };
+  proj.rooms.push(c); pushUndo(prev); sel = { type: 'room', id: c.id }; commit(); renderSheet(); ensureVisible(c);
+  showHint('Esta parte faz parte do mesmo cômodo. Arraste e ajuste o tamanho.');
+}
+/* Une o cômodo selecionado com o cômodo tocado */
+function mergeWith(other) {
+  const r = findSel(); if (!r || sel.type !== 'room' || other.id === r.id) return false;
+  if (r.group && other.group === r.group) { toast('Já fazem parte do mesmo cômodo'); return false; }
+  const prev = lastJSON; const g = r.group || uid();
+  const parts = groupOf(proj, other).concat(groupOf(proj, r));
+  parts.forEach(q => { q.group = g; q.name = r.name; q.color = r.color; q.type = r.type; });
+  pushUndo(prev); tool = 'select'; commit(); renderSheet(); updateToolbar(); hideHint();
+  toast('Cômodos unidos'); return true;
+}
+/* Separa esta parte do cômodo em L */
+function splitRoom() {
+  const r = findSel(); if (!r || sel.type !== 'room' || !r.group) return; const prev = lastJSON;
+  const g = r.group; delete r.group; r.name = uniqueName(r.name.replace(/\s\d+$/, '')); fixGroup(g);
+  pushUndo(prev); commit(); renderSheet();
+}
+function addMeasure(a, b) {
+  if (Math.hypot(b.x - a.x, b.y - a.y) < 0.1) return;
+  const prev = lastJSON; const m = { id: uid(), x1: r2(a.x), y1: r2(a.y), x2: r2(b.x), y2: r2(b.y) };
+  proj.measures.push(m); pushUndo(prev); sel = { type: 'measure', id: m.id }; tool = 'select'; pendingStart = null; previewMeasure = null;
+  commit(); renderSheet(); updateToolbar(); hideHint();
 }
 /* Encaixe de cômodo nas bordas dos vizinhos */
 function snapRoomPos(r, x, y) {
@@ -909,9 +1096,14 @@ svg.addEventListener('pointerdown', e => {
   if (pointers.size > 2) return;
   const pt = s2w(e.clientX, e.clientY);
   const g = { start: pt, sx: e.clientX, sy: e.clientY, moved: false, prev: lastJSON, action: 'pan', vb0: { ...vb } };
-  if (tool === 'door' || tool === 'window') { g.action = 'place'; gesture = g; return; }
+  if (tool === 'door' || tool === 'window' || tool === 'merge') { g.action = 'place'; gesture = g; return; }
+  if (tool === 'measure') { g.action = 'measure'; g.start = snapPoint(proj, pt, pxToWorld(16)); gesture = g; return; }
   // alças do cômodo selecionado
   const cur = findSel();
+  if (cur && sel.type === 'measure') {
+    const hr = pxToWorld(18);
+    for (const end of [1, 2]) if (Math.hypot(cur['x' + end] - pt.x, cur['y' + end] - pt.y) <= hr) { g.action = 'measureEnd'; g.end = end; g.obj = cur; gesture = g; return; }
+  }
   if (cur && sel.type === 'room') {
     const hr = pxToWorld(18);
     const h = roomHandles(cur).find(h => Math.abs(h.x - pt.x) <= hr && Math.abs(h.y - pt.y) <= hr);
@@ -922,6 +1114,8 @@ svg.addEventListener('pointerdown', e => {
   if (f) { g.action = 'furn'; g.obj = f; g.orig = { ...f }; g.hit = { type: 'furn', id: f.id }; gesture = g; return; }
   const o = openingAt(proj, pt, tol);
   if (o) { g.action = 'opening'; g.obj = o; g.orig = { ...o }; g.hit = { type: 'opening', id: o.id }; gesture = g; return; }
+  const m = measureAt(proj, pt, tol);
+  if (m) { g.action = 'measureMove'; g.obj = m; g.orig = { ...m }; g.hit = { type: 'measure', id: m.id }; gesture = g; return; }
   const r = roomAt(proj, pt);
   if (r) { g.action = 'room'; g.obj = r; g.orig = { ...r }; g.hit = { type: 'room', id: r.id }; gesture = g; return; }
   gesture = g;
@@ -955,12 +1149,21 @@ svg.addEventListener('pointermove', e => {
       gesture.obj.x = p.x; gesture.obj.y = p.y; if (!sel || sel.id !== gesture.obj.id) sel = gesture.hit; renderCanvas(); break; }
     case 'resize': resizeRoom(gesture.obj, gesture.orig, gesture.handle, pt); renderCanvas(); break;
     case 'furn': {
-      gesture.obj.x = snap(gesture.orig.x + dx); gesture.obj.y = snap(gesture.orig.y + dy);
+      gesture.obj.x = r2(snap(gesture.orig.x + dx)); gesture.obj.y = r2(snap(gesture.orig.y + dy));
       if (!sel || sel.id !== gesture.obj.id) sel = gesture.hit; renderCanvas(); break; }
     case 'opening': {
       const o = gesture.obj; const hit = nearestWall(proj, pt, 100, o.roomId);
       if (hit) { o.side = hit.side; o.t = snap(hit.u - o.w / 2); clampOpening(proj, o); }
       if (!sel || sel.id !== o.id) sel = gesture.hit; renderCanvas(); break; }
+    case 'measure': {
+      const b = snapPoint(proj, pt, pxToWorld(16));
+      previewMeasure = { x1: gesture.start.x, y1: gesture.start.y, x2: b.x, y2: b.y }; renderCanvas(); break; }
+    case 'measureEnd': {
+      const b = snapPoint(proj, pt, pxToWorld(16)); gesture.obj['x' + gesture.end] = b.x; gesture.obj['y' + gesture.end] = b.y; renderCanvas(); break; }
+    case 'measureMove': {
+      const m = gesture.obj, o = gesture.orig, sx = snap(dx), sy = snap(dy);
+      m.x1 = r2(o.x1 + sx); m.y1 = r2(o.y1 + sy); m.x2 = r2(o.x2 + sx); m.y2 = r2(o.y2 + sy);
+      if (!sel || sel.id !== m.id) sel = gesture.hit; renderCanvas(); break; }
   }
 });
 
@@ -970,8 +1173,19 @@ function endPointer(e) {
   if (gesture.action === 'pinch') { if (pointers.size === 0) gesture = null; return; }
   const g = gesture; gesture = null;
   if (g.action === 'place') {
-    if (!g.moved) placeOpening(tool, g.start);
+    if (!g.moved) {
+      if (tool === 'merge') { const r = roomAt(proj, g.start); if (r) mergeWith(r); else showHint('Toque no cômodo que quer unir', true); }
+      else placeOpening(tool, g.start);
+    }
     return;
+  }
+  if (g.action === 'measure') {
+    if (g.moved && previewMeasure) { addMeasure(g.start, { x: previewMeasure.x2, y: previewMeasure.y2 }); }
+    else if (!g.moved) {
+      if (pendingStart) addMeasure(pendingStart, g.start);
+      else { pendingStart = g.start; showHint('Agora toque no segundo ponto', true); }
+    }
+    previewMeasure = null; renderCanvas(); return;
   }
   if (!g.moved) {
     if (g.hit) { sel = g.hit; renderCanvas(); renderSheet(); }
@@ -995,8 +1209,8 @@ document.addEventListener('keydown', e => {
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); return; }
   if (inInput) return;
   if (e.key === 'Delete' || e.key === 'Backspace') { deleteSel(); return; }
-  if (e.key === 'Escape') { tool = 'select'; select(null); updateToolbar(); hideHint(); return; }
-  const o = findSel(); if (!o || sel.type === 'opening') return;
+  if (e.key === 'Escape') { tool = 'select'; pendingStart = null; previewMeasure = null; select(null); updateToolbar(); hideHint(); return; }
+  const o = findSel(); if (!o || sel.type === 'opening' || sel.type === 'measure') return;
   const step = e.shiftKey ? 0.5 : SNAP; let moved = true;
   if (e.key === 'ArrowLeft') o.x = r2(o.x - step); else if (e.key === 'ArrowRight') o.x = r2(o.x + step);
   else if (e.key === 'ArrowUp') o.y = r2(o.y - step); else if (e.key === 'ArrowDown') o.y = r2(o.y + step); else moved = false;
@@ -1014,15 +1228,17 @@ function stepper(prop, label, value, min, max) {
 }
 function renderSheet() {
   const sh = $('#sheet'); const o = findSel();
-  if (!o) { sh.classList.remove('open'); sh.innerHTML = ''; return; }
+  if (!o || tool !== 'select') { sh.classList.remove('open'); sh.innerHTML = ''; return; }
   let html = '';
   if (sel.type === 'room') {
     html += `<div class="sheet-head"><h3>${roomType(o.type).i} Cômodo</h3><button class="sheet-close" data-action="deselect">✕</button></div>`;
     html += `<div class="row"><div class="field"><label>Nome</label><input type="text" data-prop="name" value="${esc(o.name)}" maxlength="30"></div>
       <div class="field"><label>Tipo</label><select data-prop="type">${ROOM_TYPES.map(t => `<option value="${t.k}" ${t.k === o.type ? 'selected' : ''}>${t.i} ${t.n}</option>`).join('')}</select></div></div>`;
     html += `<div class="row">${stepper('w', 'Largura (m)', o.w, MIN_ROOM, 50)}${stepper('h', 'Comprimento (m)', o.h, MIN_ROOM, 50)}</div>`;
-    html += `<div class="row"><div class="field"><label>Área: <b style="color:var(--text)">${fmt(roomArea(o))} m²</b></label><div class="chips">${COLORS.map(c => `<button class="chip ${c === o.color ? 'on' : ''}" style="background:${c}" data-color="${c}" title="Cor"></button>`).join('')}</div></div></div>`;
-    html += `<div class="actions"><button class="btn secondary sm" data-action="tool-door">🚪 Porta</button><button class="btn secondary sm" data-action="tool-window">🪟 Janela</button><button class="btn ghost sm" data-action="duplicate">⧉ Duplicar</button><button class="btn danger sm" data-action="delete">🗑 Excluir</button></div>`;
+    html += `<div class="row"><div class="field"><label>Área${o.group ? ' desta parte' : ''}: <b style="color:var(--text)">${fmt(roomArea(o))} m²</b>${o.group ? ` • Total do cômodo: <b style="color:var(--text)">${fmt(groupArea(proj, o))} m²</b>` : ''}</label><div class="chips">${COLORS.map(c => `<button class="chip ${c === o.color ? 'on' : ''}" style="background:${c}" data-color="${c}" title="Cor"></button>`).join('')}</div></div></div>`;
+    html += `<div class="actions"><button class="btn secondary sm" data-action="tool-door">🚪 Porta</button><button class="btn secondary sm" data-action="tool-window">🪟 Janela</button></div>`;
+    html += `<div class="actions" style="margin-top:8px"><button class="btn secondary sm" data-action="extend">⌐ Ampliar em L</button><button class="btn secondary sm" data-action="tool-merge">⧉ Unir com vizinho</button>${o.group ? '<button class="btn ghost sm" data-action="split">✂ Separar parte</button>' : ''}</div>`;
+    html += `<div class="actions" style="margin-top:8px"><button class="btn ghost sm" data-action="duplicate">⧉ Duplicar</button><button class="btn danger sm" data-action="delete">🗑 Excluir${o.group ? ' parte' : ''}</button></div>`;
   } else if (sel.type === 'opening') {
     const room = proj.rooms.find(r => r.id === o.roomId); const len = room ? sideGeom(room, o.side).len : 10;
     const kinds = [['door', '🚪 Porta'], ['window', '🪟 Janela'], ['passage', '⬜ Vão livre']];
@@ -1033,10 +1249,15 @@ function renderSheet() {
     if (o.kind === 'door') html += `<div class="actions"><button class="btn secondary sm" data-action="flip">↔ Inverter lado</button><button class="btn secondary sm" data-action="swing">${o.out ? '⬇ Abrir para dentro' : '⬆ Abrir para fora'}</button></div>`;
     html += `<div class="actions" style="margin-top:8px"><button class="btn danger sm" data-action="delete">🗑 Excluir</button></div>`;
     html += `<p style="font-size:0.78rem;color:var(--muted);margin-top:10px">Dica: arraste a ${o.kind === 'window' ? 'janela' : 'porta'} na planta para movê-la ao longo da parede, inclusive para outra parede do mesmo cômodo.</p>`;
+  } else if (sel.type === 'measure') {
+    const len = Math.hypot(o.x2 - o.x1, o.y2 - o.y1);
+    html += `<div class="sheet-head"><h3>📏 Medição: ${fmt(len)} m</h3><button class="sheet-close" data-action="deselect">✕</button></div>`;
+    html += `<p style="font-size:0.82rem;color:var(--muted);margin-bottom:10px">Arraste as bolinhas das pontas para ajustar. Elas grudam nos cantos e nas paredes. Arraste a linha para mover a medição inteira.</p>`;
+    html += `<div class="actions"><button class="btn secondary sm" data-action="tool-measure">📏 Nova medição</button><button class="btn danger sm" data-action="delete">🗑 Excluir</button></div>`;
   } else {
     html += `<div class="sheet-head"><h3>🛋️ ${esc(o.name)}</h3><button class="sheet-close" data-action="deselect">✕</button></div>`;
     html += `<div class="row">${stepper('w', 'Largura (m)', o.w, 0.1, 20)}${stepper('h', 'Profundidade (m)', o.h, 0.1, 20)}</div>`;
-    html += `<div class="actions"><button class="btn secondary sm" data-action="rotate">↻ Girar 90°</button><button class="btn ghost sm" data-action="duplicate">⧉ Duplicar</button><button class="btn danger sm" data-action="delete">🗑 Excluir</button></div>`;
+    html += `<div class="actions"><button class="btn secondary sm" data-action="rotate">↻ Girar 90°</button><button class="btn secondary sm" data-action="flip-furn">⇋ Espelhar</button><button class="btn ghost sm" data-action="duplicate">⧉ Duplicar</button><button class="btn danger sm" data-action="delete">🗑 Excluir</button></div>`;
   }
   sh.innerHTML = html; sh.classList.add('open');
   requestAnimationFrame(ensureSelVisible);
@@ -1048,6 +1269,7 @@ function ensureSelVisible() {
   const k = r.width / vb.w;
   let x1, y1, x2, y2;
   if (sel.type === 'opening') { const room = proj.rooms.find(q => q.id === o.roomId); if (!room) return; const g = sideGeom(room, o.side); x1 = g.sx + g.dx * o.t - 0.3; y1 = g.sy + g.dy * o.t - 0.3; x2 = x1 + (g.dx ? o.w : 0) + 0.6; y2 = y1 + (g.dy ? o.w : 0) + 0.6; }
+  else if (sel.type === 'measure') { x1 = Math.min(o.x1, o.x2) - 0.5; y1 = Math.min(o.y1, o.y2) - 0.5; x2 = Math.max(o.x1, o.x2) + 0.5; y2 = Math.max(o.y1, o.y2) + 0.5; }
   else { x1 = o.x - 0.5; y1 = o.y - 0.5; x2 = o.x + o.w + 0.5; y2 = o.y + o.h + 0.5; }
   const sy1 = (y1 - vb.y) * k, sy2 = (y2 - vb.y) * k, sx1 = (x1 - vb.x) * k, sx2 = (x2 - vb.x) * k;
   let dx = 0, dy = 0;
@@ -1058,8 +1280,8 @@ function ensureSelVisible() {
 function applyProp(prop, value, final) {
   const o = findSel(); if (!o) return;
   const before = lastJSON;
-  if (prop === 'name') o.name = value.trim() || o.name;
-  else if (prop === 'type') { const t = roomType(value); o.type = value; o.color = t.c; }
+  if (prop === 'name') { const n = value.trim() || o.name; groupOf(proj, o).forEach(q => q.name = n); }
+  else if (prop === 'type') { const t = roomType(value); groupOf(proj, o).forEach(q => { q.type = value; q.color = t.c; }); }
   else {
     const v = parseFloat(String(value).replace(',', '.')); if (isNaN(v)) return;
     if (prop === 'w' || prop === 'h') {
@@ -1079,7 +1301,7 @@ sheet.addEventListener('click', e => {
   const st = e.target.closest('[data-step]');
   if (st) { const o = findSel(); const p = st.dataset.step; applyProp(p, (o[p] || 0) + 0.1 * Number(st.dataset.dir), true); return; }
   const ch = e.target.closest('[data-color]');
-  if (ch) { const o = findSel(); pushUndo(lastJSON); o.color = ch.dataset.color; commit(); renderSheet(); return; }
+  if (ch) { const o = findSel(); pushUndo(lastJSON); groupOf(proj, o).forEach(q => q.color = ch.dataset.color); commit(); renderSheet(); return; }
   const kd = e.target.closest('[data-kind]');
   if (kd) { const o = findSel(); pushUndo(lastJSON); o.kind = kd.dataset.kind; if (o.kind === 'window' && o.w < 0.6) o.w = 1.2; clampOpening(proj, o); commit(); renderSheet(); return; }
 });
@@ -1120,7 +1342,12 @@ function guessCat(r) {
   return (r && m[r.type]) || 'sala';
 }
 function showSummary() {
-  const rows = proj.rooms.map(r => `<tr><td>${roomType(r.type).i} ${esc(r.name)}</td><td class="r">${fmt(r.w)} × ${fmt(r.h)}</td><td class="r">${fmt(roomArea(r))} m²</td></tr>`).join('');
+  const seen = new Set();
+  const rows = proj.rooms.filter(r => !r.group || (!seen.has(r.group) && seen.add(r.group))).map(r => {
+    if (!r.group) return `<tr><td>${roomType(r.type).i} ${esc(r.name)}</td><td class="r">${fmt(r.w)} × ${fmt(r.h)}</td><td class="r">${fmt(roomArea(r))} m²</td></tr>`;
+    const gb = groupBounds(proj, r);
+    return `<tr><td>${roomType(r.type).i} ${esc(r.name)} <span style="color:var(--muted);font-size:0.75rem">(L, ${groupOf(proj, r).length} partes)</span></td><td class="r">até ${fmt(gb.w)} × ${fmt(gb.h)}</td><td class="r">${fmt(groupArea(proj, r))} m²</td></tr>`;
+  }).join('');
   const doors = proj.openings.filter(o => o.kind === 'door').length, wins = proj.openings.filter(o => o.kind === 'window').length;
   const b = bounds({ rooms: proj.rooms, furniture: [] });
   openModal(mhead('📋 Resumo da planta') + `
@@ -1135,6 +1362,8 @@ function showHelp() {
     <p><b>2. Mover e redimensionar:</b> arraste o cômodo para movê-lo. As bordas grudam nas dos vizinhos automaticamente, formando as paredes. Com o cômodo selecionado, puxe as alças dos cantos para mudar o tamanho, ou digite as medidas no painel.</p>
     <p><b>3. Portas e janelas:</b> toque em <b>🚪 Porta</b> ou <b>🪟 Janela</b> e depois na parede onde ela deve ficar. Depois você pode arrastá-la ao longo da parede, mudar a largura e o lado de abertura.</p>
     <p><b>4. Móveis:</b> toque em <b>🛋️ Móveis</b> para colocar camas, sofás, pia, vaso... Arraste para posicionar e gire pelo painel.</p>
+    <p><b>Formato L ou U:</b> com o cômodo selecionado, toque em <b>Ampliar em L</b> para acrescentar uma parte, ou em <b>Unir com vizinho</b> e toque no cômodo ao lado. A parede entre as partes some e a área é somada.</p>
+    <p><b>Medir:</b> toque em <b>📏 Medir</b> e depois em dois pontos (ou arraste de um ponto ao outro). A medição gruda nos cantos e paredes e fica salva na planta.</p>
     <p><b>5. Navegar:</b> arraste em uma área vazia para mover a vista. Use dois dedos (ou a roda do mouse) para aproximar e afastar. O botão ⤢ mostra a planta inteira.</p>
     <p><b>6. Salvar e compartilhar:</b> tudo é salvo automaticamente neste aparelho. No menu ⋯ você exporta como imagem, PDF ou arquivo de backup.</p>
     <div class="actions" style="margin-top:12px"><button class="btn block" data-action="close-modal">Entendi</button></div></div>`);
@@ -1236,13 +1465,18 @@ const actions = {
   'help': () => showHelp(),
   'editor-menu': showEditorMenu,
   'close-modal': closeModal,
-  'deselect': () => select(null),
+  'deselect': () => { tool = 'select'; pendingStart = null; updateToolbar(); hideHint(); select(null); },
   'zoom-in': () => zoomAt(0.8), 'zoom-out': () => zoomAt(1.25), 'zoom-fit': fitView,
   'pick-room': showRoomPicker,
   'pick-furn': () => showFurnPicker(),
   'summary': showSummary,
   'tool-door': () => setTool('door'),
   'tool-window': () => setTool('window'),
+  'tool-measure': () => setTool('measure'),
+  'tool-merge': () => setTool('merge'),
+  'extend': extendRoom,
+  'split': splitRoom,
+  'flip-furn': () => { const o = findSel(); if (!o) return; pushUndo(lastJSON); o.flip = !o.flip; commit(); },
   'delete': deleteSel,
   'duplicate': duplicateSel,
   'rotate': () => { const o = findSel(); if (!o) return; pushUndo(lastJSON); o.rot = ((o.rot || 0) + 90) % 360; commit(); },
@@ -1262,11 +1496,13 @@ const actions = {
     db.projects = db.projects.filter(p => p.id !== proj.id); save(); closeModal(); goHome();
   },
 };
+const TOOL_HINTS = { door: 'Toque na parede onde quer a porta', window: 'Toque na parede onde quer a janela', measure: 'Toque no primeiro ponto (ou arraste de um ponto ao outro)', merge: 'Toque no cômodo vizinho que quer unir a este' };
 function setTool(t) {
-  if (!proj.rooms.length) { toast('Adicione um cômodo primeiro'); return; }
-  tool = tool === t ? 'select' : t; updateToolbar();
+  if (t !== 'measure' && !proj.rooms.length) { toast('Adicione um cômodo primeiro'); return; }
+  if (t === 'merge' && (!sel || sel.type !== 'room')) { toast('Selecione um cômodo primeiro'); return; }
+  tool = tool === t ? 'select' : t; pendingStart = null; previewMeasure = null; updateToolbar(); renderCanvas(); renderSheet();
   if (tool === 'select') hideHint();
-  else showHint(t === 'door' ? 'Toque na parede onde quer a porta' : 'Toque na parede onde quer a janela', true);
+  else showHint(TOOL_HINTS[t], true);
 }
 document.addEventListener('click', e => {
   const el = e.target.closest('[data-action]'); if (!el) return;
