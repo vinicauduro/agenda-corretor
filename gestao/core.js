@@ -1,0 +1,617 @@
+/* ===== Gestão de Loteamento — núcleo (dados, utilitários, navegação) ===== */
+'use strict';
+
+const DB_KEY = 'gl_db_v1';
+const PREF_KEY = 'gl_prefs_v1';
+const SYNC_KEY = 'gl_sync_cfg';
+
+// ---------------------------------------------------------------- utilitários
+const $ = (sel, root = document) => root.querySelector(sel);
+const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
+
+function genId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
+function pad2(n) { return String(n).padStart(2, '0'); }
+function ymd(dt) { return dt.getFullYear() + '-' + pad2(dt.getMonth() + 1) + '-' + pad2(dt.getDate()); }
+function todayStr() { return ymd(new Date()); }
+function parseDate(s) { if (!s) return null; const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); }
+function addDays(s, n) { const d = parseDate(s); d.setDate(d.getDate() + n); return ymd(d); }
+function addMonths(s, n) {
+  const [y, m, d] = s.split('-').map(Number);
+  const dt = new Date(y, m - 1 + n, 1);
+  const last = new Date(dt.getFullYear(), dt.getMonth() + 1, 0).getDate();
+  dt.setDate(Math.min(d, last));
+  return ymd(dt);
+}
+function daysBetween(a, b) { return Math.round((parseDate(b) - parseDate(a)) / 86400000); }
+function monthKey(s) { return (s || '').slice(0, 7); }
+function monthLabel(key) { const [y, m] = key.split('-'); return ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'][Number(m) - 1] + '/' + y.slice(2); }
+function fmtMoney(v) { return (Number(v) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); }
+function fmtMoneyShort(v) {
+  v = Number(v) || 0; const abs = Math.abs(v);
+  if (abs >= 1e6) return 'R$ ' + (v / 1e6).toLocaleString('pt-BR', { maximumFractionDigits: 2 }) + ' mi';
+  if (abs >= 1e4) return 'R$ ' + (v / 1e3).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + ' mil';
+  return fmtMoney(v);
+}
+function fmtNum(v, dec = 2) { return (Number(v) || 0).toLocaleString('pt-BR', { minimumFractionDigits: dec, maximumFractionDigits: dec }); }
+function fmtDate(s) { if (!s) return '—'; const [y, m, d] = s.split('-'); return `${d}/${m}/${y}`; }
+function fmtDateTime(iso) { if (!iso) return ''; const d = new Date(iso); return pad2(d.getDate()) + '/' + pad2(d.getMonth() + 1) + ' ' + pad2(d.getHours()) + ':' + pad2(d.getMinutes()); }
+function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+function num(v) { const n = parseFloat(String(v ?? '').replace(',', '.')); return isNaN(n) ? 0 : n; }
+function naturalCmp(a, b) { return String(a ?? '').localeCompare(String(b ?? ''), 'pt-BR', { numeric: true, sensitivity: 'base' }); }
+function onlyDigits(s) { return String(s || '').replace(/\D/g, ''); }
+function fmtPhone(s) {
+  const d = onlyDigits(s);
+  if (d.length === 11) return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+  if (d.length === 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
+  return s || '';
+}
+function fmtCPF(s) {
+  const d = onlyDigits(s);
+  if (d.length === 11) return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`;
+  if (d.length === 14) return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8, 12)}-${d.slice(12)}`;
+  return s || '';
+}
+function waLink(phone, text) {
+  let d = onlyDigits(phone);
+  if (d && d.length <= 11) d = '55' + d;
+  return `https://wa.me/${d}?text=${encodeURIComponent(text)}`;
+}
+function hashStr(str) { // cyrb53 — não é criptografia forte, apenas evita guardar o PIN em texto puro
+  let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
+  for (let i = 0; i < str.length; i++) { const ch = str.charCodeAt(i); h1 = Math.imul(h1 ^ ch, 2654435761); h2 = Math.imul(h2 ^ ch, 1597334677); }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36);
+}
+function download(filename, content, type = 'application/json') {
+  const blob = new Blob([content], { type });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = filename; document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+}
+function csvEscape(v) { const s = String(v ?? ''); return /[;"\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }
+function toCSV(rows) { return '﻿' + rows.map(r => r.map(csvEscape).join(';')).join('\n'); }
+function readFileAsDataURL(file) { return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(file); }); }
+function readFileAsText(file) { return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsText(file); }); }
+function resizeImage(dataUrl, maxW = 2000) {
+  return new Promise((res, rej) => {
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, maxW / img.width);
+      const w = Math.round(img.width * scale), h = Math.round(img.height * scale);
+      const c = document.createElement('canvas'); c.width = w; c.height = h;
+      c.getContext('2d').drawImage(img, 0, 0, w, h);
+      res({ dataUrl: c.toDataURL('image/jpeg', 0.86), w, h });
+    };
+    img.onerror = rej; img.src = dataUrl;
+  });
+}
+function pmt(rateMonth, n, pv) { // parcela Price
+  if (n <= 0) return 0;
+  if (!rateMonth) return pv / n;
+  const i = rateMonth;
+  return pv * i / (1 - Math.pow(1 + i, -n));
+}
+
+function toast(icon, title, body, isErr) {
+  const c = $('#toastContainer');
+  const t = document.createElement('div');
+  t.className = 'toast' + (isErr ? ' err' : '');
+  t.innerHTML = `<div class="t">${icon} ${esc(title)}</div>${body ? `<div>${esc(body)}</div>` : ''}`;
+  c.appendChild(t);
+  setTimeout(() => t.remove(), 4200);
+}
+
+// ---------------------------------------------------------------- modal
+function openModal({ title, body, footer = '', wide = false, onClose = null }) {
+  $('#modalTitle').innerHTML = title;
+  $('#modalBody').innerHTML = body;
+  $('#modalFoot').innerHTML = footer;
+  $('#modalFoot').style.display = footer ? 'flex' : 'none';
+  $('#modalBox').classList.toggle('wide', wide);
+  $('#modalBody').scrollTop = 0;
+  $('#modalOverlay').classList.add('open');
+  state.modalOnClose = onClose;
+  document.body.style.overflow = 'hidden';
+}
+function closeModal() {
+  $('#modalOverlay').classList.remove('open');
+  document.body.style.overflow = '';
+  const cb = state.modalOnClose; state.modalOnClose = null;
+  if (cb) cb();
+}
+function val(id) { const el = document.getElementById(id); return el ? el.value.trim() : ''; }
+function setVal(id, v) { const el = document.getElementById(id); if (el) el.value = v ?? ''; }
+function checked(id) { const el = document.getElementById(id); return !!(el && el.checked); }
+function optionsHtml(list, selected, labelFn = x => x.nome, valueFn = x => x.id) {
+  return list.map(x => `<option value="${esc(valueFn(x))}" ${valueFn(x) === selected ? 'selected' : ''}>${esc(labelFn(x))}</option>`).join('');
+}
+
+// ---------------------------------------------------------------- dados
+function defaultCategorias() {
+  return [
+    { id: 'terraplanagem', nome: 'Terraplanagem', cor: '#92400e' },
+    { id: 'pavimentacao', nome: 'Pavimentação e Drenagem', cor: '#0ea5e9' },
+    { id: 'rede-eletrica', nome: 'Rede Elétrica / Iluminação', cor: '#eab308' },
+    { id: 'agua-esgoto', nome: 'Água e Esgoto', cor: '#06b6d4' },
+    { id: 'documentacao', nome: 'Documentação e Cartório', cor: '#ef4444' },
+    { id: 'projetos', nome: 'Projetos e Licenças', cor: '#14b8a6' },
+    { id: 'mao-de-obra', nome: 'Mão de Obra', cor: '#8b5cf6' },
+    { id: 'materiais', nome: 'Materiais', cor: '#f97316' },
+    { id: 'impostos', nome: 'Impostos e Taxas', cor: '#64748b' },
+    { id: 'marketing', nome: 'Marketing e Vendas', cor: '#22c55e' },
+    { id: 'terreno', nome: 'Aquisição do Terreno', cor: '#a16207' },
+    { id: 'administrativo', nome: 'Administrativo', cor: '#6366f1' },
+    { id: 'outros', nome: 'Outros', cor: '#94a3b8' }
+  ];
+}
+function defaultConfig() {
+  return {
+    empresa: '',
+    adminPin: hashStr('1234'),
+    pinPadrao: true,
+    codigoCorretor: '',
+    reservaDias: 7,
+    multaPct: 2,
+    jurosMesPct: 1,
+    comissaoPct: 5,
+    adminWhatsapp: '',
+    mostrarPrecoVendido: true
+  };
+}
+function defaultDB() {
+  return {
+    meta: { version: 1, createdAt: new Date().toISOString() },
+    config: defaultConfig(),
+    loteamentos: [], lotes: [], reservas: [], vendas: [], recebiveis: [], custos: [],
+    categorias: defaultCategorias(), corretores: [], log: []
+  };
+}
+const COLLECTIONS = ['loteamentos', 'lotes', 'reservas', 'vendas', 'recebiveis', 'custos', 'categorias', 'corretores', 'log'];
+function normalizeDB(data) {
+  const d = data && typeof data === 'object' ? data : {};
+  d.meta = d.meta || { version: 1 };
+  d.config = Object.assign(defaultConfig(), d.config || {});
+  COLLECTIONS.forEach(c => {
+    let v = d[c];
+    if (v && !Array.isArray(v) && typeof v === 'object') v = Object.values(v);
+    d[c] = Array.isArray(v) ? v.filter(Boolean) : [];
+  });
+  if (!d.categorias.length) d.categorias = defaultCategorias();
+  d.lotes.forEach(l => { if (l.pts && !Array.isArray(l.pts)) l.pts = Object.values(l.pts); });
+  d.vendas.forEach(v => { if (v.baloes && !Array.isArray(v.baloes)) v.baloes = Object.values(v.baloes); v.baloes = v.baloes || []; });
+  return d;
+}
+let db = normalizeDB(loadLocalRaw());
+function loadLocalRaw() { try { const raw = localStorage.getItem(DB_KEY); return raw ? JSON.parse(raw) : null; } catch (e) { return null; } }
+function saveLocal() {
+  try { localStorage.setItem(DB_KEY, JSON.stringify(db)); }
+  catch (e) { toast('⚠️', 'Não foi possível salvar', 'Armazenamento cheio. Reduza imagens ou faça backup e limpe dados.', true); }
+}
+
+const prefs = (() => { try { return JSON.parse(localStorage.getItem(PREF_KEY) || '{}'); } catch (e) { return {}; } })();
+function savePrefs() { localStorage.setItem(PREF_KEY, JSON.stringify(prefs)); }
+
+// gravação: sempre em memória + local; se nuvem ativa, também no Firebase
+function upsert(col, rec) {
+  const arr = db[col];
+  const i = arr.findIndex(r => r.id === rec.id);
+  if (i >= 0) arr[i] = rec; else arr.push(rec);
+  saveLocal();
+  Sync.write(`${col}/${rec.id}`, rec);
+  return rec;
+}
+function removeRec(col, id) {
+  db[col] = db[col].filter(r => r.id !== id);
+  saveLocal();
+  Sync.remove(`${col}/${id}`);
+}
+function setConfig(patch) {
+  Object.assign(db.config, patch);
+  saveLocal();
+  Sync.write('config', db.config);
+}
+function replaceDB(newDb) {
+  db = normalizeDB(newDb);
+  saveLocal();
+  Sync.pushAll();
+}
+function logAct(msg, who) {
+  const entry = { id: genId(), ts: new Date().toISOString(), who: who || (state.role === 'admin' ? 'Admin' : 'Corretor'), msg };
+  db.log.push(entry);
+  if (db.log.length > 400) {
+    const old = db.log.slice(0, db.log.length - 400);
+    db.log = db.log.slice(-400);
+    old.forEach(o => Sync.remove(`log/${o.id}`));
+  }
+  saveLocal();
+  Sync.write(`log/${entry.id}`, entry);
+}
+
+// ---------------------------------------------------------------- sincronização em nuvem (Firebase Realtime Database, opcional)
+const Sync = {
+  cfg: null, ref: null, status: 'off', active: false, msg: '',
+  loadCfg() { try { return JSON.parse(localStorage.getItem(SYNC_KEY) || 'null'); } catch (e) { return null; } },
+  saveCfg(cfg) { if (cfg) localStorage.setItem(SYNC_KEY, JSON.stringify(cfg)); else localStorage.removeItem(SYNC_KEY); },
+  loadScript(src) {
+    return new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = () => rej(new Error('Falha ao carregar ' + src)); document.head.appendChild(s); });
+  },
+  async start(cfg) {
+    this.cfg = cfg; this.status = 'connecting'; this.msg = 'Conectando…'; renderSyncStatus();
+    try {
+      if (!window.firebase) {
+        await this.loadScript('https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js');
+        await this.loadScript('https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js');
+      }
+      if (!firebase.apps.length) firebase.initializeApp(cfg);
+      this.ref = firebase.database().ref(cfg.path || 'gestao-loteamento');
+      this.ref.on('value', snap => {
+        const v = snap.val();
+        if (!v || !v.config) {
+          // nuvem vazia: envia os dados locais como ponto de partida
+          this.active = true; this.pushAll();
+        } else {
+          db = normalizeDB(v);
+          saveLocal();
+          this.active = true;
+        }
+        this.status = 'on'; this.msg = 'Sincronizado';
+        renderSyncStatus();
+        renderCurrent();
+      }, err => { this.status = 'err'; this.msg = 'Erro: ' + (err.message || err.code); this.active = false; renderSyncStatus(); });
+      firebase.database().ref('.info/connected').on('value', s => { if (this.status !== 'err') { this.status = s.val() ? 'on' : 'offline'; this.msg = s.val() ? 'Sincronizado' : 'Sem conexão (dados locais)'; renderSyncStatus(); } });
+    } catch (e) {
+      this.status = 'err'; this.msg = 'Erro: ' + e.message; this.active = false; renderSyncStatus();
+    }
+  },
+  stop() {
+    if (this.ref) this.ref.off();
+    this.ref = null; this.active = false; this.status = 'off'; this.msg = ''; this.cfg = null;
+    this.saveCfg(null); renderSyncStatus();
+  },
+  toCloud(d) {
+    const out = { meta: d.meta, config: d.config };
+    COLLECTIONS.forEach(c => { const o = {}; d[c].forEach(r => { o[r.id] = r; }); out[c] = o; });
+    return out;
+  },
+  write(path, rec) { if (this.active && this.ref) this.ref.child(path).set(JSON.parse(JSON.stringify(rec))).catch(e => toast('⚠️', 'Falha ao sincronizar', e.message, true)); },
+  remove(path) { if (this.active && this.ref) this.ref.child(path).remove().catch(() => {}); },
+  pushAll() { if (this.active && this.ref) this.ref.set(this.toCloud(db)).catch(e => toast('⚠️', 'Falha ao enviar dados', e.message, true)); }
+};
+function renderSyncStatus() {
+  $$('.sync-pill').forEach(el => {
+    el.className = 'sync-pill' + (Sync.status === 'on' ? ' on' : Sync.status === 'err' ? ' err' : '');
+    el.innerHTML = `<span class="dot"></span>${Sync.status === 'off' ? 'Somente neste dispositivo' : esc(Sync.msg)}`;
+  });
+  const s = $('#syncStatusBox'); if (s) s.innerHTML = Sync.status === 'off' ? '<span class="badge neutral">Desativada</span>' : `<span class="badge ${Sync.status === 'on' ? 'pago' : Sync.status === 'err' ? 'atrasado' : 'pendente'}">${esc(Sync.msg)}</span>`;
+}
+
+// ---------------------------------------------------------------- estado / navegação
+const state = {
+  role: null, tab: null, lotId: prefs.lotId || null,
+  modalOnClose: null, filters: {}, sub: {}, plantaCorretor: null, plantaAdmin: null, editorLoteId: null
+};
+function curLot() {
+  let l = db.loteamentos.find(x => x.id === state.lotId);
+  if (!l && db.loteamentos.length) { l = db.loteamentos[0]; state.lotId = l.id; }
+  return l || null;
+}
+function setCurLot(id) { state.lotId = id; prefs.lotId = id; savePrefs(); renderCurrent(); }
+function lotesDo(lotId) { return db.lotes.filter(l => l.loteamentoId === lotId).sort(cmpLote); }
+function cmpLote(a, b) { return naturalCmp(a.quadra, b.quadra) || naturalCmp(a.numero, b.numero); }
+function getLote(id) { return db.lotes.find(l => l.id === id); }
+function getLoteamento(id) { return db.loteamentos.find(l => l.id === id); }
+function getReserva(id) { return db.reservas.find(r => r.id === id); }
+function getVenda(id) { return db.vendas.find(v => v.id === id); }
+function getCategoria(id) { return db.categorias.find(c => c.id === id); }
+function loteLabel(l) { return `Quadra ${l.quadra} · Lote ${l.numero}`; }
+function loteShort(l) { return `Q${l.quadra}-L${l.numero}`; }
+function statusLabel(s) {
+  return { disponivel: 'Disponível', reservado: 'Reservado', vendido: 'Vendido', bloqueado: 'Indisponível',
+    pendente: 'Pendente', aprovada: 'Aprovada', recusada: 'Recusada', cancelada: 'Cancelada', expirada: 'Expirada', convertida: 'Virou venda',
+    pago: 'Pago', parcial: 'Parcial', atrasado: 'Atrasado', ativa: 'Ativa', quitada: 'Quitada', distrato: 'Distrato', paga: 'Paga' }[s] || s;
+}
+function quadrasDo(lotId) { return [...new Set(lotesDo(lotId).map(l => l.quadra))].sort(naturalCmp); }
+
+// reservas
+function reservaAtiva(loteId) { return db.reservas.find(r => r.loteId === loteId && (r.status === 'pendente' || r.status === 'aprovada')); }
+function reservaStatus(r) {
+  if ((r.status === 'pendente' || r.status === 'aprovada') && r.validade && r.validade < todayStr()) return 'expirada';
+  return r.status;
+}
+// venda / recebíveis
+function vendaAtiva(loteId) { return db.vendas.find(v => v.loteId === loteId && (v.status === 'ativa' || v.status === 'quitada')); }
+function recStatus(r) {
+  const restante = (Number(r.valor) || 0) - (Number(r.valorPago) || 0);
+  if (restante <= 0.005) return 'pago';
+  if ((Number(r.valorPago) || 0) > 0) return r.vencimento < todayStr() ? 'atrasado' : 'parcial';
+  if (r.vencimento < todayStr()) return 'atrasado';
+  return 'pendente';
+}
+function recRestante(r) { return Math.max(0, (Number(r.valor) || 0) - (Number(r.valorPago) || 0)); }
+function recAtualizado(r) { // valor com multa e juros de mora
+  const rest = recRestante(r);
+  if (rest <= 0 || r.vencimento >= todayStr()) return rest;
+  const dias = daysBetween(r.vencimento, todayStr());
+  const multa = rest * (num(db.config.multaPct) / 100);
+  const juros = rest * (num(db.config.jurosMesPct) / 100) * (dias / 30);
+  return rest + multa + juros;
+}
+function recebiveisDe(vendaId) { return db.recebiveis.filter(r => r.vendaId === vendaId).sort((a, b) => a.vencimento.localeCompare(b.vencimento) || a.numero - b.numero); }
+function recebiveisDo(lotId) {
+  const vendasOk = new Set(db.vendas.filter(v => v.loteamentoId === lotId && v.status !== 'distrato').map(v => v.id));
+  return db.recebiveis.filter(r => vendasOk.has(r.vendaId));
+}
+function custoStatus(c) { if (c.status === 'pago') return 'pago'; if (c.vencimento && c.vencimento < todayStr()) return 'atrasado'; return 'pendente'; }
+function custosDo(lotId) { return db.custos.filter(c => c.loteamentoId === lotId); }
+
+function gerarRecebiveis(venda) {
+  const list = [];
+  const n = Number(venda.nParcelas) || 0;
+  if (num(venda.entrada) > 0) list.push({ id: genId(), vendaId: venda.id, loteamentoId: venda.loteamentoId, tipo: 'entrada', numero: 0, descricao: 'Entrada', vencimento: venda.dataEntrada || venda.dataVenda, valor: num(venda.entrada), valorPago: 0, dataPagamento: null, forma: null });
+  for (let i = 1; i <= n; i++) list.push({ id: genId(), vendaId: venda.id, loteamentoId: venda.loteamentoId, tipo: 'parcela', numero: i, descricao: `Parcela ${i}/${n}`, vencimento: addMonths(venda.primeiroVencimento, i - 1), valor: num(venda.valorParcela), valorPago: 0, dataPagamento: null, forma: null });
+  (venda.baloes || []).forEach((b, i) => { if (b.data && num(b.valor) > 0) list.push({ id: genId(), vendaId: venda.id, loteamentoId: venda.loteamentoId, tipo: 'balao', numero: 1000 + i, descricao: `Reforço ${i + 1}`, vencimento: b.data, valor: num(b.valor), valorPago: 0, dataPagamento: null, forma: null }); });
+  return list;
+}
+function vendaResumo(v) {
+  const recs = recebiveisDe(v.id);
+  const total = recs.reduce((s, r) => s + num(r.valor), 0);
+  const pago = recs.reduce((s, r) => s + num(r.valorPago), 0);
+  const atrasado = recs.filter(r => recStatus(r) === 'atrasado').reduce((s, r) => s + recRestante(r), 0);
+  const nPagas = recs.filter(r => recStatus(r) === 'pago').length;
+  return { total, pago, restante: total - pago, atrasado, n: recs.length, nPagas };
+}
+function atualizarStatusVenda(vendaId) {
+  const v = getVenda(vendaId); if (!v || v.status === 'distrato') return;
+  const r = vendaResumo(v);
+  const novo = (r.n > 0 && r.restante <= 0.005) ? 'quitada' : 'ativa';
+  if (novo !== v.status) { v.status = novo; upsert('vendas', v); }
+}
+
+// corretor identificado neste dispositivo
+function corretorPerfil() { return prefs.corretor || { nome: '', creci: '', telefone: '', email: '', imobiliaria: '' }; }
+function corretorMatch(c) {
+  const p = corretorPerfil();
+  if (!c) return false;
+  const tel = onlyDigits(p.telefone), creci = (p.creci || '').trim().toLowerCase();
+  return (tel && onlyDigits(c.telefone) === tel) || (creci && (c.creci || '').trim().toLowerCase() === creci);
+}
+function registrarCorretor(c) { // mantém cadastro de corretores a partir das reservas
+  const existente = db.corretores.find(x => (onlyDigits(x.telefone) && onlyDigits(x.telefone) === onlyDigits(c.telefone)) || (x.creci && c.creci && x.creci.trim().toLowerCase() === c.creci.trim().toLowerCase()));
+  if (existente) {
+    const upd = Object.assign({}, existente, { nome: c.nome || existente.nome, email: c.email || existente.email, imobiliaria: c.imobiliaria || existente.imobiliaria, creci: c.creci || existente.creci, telefone: c.telefone || existente.telefone });
+    upsert('corretores', upd); return upd;
+  }
+  const novo = { id: genId(), nome: c.nome, creci: c.creci || '', telefone: c.telefone || '', email: c.email || '', imobiliaria: c.imobiliaria || '', ativo: true, criadoEm: new Date().toISOString() };
+  upsert('corretores', novo); return novo;
+}
+
+// ---------------------------------------------------------------- telas
+function showScreen(name) {
+  $$('.screen').forEach(s => s.classList.remove('active'));
+  $('#screen-' + name).classList.add('active');
+  window.scrollTo(0, 0);
+}
+function switchTab(tab) {
+  state.tab = tab;
+  const prefix = state.role === 'admin' ? 'a' : 'c';
+  $$(`#screen-${state.role} .tab`).forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+  $$(`#screen-${state.role} .view`).forEach(v => v.classList.toggle('active', v.id === `${prefix}v-${tab}`));
+  renderCurrent();
+}
+function renderCurrent() {
+  if (state.role === 'landing' || !state.role) { renderLanding(); return; }
+  if (state.role === 'corretor') renderCorretorTab();
+  else if (state.role === 'admin') renderAdminTab();
+  updateTopbars();
+}
+function updateTopbars() {
+  const lot = curLot();
+  $$('.lot-select').forEach(sel => {
+    sel.innerHTML = db.loteamentos.length ? optionsHtml(db.loteamentos, lot ? lot.id : '') : '<option value="">Nenhum loteamento</option>';
+    sel.style.display = db.loteamentos.length > 1 ? '' : 'none';
+  });
+  $$('.lot-name').forEach(el => { el.textContent = lot ? lot.nome : 'Gestão de Loteamento'; });
+}
+
+// ---------------------------------------------------------------- autenticação simples
+function enterAdmin() {
+  const body = `<p class="small muted mb">Digite o PIN do administrador.</p>
+    <div class="fg"><input type="password" inputmode="numeric" id="pinInput" class="pin-input" maxlength="8" autocomplete="off" placeholder="••••"></div>
+    ${db.config.pinPadrao ? '<div class="alert warn" style="cursor:default"><span>PIN padrão <b>1234</b>. Troque em Cadastros › Configurações.</span></div>' : ''}`;
+  openModal({ title: '🔐 Acesso do administrador', body, footer: `<button class="btn btn-secondary" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" onclick="checkPin()">Entrar</button>` });
+  setTimeout(() => { const i = $('#pinInput'); i.focus(); i.onkeydown = e => { if (e.key === 'Enter') checkPin(); }; }, 50);
+}
+function checkPin() {
+  if (hashStr(val('pinInput')) !== db.config.adminPin) { toast('⛔', 'PIN incorreto', '', true); $('#pinInput').value = ''; return; }
+  closeModal();
+  sessionStorage.setItem('gl_admin', '1');
+  startRole('admin');
+}
+function enterCorretor() {
+  if (db.config.codigoCorretor && prefs.codigoOk !== hashStr(db.config.codigoCorretor)) {
+    const body = `<p class="small muted mb">Este loteamento exige um código de acesso para corretores. Peça ao administrador.</p>
+      <div class="fg"><input type="text" id="codInput" placeholder="Código de acesso" autocomplete="off"></div>`;
+    openModal({ title: '🔑 Acesso do corretor', body, footer: `<button class="btn btn-secondary" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" onclick="checkCodigo()">Entrar</button>` });
+    setTimeout(() => { const i = $('#codInput'); i.focus(); i.onkeydown = e => { if (e.key === 'Enter') checkCodigo(); }; }, 50);
+    return;
+  }
+  startRole('corretor');
+}
+function checkCodigo() {
+  if (val('codInput').trim().toLowerCase() !== db.config.codigoCorretor.trim().toLowerCase()) { toast('⛔', 'Código inválido', '', true); return; }
+  prefs.codigoOk = hashStr(db.config.codigoCorretor); savePrefs();
+  closeModal(); startRole('corretor');
+}
+function startRole(role) {
+  state.role = role;
+  prefs.lastRole = role; savePrefs();
+  showScreen(role);
+  updateTopbars();
+  switchTab(role === 'admin' ? (db.loteamentos.length ? 'painel' : 'cadastros') : 'planta');
+}
+function sair() {
+  sessionStorage.removeItem('gl_admin');
+  state.role = 'landing'; prefs.lastRole = null; savePrefs();
+  showScreen('landing'); renderLanding();
+}
+
+// ---------------------------------------------------------------- landing
+function renderLanding() {
+  const lot = curLot();
+  const box = $('#landingEmpreend');
+  if (!lot) {
+    box.innerHTML = `<div class="nome">Nenhum loteamento cadastrado</div><div class="info">Entre como administrador para cadastrar o primeiro loteamento, ou carregue os dados de exemplo.</div>
+      <div class="mt"><button class="btn btn-sm btn-accent" onclick="carregarDemo()">✨ Carregar dados de exemplo</button></div>`;
+  } else {
+    const ls = lotesDo(lot.id);
+    const cnt = s => ls.filter(l => l.status === s).length;
+    box.innerHTML = `<div class="nome">🏘️ ${esc(lot.nome)}</div><div class="info">${esc([lot.cidade, lot.endereco].filter(Boolean).join(' · '))}</div>
+      <div class="stats"><span><b>${ls.length}</b>lotes</span><span><b style="color:#86efac">${cnt('disponivel')}</b>disponíveis</span><span><b style="color:#fcd34d">${cnt('reservado')}</b>reservados</span><span><b style="color:#fca5a5">${cnt('vendido')}</b>vendidos</span></div>
+      ${db.loteamentos.length > 1 ? `<div class="mt"><select class="lot-select" onchange="setCurLot(this.value)" style="max-width:260px;margin:0 auto"></select></div>` : ''}`;
+  }
+  updateTopbars();
+  $('#landingWarn').style.display = db.config.pinPadrao ? '' : 'none';
+  renderSyncStatus();
+}
+
+// ---------------------------------------------------------------- backup
+function exportarBackup() {
+  download(`backup-loteamento-${todayStr()}.json`, JSON.stringify(db, null, 1));
+  toast('💾', 'Backup exportado', '');
+}
+async function importarBackup(input) {
+  const f = input.files[0]; if (!f) return;
+  try {
+    const data = JSON.parse(await readFileAsText(f));
+    if (!data || !data.config) throw new Error('Arquivo inválido');
+    if (!confirm('Importar este backup vai SUBSTITUIR todos os dados atuais. Continuar?')) { input.value = ''; return; }
+    replaceDB(data);
+    toast('✅', 'Backup importado', '');
+    renderCurrent();
+  } catch (e) { toast('⚠️', 'Falha ao importar', e.message, true); }
+  input.value = '';
+}
+function apagarTudo() {
+  if (!confirm('Apagar TODOS os dados deste loteamento (lotes, reservas, vendas, custos)? Esta ação não pode ser desfeita.')) return;
+  if (!confirm('Tem certeza? Recomendamos exportar um backup antes.')) return;
+  const cfg = db.config;
+  replaceDB(Object.assign(defaultDB(), { config: cfg }));
+  state.lotId = null;
+  toast('🗑️', 'Dados apagados', '');
+  renderCurrent();
+}
+
+// ---------------------------------------------------------------- dados de exemplo
+function carregarDemo() {
+  if (db.lotes.length && !confirm('Já existem dados cadastrados. Carregar os dados de exemplo vai substituí-los. Continuar?')) return;
+  const d = defaultDB();
+  d.config = Object.assign(d.config, { empresa: 'Sua Incorporadora', comissaoPct: 5 });
+  const lot = { id: 'demo-lot', nome: 'Residencial Vista Verde', cidade: 'Rio do Sul / SC', endereco: 'Rod. BR-470, km 140', descricao: 'Loteamento residencial com 32 lotes, infraestrutura completa: asfalto, água, energia, iluminação em LED e área de lazer.',
+    cond: { entradaMinPct: 10, maxParcelas: 120, jurosMes: 0.8, descontoVistaPct: 6 }, orcamento: { terraplanagem: 380000, pavimentacao: 620000, 'rede-eletrica': 210000, 'agua-esgoto': 260000, documentacao: 60000, projetos: 90000, marketing: 80000, terreno: 1500000 }, criadoEm: new Date().toISOString() };
+  d.loteamentos.push(lot);
+  const t = todayStr();
+  const quadras = { A: 10, B: 12, C: 10 };
+  let idx = 0;
+  Object.entries(quadras).forEach(([q, n]) => {
+    for (let i = 1; i <= n; i++) {
+      idx++;
+      const area = 300 + ((idx * 37) % 160);
+      const preco = Math.round(area * (410 + ((idx * 13) % 60)) / 100) * 100;
+      d.lotes.push({ id: 'lote-' + q + i, loteamentoId: lot.id, quadra: q, numero: String(i), area, frente: 12, fundos: Math.round(area / 12 * 10) / 10, preco, tipo: (q === 'C' && i <= 2) ? 'comercial' : 'residencial', status: 'disponivel', obs: '', matricula: '' });
+    }
+  });
+  const byId = id => d.lotes.find(l => l.id === id);
+  const corr1 = { nome: 'Carlos Mendes', creci: 'SC-12345', telefone: '(47) 99911-2233', email: 'carlos@imob.com', imobiliaria: 'Mendes Imóveis' };
+  const corr2 = { nome: 'Ana Paula Souza', creci: 'SC-54321', telefone: '(47) 98877-6655', email: 'ana@souzaimoveis.com', imobiliaria: 'Souza Imóveis' };
+  d.corretores.push(Object.assign({ id: 'c1', ativo: true }, corr1), Object.assign({ id: 'c2', ativo: true }, corr2));
+  const clientes = [
+    { nome: 'João da Silva', cpf: '123.456.789-00', telefone: '(47) 99123-4567', email: 'joao@email.com', endereco: 'Rua das Flores, 120', cidade: 'Rio do Sul' },
+    { nome: 'Maria Oliveira', cpf: '987.654.321-00', telefone: '(47) 99765-4321', email: 'maria@email.com', endereco: 'Av. Central, 500', cidade: 'Ituporanga' },
+    { nome: 'Pedro Santos', cpf: '111.222.333-44', telefone: '(49) 98811-2233', email: '', endereco: '', cidade: 'Lontras' },
+    { nome: 'Fernanda Lima', cpf: '555.666.777-88', telefone: '(47) 99222-1100', email: 'fer@email.com', endereco: 'Rua 7 de Setembro, 45', cidade: 'Rio do Sul' },
+    { nome: 'Roberto Costa', cpf: '999.888.777-66', telefone: '(47) 99333-2211', email: '', endereco: '', cidade: 'Blumenau' }
+  ];
+  function venda(loteId, cliente, corr, mesesAtras, n, entradaPct, pagas) {
+    const l = byId(loteId);
+    const dataVenda = addMonths(t, -mesesAtras);
+    const total = l.preco;
+    const entrada = Math.round(total * entradaPct / 100);
+    const parcela = Math.round((total - entrada) / n * 100) / 100;
+    const v = { id: 'v-' + loteId, loteId, loteamentoId: lot.id, cliente, corretor: corr, dataVenda, valorTotal: total, entrada, dataEntrada: dataVenda, nParcelas: n, valorParcela: parcela, primeiroVencimento: addMonths(dataVenda, 1), baloes: [], comissaoPct: 5, comissaoValor: total * 0.05, comissaoPaga: pagas > 2, comissaoData: pagas > 2 ? addMonths(dataVenda, 1) : null, status: 'ativa', obs: '', criadoEm: new Date().toISOString() };
+    d.vendas.push(v);
+    l.status = 'vendido'; l.vendaId = v.id;
+    const recs = gerarRecebiveis(v);
+    recs.forEach((r, i) => { if (i <= pagas) { r.valorPago = r.valor; r.dataPagamento = r.vencimento; r.forma = i === 0 ? 'PIX' : 'Boleto'; } });
+    d.recebiveis.push(...recs);
+  }
+  venda('lote-A1', clientes[0], corr1, 8, 60, 20, 8);
+  venda('lote-A2', clientes[1], corr1, 6, 48, 15, 6);
+  venda('lote-B3', clientes[2], corr2, 5, 36, 10, 2); // atrasado
+  venda('lote-B4', clientes[3], corr2, 3, 24, 30, 3);
+  venda('lote-C1', clientes[4], corr1, 1, 12, 50, 1);
+  // reservas
+  function reserva(loteId, cliente, corr, status, diasAtras, obs) {
+    const l = byId(loteId);
+    const data = addDays(t, -diasAtras);
+    const r = { id: 'r-' + loteId, loteId, loteamentoId: lot.id, cliente, corretor: corr, dataReserva: data, validade: addDays(data, 7), status, proposta: { valor: l.preco, entrada: Math.round(l.preco * 0.1), nParcelas: 60 }, obs: obs || '', criadoEm: new Date(parseDate(data)).toISOString() };
+    d.reservas.push(r);
+    if (status === 'pendente' || status === 'aprovada') { l.status = 'reservado'; l.reservaId = r.id; }
+  }
+  reserva('lote-A5', { nome: 'Lucas Pereira', cpf: '222.333.444-55', telefone: '(47) 99444-5566', email: '', endereco: '', cidade: 'Rio do Sul' }, corr2, 'pendente', 1, 'Cliente quer visitar no sábado.');
+  reserva('lote-B7', { nome: 'Juliana Rocha', cpf: '333.444.555-66', telefone: '(47) 99555-6677', email: 'ju@email.com', endereco: '', cidade: 'Rio do Sul' }, corr1, 'aprovada', 3, '');
+  reserva('lote-C5', { nome: 'Marcos Antunes', cpf: '444.555.666-77', telefone: '(47) 99666-7788', email: '', endereco: '', cidade: 'Lontras' }, corr2, 'aprovada', 12, 'Aguardando aprovação de crédito.');
+  reserva('lote-A9', { nome: 'Beatriz Nunes', cpf: '', telefone: '(47) 99777-8899', email: '', endereco: '', cidade: '' }, corr1, 'recusada', 20, '');
+  byId('lote-C10').status = 'bloqueado'; byId('lote-C10').obs = 'Área institucional / reservada';
+  // custos
+  const custos = [
+    ['Aquisição da gleba (parcela 3/10)', 'terreno', 'Espólio Família Souza', 150000, -2, 'pago'],
+    ['Aquisição da gleba (parcela 4/10)', 'terreno', 'Espólio Família Souza', 150000, 1, 'pendente'],
+    ['Terraplanagem quadras A e B', 'terraplanagem', 'Terraplanagem Silva Ltda', 210000, -5, 'pago'],
+    ['Terraplanagem quadra C', 'terraplanagem', 'Terraplanagem Silva Ltda', 95000, -1, 'pago'],
+    ['Pavimentação asfáltica — 1ª medição', 'pavimentacao', 'Pavisul Engenharia', 280000, -2, 'pago'],
+    ['Pavimentação asfáltica — 2ª medição', 'pavimentacao', 'Pavisul Engenharia', 190000, 0, 'pendente'],
+    ['Rede de água e esgoto', 'agua-esgoto', 'Hidro Obras', 175000, -3, 'pago'],
+    ['Rede elétrica e postes', 'rede-eletrica', 'Celesc / Eletro Vale', 120000, -1, 'pago'],
+    ['Iluminação LED', 'rede-eletrica', 'Eletro Vale', 48000, 2, 'pendente'],
+    ['Projeto urbanístico e aprovação', 'projetos', 'Arq. Helena Prado', 45000, -7, 'pago'],
+    ['Registro do loteamento (cartório)', 'documentacao', 'Cartório RI', 22000, -6, 'pago'],
+    ['Placas, site e anúncios', 'marketing', 'Agência Vale Digital', 18500, -1, 'pago'],
+    ['Impulsionamento mídias (mês)', 'marketing', 'Agência Vale Digital', 3500, 0, 'pendente'],
+    ['ITBI e taxas municipais', 'impostos', 'Prefeitura', 12800, -4, 'pago'],
+    ['Contabilidade (trimestre)', 'administrativo', 'Contábil Rio', 4200, -1, 'atrasado']
+  ];
+  custos.forEach(([desc, cat, forn, valor, meses, st], i) => {
+    const comp = addMonths(t, meses);
+    const venc = st === 'atrasado' ? addDays(t, -9) : addDays(comp, 15);
+    d.custos.push({ id: 'cu-' + i, loteamentoId: lot.id, descricao: desc, categoriaId: cat, fornecedor: forn, valor, dataCompetencia: comp, vencimento: venc, status: st === 'pago' ? 'pago' : 'pendente', dataPagamento: st === 'pago' ? venc : null, formaPagamento: 'Transferência', obs: '' });
+  });
+  d.log.push({ id: genId(), ts: new Date().toISOString(), who: 'Sistema', msg: 'Dados de exemplo carregados.' });
+  replaceDB(d);
+  state.lotId = lot.id; prefs.lotId = lot.id; savePrefs();
+  toast('✨', 'Dados de exemplo carregados', 'Explore como corretor e como administrador (PIN 1234).');
+  renderCurrent();
+}
+
+// ---------------------------------------------------------------- boot
+function bootLinks() {
+  // link compartilhado pelo admin: ?modo=corretor&sync=<base64 do config firebase>
+  const p = new URLSearchParams(location.search);
+  if (p.get('sync')) {
+    try { const cfg = JSON.parse(decodeURIComponent(escape(atob(p.get('sync'))))); if (cfg && cfg.databaseURL) Sync.saveCfg(cfg); } catch (e) { /* ignora */ }
+  }
+  return p.get('modo');
+}
+document.addEventListener('DOMContentLoaded', () => {
+  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('./sw.js').catch(() => {});
+  $('#modalOverlay').addEventListener('click', e => { if (e.target.id === 'modalOverlay') closeModal(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('#modalOverlay').classList.contains('open')) closeModal(); });
+  const modo = bootLinks();
+  const syncCfg = Sync.loadCfg();
+  if (syncCfg) Sync.start(syncCfg);
+  state.role = 'landing';
+  showScreen('landing'); renderLanding();
+  if (modo === 'corretor') enterCorretor();
+  else if (sessionStorage.getItem('gl_admin') === '1') startRole('admin');
+  else if (prefs.lastRole === 'corretor') startRole('corretor');
+});
