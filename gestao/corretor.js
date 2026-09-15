@@ -225,21 +225,32 @@ function abrirReservaForm(loteId) {
   openModal({ title: '📝 Solicitar reserva', body, footer: `<button class="btn btn-secondary" onclick="abrirLoteCorretor('${l.id}')">Voltar</button><button class="btn btn-primary" onclick="enviarReserva('${l.id}')">Enviar pedido</button>` });
   setTimeout(() => { const el = $(p.nome ? '#rlNome' : '#rcNome'); if (el) el.focus(); }, 60);
 }
-function enviarReserva(loteId) {
+async function enviarReserva(loteId) {
   const l = getLote(loteId);
   if (!l || l.status !== 'disponivel') { toast('⚠️', 'Este lote acabou de ficar indisponível', '', true); closeModal(); renderCurrent(); return; }
   const corretor = { nome: val('rcNome'), creci: val('rcCreci'), telefone: val('rcTel'), email: val('rcEmail'), imobiliaria: val('rcImob') };
   const cliente = { nome: val('rlNome'), cpf: val('rlCpf'), telefone: val('rlTel'), email: val('rlEmail'), cidade: val('rlCidade'), endereco: val('rlEnd'), profissao: val('rlProf'), estadoCivil: val('rlEstCivil') };
   if (!corretor.nome || !corretor.telefone) { toast('⚠️', 'Informe seu nome e telefone', '', true); return; }
   if (!cliente.nome || !cliente.telefone) { toast('⚠️', 'Informe nome e telefone do cliente', '', true); return; }
-  if (state.role === 'corretor') { prefs.corretor = corretor; savePrefs(); }
+  if (!Cloud.active && state.role === 'corretor') { prefs.corretor = corretor; savePrefs(); }
   registrarCorretor(corretor);
   const hoje = todayStr();
   const r = { id: genId(), loteId, loteamentoId: l.loteamentoId, corretor, cliente, dataReserva: hoje, validade: addDays(hoje, Number(db.config.reservaDias) || 7),
     status: 'pendente', proposta: { valor: num(val('rpValor')), entrada: num(val('rpEntrada')), nParcelas: Math.round(num(val('rpParcelas'))) }, obs: val('rpObs'), criadoEm: new Date().toISOString() };
-  upsert('reservas', r);
-  upsert('lotes', Object.assign({}, l, { status: 'reservado', reservaId: r.id }));
-  logAct(`Reserva solicitada: ${loteLabel(l)} — cliente ${cliente.nome} (corretor ${corretor.nome})`, corretor.nome);
+  if (Cloud.active) {
+    // na nuvem a reserva é criada pelo banco (evita dois corretores no mesmo lote)
+    corretor.userId = Cloud.user.id; r.corretorUserId = Cloud.user.id;
+    const btn = $('#modalFoot .btn-primary'); if (btn) { btn.disabled = true; btn.textContent = 'Enviando…'; }
+    try { await Cloud.solicitarReserva(r); }
+    catch (e) { if (btn) { btn.disabled = false; btn.textContent = 'Enviar pedido'; } toast('⚠️', 'Não foi possível reservar', e.message, true); if (/disponível/.test(e.message)) { closeModal(); Cloud.loadAll().then(renderCurrent); } return; }
+    // reflete localmente; o tempo real confirma em seguida
+    db.reservas.push(r); const li = db.lotes.findIndex(x => x.id === l.id); if (li >= 0) db.lotes[li] = Object.assign({}, l, { status: 'reservado', reservaId: r.id }); saveLocal();
+    if (!Cloud.membro.telefone || !Cloud.membro.nome) Cloud.atualizarMeuPerfil({ nome: corretor.nome, telefone: corretor.telefone, creci: corretor.creci, imobiliaria: corretor.imobiliaria }).then(() => Cloud.loadEquipe()).catch(() => {});
+  } else {
+    upsert('reservas', r);
+    upsert('lotes', Object.assign({}, l, { status: 'reservado', reservaId: r.id }));
+    logAct(`Reserva solicitada: ${loteLabel(l)} — cliente ${cliente.nome} (corretor ${corretor.nome})`, corretor.nome);
+  }
   closeModal();
   renderCurrent();
   const lot = getLoteamento(l.loteamentoId);
@@ -247,9 +258,15 @@ function enviarReserva(loteId) {
   openModal({ title: '✅ Pedido enviado', body: `<p class="small">O lote <b>${esc(loteLabel(l))}</b> ficou marcado como <span class="badge reservado">Reservado</span> aguardando aprovação do administrador.</p><p class="small muted mt">Você acompanha o andamento na aba <b>Minhas reservas</b>.</p>`,
     footer: `${db.config.adminWhatsapp ? `<a class="btn btn-wa" href="${waLink(db.config.adminWhatsapp, msg)}" target="_blank">💬 Avisar administrador</a>` : ''}<button class="btn btn-primary" onclick="closeModal()">OK</button>` });
 }
-function cancelarMinhaReserva(id) {
+async function cancelarMinhaReserva(id) {
   const r = getReserva(id); if (!r) return;
   if (!confirm('Cancelar o pedido de reserva deste lote?')) return;
+  if (Cloud.active && !Cloud.admin) {
+    try { await Cloud.cancelarMinhaReserva(id, 'Corretor cancelou o pedido'); } catch (e) { toast('⚠️', 'Não foi possível cancelar', e.message, true); return; }
+    const ri = db.reservas.findIndex(x => x.id === id); if (ri >= 0) db.reservas[ri] = Object.assign({}, r, { status: 'cancelada' });
+    const l = getLote(r.loteId); if (l && l.reservaId === id) { const li = db.lotes.findIndex(x => x.id === l.id); db.lotes[li] = Object.assign({}, l, { status: 'disponivel', reservaId: null }); }
+    saveLocal(); closeModal(); renderCurrent(); toast('↩️', 'Pedido cancelado', ''); return;
+  }
   liberarReserva(r, 'cancelada', 'Corretor cancelou o pedido');
   closeModal(); renderCurrent();
   toast('↩️', 'Pedido cancelado', '');
@@ -265,7 +282,7 @@ function liberarReserva(r, novoStatus, motivo) {
 // ---------------------------------------------------------------- minhas reservas
 function renderCReservas() {
   const v = $('#cv-reservas'); const p = corretorPerfil();
-  if (!p.telefone && !p.creci) {
+  if (!Cloud.active && !p.telefone && !p.creci) {
     v.innerHTML = `<div class="empty"><div class="ic">👤</div><p>Preencha seu perfil (telefone ou CRECI) para ver suas reservas.<br><br><button class="btn btn-primary btn-sm" onclick="switchTab('perfil')">Preencher perfil</button></p></div>`; return;
   }
   const list = db.reservas.filter(r => corretorMatch(r.corretor)).sort((a, b) => (b.criadoEm || '').localeCompare(a.criadoEm || ''));
@@ -332,7 +349,7 @@ function renderCPerfil() {
   const p = corretorPerfil(); const v = $('#cv-perfil');
   v.innerHTML = `
     <div class="card"><h3>👤 Meus dados</h3>
-      <p class="help mb">Esses dados são preenchidos automaticamente nos pedidos de reserva e ficam salvos neste aparelho.</p>
+      <p class="help mb">${Cloud.active ? 'Esses dados aparecem para a administração e são preenchidos automaticamente nos pedidos de reserva.' : 'Esses dados são preenchidos automaticamente nos pedidos de reserva e ficam salvos neste aparelho.'}</p>
       <div class="fg"><label>Nome completo</label><input type="text" id="pfNome" value="${esc(p.nome)}"></div>
       <div class="frow"><div class="fg"><label>CRECI</label><input type="text" id="pfCreci" value="${esc(p.creci)}"></div><div class="fg"><label>Telefone / WhatsApp</label><input type="tel" id="pfTel" value="${esc(p.telefone)}"></div></div>
       <div class="frow"><div class="fg"><label>E-mail</label><input type="email" id="pfEmail" value="${esc(p.email)}"></div><div class="fg"><label>Imobiliária</label><input type="text" id="pfImob" value="${esc(p.imobiliaria)}"></div></div>
@@ -342,10 +359,16 @@ function renderCPerfil() {
       <div class="detail-grid mt"><div><div class="k">Entrada mínima</div><div class="v">${fmtNum(c.entradaMinPct || 0, 0)}%</div></div><div><div class="k">Parcelas máx.</div><div class="v">${c.maxParcelas || '—'}×</div></div><div><div class="k">Juros</div><div class="v">${c.jurosMes ? fmtNum(c.jurosMes, 2) + '% a.m.' : 'Sem juros'}</div></div><div><div class="k">Desconto à vista</div><div class="v">${fmtNum(c.descontoVistaPct || 0, 0)}%</div></div><div><div class="k">Validade da reserva</div><div class="v">${db.config.reservaDias} dias</div></div><div><div class="k">Comissão</div><div class="v">${fmtNum(db.config.comissaoPct, 1)}%</div></div></div>`; })()}
       ${db.config.adminWhatsapp ? `<a class="btn btn-wa btn-block mt" href="${waLink(db.config.adminWhatsapp, 'Olá! Sou corretor e tenho uma dúvida sobre o loteamento.')}" target="_blank">💬 Falar com a administração</a>` : ''}
     </div>
-    <div class="card"><button class="btn btn-secondary btn-block" onclick="sair()">Sair da área do corretor</button></div>`;
+    <div class="card">${Cloud.active ? `<p class="help mb">Conectado como <b>${esc(Cloud.user.email || '')}</b> · empresa <b>${esc(Cloud.org.nome)}</b> · <span class="badge neutral">${statusLabel(Cloud.papel)}</span></p><div class="btn-row"><button class="btn btn-outline" onclick="renderAuthNovaSenhaModal()">Alterar senha</button>${Cloud.minhasOrgs.length > 1 ? '<button class="btn btn-secondary" onclick="trocarEmpresa()">Trocar de empresa</button>' : ''}${Cloud.admin ? '<button class="btn btn-primary" onclick="voltarAdmin()">🔐 Voltar à administração</button>' : ''}<button class="btn btn-secondary" onclick="sair()">Sair</button></div>` : `<button class="btn btn-secondary btn-block" onclick="sair()">Sair da área do corretor</button>`}</div>`;
 }
-function salvarPerfil() {
-  prefs.corretor = { nome: val('pfNome'), creci: val('pfCreci'), telefone: val('pfTel'), email: val('pfEmail'), imobiliaria: val('pfImob') };
+async function salvarPerfil() {
+  const d = { nome: val('pfNome'), creci: val('pfCreci'), telefone: val('pfTel'), email: val('pfEmail'), imobiliaria: val('pfImob') };
+  if (Cloud.active) {
+    try { await Cloud.atualizarMeuPerfil(d); Object.assign(Cloud.membro, d); await Cloud.loadEquipe(); toast('✅', 'Perfil salvo', ''); renderCorretorTab(); }
+    catch (e) { toast('⚠️', 'Falha ao salvar', e.message, true); }
+    return;
+  }
+  prefs.corretor = d;
   savePrefs();
   if (prefs.corretor.nome && prefs.corretor.telefone) registrarCorretor(prefs.corretor);
   toast('✅', 'Perfil salvo', '');

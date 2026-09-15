@@ -3,7 +3,6 @@
 
 const DB_KEY = 'gl_db_v1';
 const PREF_KEY = 'gl_prefs_v1';
-const SYNC_KEY = 'gl_sync_cfg';
 
 // ---------------------------------------------------------------- utilitários
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -182,108 +181,261 @@ function normalizeDB(data) {
   d.vendas.forEach(v => { if (v.baloes && !Array.isArray(v.baloes)) v.baloes = Object.values(v.baloes); v.baloes = v.baloes || []; });
   return d;
 }
-let db = normalizeDB(loadLocalRaw());
-function loadLocalRaw() { try { const raw = localStorage.getItem(DB_KEY); return raw ? JSON.parse(raw) : null; } catch (e) { return null; } }
+
+// configuração da nuvem (gestao/config.js); sem ela o app roda só neste dispositivo
+const GL_CFG = window.GL_CONFIG || {};
+const CLOUD_ENABLED = !!(GL_CFG.supabaseUrl && GL_CFG.supabaseAnonKey && window.supabase && window.supabase.createClient);
+
+function cacheKey() { return CLOUD_ENABLED ? (Cloud.org ? 'gl_cache_' + Cloud.org.id : null) : DB_KEY; }
+function loadLocalRaw(key) { try { const raw = localStorage.getItem(key || DB_KEY); return raw ? JSON.parse(raw) : null; } catch (e) { return null; } }
+let db = CLOUD_ENABLED ? normalizeDB(null) : normalizeDB(loadLocalRaw());
 function saveLocal() {
-  try { localStorage.setItem(DB_KEY, JSON.stringify(db)); }
-  catch (e) { toast('⚠️', 'Não foi possível salvar', 'Armazenamento cheio. Reduza imagens ou faça backup e limpe dados.', true); }
+  const k = cacheKey(); if (!k) return;
+  try { localStorage.setItem(k, JSON.stringify(db)); }
+  catch (e) { toast('⚠️', 'Não foi possível salvar localmente', 'Armazenamento cheio. Reduza imagens ou faça backup e limpe dados.', true); }
 }
 
 const prefs = (() => { try { return JSON.parse(localStorage.getItem(PREF_KEY) || '{}'); } catch (e) { return {}; } })();
 function savePrefs() { localStorage.setItem(PREF_KEY, JSON.stringify(prefs)); }
 
-// gravação: sempre em memória + local; se nuvem ativa, também no Firebase
+// gravação: sempre em memória + cache local; na nuvem, também no Supabase
 function upsert(col, rec) {
   const arr = db[col];
   const i = arr.findIndex(r => r.id === rec.id);
   if (i >= 0) arr[i] = rec; else arr.push(rec);
   saveLocal();
-  Sync.write(`${col}/${rec.id}`, rec);
+  if (Cloud.active) Cloud.upsert(col, rec);
   return rec;
 }
 function removeRec(col, id) {
   db[col] = db[col].filter(r => r.id !== id);
   saveLocal();
-  Sync.remove(`${col}/${id}`);
+  if (Cloud.active) Cloud.remove(col, id);
 }
 function setConfig(patch) {
   Object.assign(db.config, patch);
   saveLocal();
-  Sync.write('config', db.config);
+  if (Cloud.active) Cloud.saveConfig();
 }
 function replaceDB(newDb) {
   db = normalizeDB(newDb);
   saveLocal();
-  Sync.pushAll();
+  if (Cloud.active) return Cloud.replaceAll();
+  return Promise.resolve();
 }
 function logAct(msg, who) {
-  const entry = { id: genId(), ts: new Date().toISOString(), who: who || (state.role === 'admin' ? 'Admin' : 'Corretor'), msg };
+  const entry = { id: genId(), ts: new Date().toISOString(), who: who || (Cloud.active ? (Cloud.membro.nome || 'Usuário') : (state.role === 'admin' ? 'Admin' : 'Corretor')), msg };
   db.log.push(entry);
-  if (db.log.length > 400) {
-    const old = db.log.slice(0, db.log.length - 400);
-    db.log = db.log.slice(-400);
-    old.forEach(o => Sync.remove(`log/${o.id}`));
-  }
+  if (db.log.length > 400) db.log = db.log.slice(-400);
   saveLocal();
-  Sync.write(`log/${entry.id}`, entry);
+  if (Cloud.active) Cloud.upsert('log', entry);
 }
 
-// ---------------------------------------------------------------- sincronização em nuvem (Firebase Realtime Database, opcional)
-const Sync = {
-  cfg: null, ref: null, status: 'off', active: false, msg: '',
-  loadCfg() { try { return JSON.parse(localStorage.getItem(SYNC_KEY) || 'null'); } catch (e) { return null; } },
-  saveCfg(cfg) { if (cfg) localStorage.setItem(SYNC_KEY, JSON.stringify(cfg)); else localStorage.removeItem(SYNC_KEY); },
-  loadScript(src) {
-    return new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = () => rej(new Error('Falha ao carregar ' + src)); document.head.appendChild(s); });
+// ---------------------------------------------------------------- nuvem (Supabase)
+const TABLE_COLS = {
+  loteamentos: ['id', 'nome', 'cidade', 'endereco', 'descricao', 'cond', 'orcamento', 'planta', 'criadoEm'],
+  categorias: ['id', 'nome', 'cor'],
+  lotes: ['id', 'loteamentoId', 'quadra', 'numero', 'area', 'frente', 'fundos', 'preco', 'tipo', 'status', 'obs', 'matricula', 'pts', 'reservaId', 'vendaId', 'criadoEm'],
+  reservas: ['id', 'loteamentoId', 'loteId', 'corretor', 'corretorUserId', 'cliente', 'dataReserva', 'validade', 'status', 'proposta', 'obs', 'motivo', 'aprovadaEm', 'encerradaEm', 'criadoEm'],
+  vendas: ['id', 'loteamentoId', 'loteId', 'reservaId', 'cliente', 'corretor', 'corretorUserId', 'dataVenda', 'valorTotal', 'entrada', 'dataEntrada', 'nParcelas', 'jurosMes', 'valorParcela', 'primeiroVencimento', 'baloes', 'comissaoPct', 'comissaoValor', 'comissaoPaga', 'comissaoData', 'status', 'obs', 'motivo', 'distratoEm', 'criadoEm'],
+  recebiveis: ['id', 'loteamentoId', 'vendaId', 'tipo', 'numero', 'descricao', 'vencimento', 'valor', 'valorPago', 'dataPagamento', 'forma', 'obsPagamento'],
+  custos: ['id', 'loteamentoId', 'loteId', 'descricao', 'categoriaId', 'fornecedor', 'valor', 'formaPagamento', 'dataCompetencia', 'vencimento', 'status', 'dataPagamento', 'obs', 'criadoEm'],
+  log: ['id', 'ts', 'who', 'msg']
+};
+const NULLABLE_EMPTY = new Set(['validade', 'aprovadaEm', 'encerradaEm', 'dataEntrada', 'primeiroVencimento', 'comissaoData', 'distratoEm', 'dataPagamento', 'vencimento', 'reservaId', 'vendaId', 'loteId', 'categoriaId', 'forma', 'frente', 'fundos', 'planta', 'pts', 'proposta', 'corretorUserId']);
+const INT_FIELDS = new Set(['nParcelas', 'numero']);
+function snakeKey(k) { return k.replace(/[A-Z]/g, m => '_' + m.toLowerCase()); }
+function camelKey(k) { return k.replace(/_([a-z])/g, (m, c) => c.toUpperCase()); }
+function toRow(col, rec) {
+  const row = { org_id: Cloud.org.id };
+  TABLE_COLS[col].forEach(k => {
+    if (!(k in rec)) return;
+    let v = rec[k];
+    if (v === undefined || (v === '' && NULLABLE_EMPTY.has(k))) v = null;
+    if (INT_FIELDS.has(k) && col !== 'lotes' && v !== null) v = Math.round(num(v));
+    row[snakeKey(k)] = v;
+  });
+  return row;
+}
+function fromRow(col, row) {
+  const rec = {};
+  Object.keys(row).forEach(k => { if (k !== 'org_id') rec[camelKey(k)] = row[k]; });
+  if (col === 'lotes') { rec.numero = String(rec.numero ?? ''); rec.pts = rec.pts || null; }
+  if (col === 'vendas') rec.baloes = rec.baloes || [];
+  return rec;
+}
+function membroToCorretor(m) { return { id: m.id, userId: m.userId, nome: m.nome, creci: m.creci, telefone: m.telefone, email: m.email, imobiliaria: m.imobiliaria, ativo: m.ativo, papel: m.papel }; }
+
+const Cloud = {
+  enabled: CLOUD_ENABLED, client: null, user: null, org: null, membro: null, papel: null,
+  membros: [], convites: [], minhasOrgs: [], active: false, status: 'off', msg: '', channel: null, _renderTimer: null,
+  init() {
+    if (!this.enabled) return;
+    this.client = window.supabase.createClient(GL_CFG.supabaseUrl, GL_CFG.supabaseAnonKey, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } });
+    this.client.auth.onAuthStateChange((event, session) => {
+      if (event === 'PASSWORD_RECOVERY') { state.role = 'landing'; showScreen('landing'); renderAuth('nova-senha'); return; }
+      if (event === 'SIGNED_OUT') { this.user = null; this.fecharOrg(); state.role = 'landing'; showScreen('landing'); renderAuth('login'); return; }
+      if (event === 'SIGNED_IN' && session && !this.user) { this.user = session.user; this.aposLogin(); }
+    });
   },
-  async start(cfg) {
-    this.cfg = cfg; this.status = 'connecting'; this.msg = 'Conectando…'; renderSyncStatus();
+  get admin() { return ['dono', 'admin', 'financeiro'].includes(this.papel); },
+  async boot() {
+    renderAuth('carregando');
+    const { data } = await this.client.auth.getSession();
+    if (data.session) { this.user = data.session.user; await this.aposLogin(); }
+    else renderAuth('login');
+  },
+  async signIn(email, senha) { const { error } = await this.client.auth.signInWithPassword({ email, password: senha }); if (error) throw error; },
+  async signUp(email, senha, nome) {
+    const { data, error } = await this.client.auth.signUp({ email, password: senha, options: { data: { nome }, emailRedirectTo: location.origin + location.pathname } });
+    if (error) throw error;
+    return data; // data.session === null quando a confirmação de e-mail está ativada
+  },
+  async signOut() { this.fecharOrg(); await this.client.auth.signOut(); },
+  async resetPassword(email) { const { error } = await this.client.auth.resetPasswordForEmail(email, { redirectTo: location.origin + location.pathname }); if (error) throw error; },
+  async updatePassword(senha) { const { error } = await this.client.auth.updateUser({ password: senha }); if (error) throw error; },
+  async rpc(fn, args) { const { data, error } = await this.client.rpc(fn, args); if (error) throw new Error(error.message || String(error)); return data; },
+
+  // --- empresas do usuário ---
+  async carregarMinhasOrgs() {
+    const { data, error } = await this.client.from('membros').select('*, organizacoes(id, nome, config, plano)').eq('user_id', this.user.id).eq('ativo', true);
+    if (error) throw new Error(error.message);
+    this.minhasOrgs = (data || []).filter(m => m.organizacoes).map(m => ({ membro: m, org: m.organizacoes }));
+    return this.minhasOrgs;
+  },
+  async aposLogin() {
     try {
-      if (!window.firebase) {
-        await this.loadScript('https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js');
-        await this.loadScript('https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js');
-      }
-      if (!firebase.apps.length) firebase.initializeApp(cfg);
-      this.ref = firebase.database().ref(cfg.path || 'gestao-loteamento');
-      this.ref.on('value', snap => {
-        const v = snap.val();
-        if (!v || !v.config) {
-          // nuvem vazia: envia os dados locais como ponto de partida
-          this.active = true; this.pushAll();
-        } else {
-          db = normalizeDB(v);
-          saveLocal();
-          this.active = true;
+      renderAuth('carregando');
+      await this.carregarMinhasOrgs();
+      const p = new URLSearchParams(location.search);
+      const convite = p.get('convite') || prefs.convitePendente;
+      if (convite) { prefs.convitePendente = convite; savePrefs(); renderAuth('entrar'); return; }
+      if (!this.minhasOrgs.length) { renderAuth('entrar'); return; }
+      const lembrada = this.minhasOrgs.find(x => x.org.id === prefs.orgId);
+      if (this.minhasOrgs.length === 1 || lembrada) await this.abrirOrg((lembrada || this.minhasOrgs[0]).org.id);
+      else renderAuth('escolher');
+    } catch (e) { renderAuth('login', 'Falha ao carregar seus dados: ' + e.message); }
+  },
+  async abrirOrg(orgId) {
+    const item = this.minhasOrgs.find(x => x.org.id === orgId) || (await this.carregarMinhasOrgs(), this.minhasOrgs.find(x => x.org.id === orgId));
+    if (!item) throw new Error('Empresa não encontrada');
+    this.org = item.org; this.membro = fromRow('membros', item.membro); this.papel = item.membro.papel;
+    prefs.orgId = orgId; savePrefs();
+    // cache local para abrir rápido
+    const cached = loadLocalRaw('gl_cache_' + orgId);
+    db = normalizeDB(cached || {});
+    db.config = Object.assign(defaultConfig(), item.org.config || {});
+    this.active = true; this.status = 'loading'; this.msg = 'Carregando…'; renderSyncStatus();
+    await this.loadAll();
+    this.subscribe();
+    this.status = 'on'; this.msg = 'Sincronizado'; renderSyncStatus();
+    startRole(this.admin ? 'admin' : 'corretor');
+  },
+  fecharOrg() {
+    if (this.channel) { try { this.client.removeChannel(this.channel); } catch (e) { /* ignora */ } this.channel = null; }
+    this.org = null; this.membro = null; this.papel = null; this.active = false; this.status = 'off';
+    db = normalizeDB(null);
+  },
+  async loadAll() {
+    const org = this.org.id;
+    const tabs = Object.keys(TABLE_COLS);
+    const results = await Promise.all(tabs.map(t => this.client.from(t).select('*').eq('org_id', org).limit(t === 'log' ? 400 : 20000).order(t === 'log' ? 'ts' : 'id', { ascending: true })));
+    tabs.forEach((t, i) => { if (results[i].error) throw new Error(t + ': ' + results[i].error.message); db[t] = (results[i].data || []).map(r => fromRow(t, r)); });
+    if (!db.categorias.length) db.categorias = defaultCategorias();
+    await this.loadEquipe();
+    saveLocal();
+  },
+  async loadEquipe() {
+    const org = this.org.id;
+    const { data: ms } = await this.client.from('membros').select('*').eq('org_id', org).order('nome');
+    this.membros = (ms || []).map(m => fromRow('membros', m));
+    db.corretores = this.membros.filter(m => m.papel === 'corretor').map(membroToCorretor);
+    const me = this.membros.find(m => m.userId === this.user.id); if (me) { this.membro = me; this.papel = me.papel; }
+    if (this.admin) { const { data: cs } = await this.client.from('convites').select('*').eq('org_id', org).order('criado_em', { ascending: false }); this.convites = (cs || []).map(c => fromRow('convites', c)); }
+  },
+  subscribe() {
+    if (this.channel) this.client.removeChannel(this.channel);
+    const org = this.org.id;
+    let ch = this.client.channel('org-' + org);
+    Object.keys(TABLE_COLS).forEach(t => {
+      ch = ch.on('postgres_changes', { event: '*', schema: 'public', table: t, filter: 'org_id=eq.' + org }, payload => this.onChange(t, payload));
+    });
+    ch = ch.on('postgres_changes', { event: '*', schema: 'public', table: 'organizacoes', filter: 'id=eq.' + org }, payload => { if (payload.new && payload.new.config) { db.config = Object.assign(defaultConfig(), payload.new.config); saveLocal(); this.agendarRender(); } });
+    ch = ch.on('postgres_changes', { event: '*', schema: 'public', table: 'membros', filter: 'org_id=eq.' + org }, () => { this.loadEquipe().then(() => this.agendarRender()); });
+    ch.subscribe(status => {
+      if (status === 'SUBSCRIBED') { this.status = 'on'; this.msg = 'Sincronizado'; }
+      else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') { this.status = 'offline'; this.msg = 'Sem tempo real (recarregue para atualizar)'; }
+      renderSyncStatus();
+    });
+    this.channel = ch;
+  },
+  onChange(table, payload) {
+    if (payload.eventType === 'DELETE') { const id = payload.old && payload.old.id; if (id) db[table] = db[table].filter(r => r.id !== id); }
+    else if (payload.new) { const rec = fromRow(table, payload.new); const i = db[table].findIndex(r => r.id === rec.id); if (i >= 0) db[table][i] = rec; else db[table].push(rec); }
+    saveLocal(); this.agendarRender();
+  },
+  agendarRender() { clearTimeout(this._renderTimer); this._renderTimer = setTimeout(() => { if (!$('#modalOverlay').classList.contains('open')) renderCurrent(); else updateTopbars(); }, 250); },
+  erro(e, oque) { console.error(oque, e); toast('⚠️', 'Falha ao salvar na nuvem', (e && e.message) || String(e), true); },
+
+  // --- escrita ---
+  async upsert(col, rec) {
+    if (!TABLE_COLS[col]) return;
+    const { error } = await this.client.from(col).upsert(toRow(col, rec), { onConflict: 'org_id,id' });
+    if (error) this.erro(error, col);
+  },
+  async remove(col, id) {
+    if (!TABLE_COLS[col]) return;
+    const { error } = await this.client.from(col).delete().eq('org_id', this.org.id).eq('id', id);
+    if (error) this.erro(error, col);
+  },
+  async saveConfig() {
+    const cfg = Object.assign({}, db.config); delete cfg.adminPin; delete cfg.pinPadrao; delete cfg.codigoCorretor;
+    const { error } = await this.client.from('organizacoes').update({ config: cfg }).eq('id', this.org.id);
+    if (error) this.erro(error, 'config'); else this.org.config = cfg;
+  },
+  async replaceAll() {
+    try {
+      await this.rpc('limpar_dados_org', { p_org: this.org.id });
+      for (const t of ['loteamentos', 'categorias', 'lotes', 'reservas', 'vendas', 'recebiveis', 'custos', 'log']) {
+        const rows = db[t].map(r => toRow(t, r));
+        for (let i = 0; i < rows.length; i += 400) {
+          const { error } = await this.client.from(t).upsert(rows.slice(i, i + 400), { onConflict: 'org_id,id' });
+          if (error) throw new Error(t + ': ' + error.message);
         }
-        this.status = 'on'; this.msg = 'Sincronizado';
-        renderSyncStatus();
-        renderCurrent();
-      }, err => { this.status = 'err'; this.msg = 'Erro: ' + (err.message || err.code); this.active = false; renderSyncStatus(); });
-      firebase.database().ref('.info/connected').on('value', s => { if (this.status !== 'err') { this.status = s.val() ? 'on' : 'offline'; this.msg = s.val() ? 'Sincronizado' : 'Sem conexão (dados locais)'; renderSyncStatus(); } });
-    } catch (e) {
-      this.status = 'err'; this.msg = 'Erro: ' + e.message; this.active = false; renderSyncStatus();
-    }
+      }
+      await this.saveConfig();
+    } catch (e) { this.erro(e, 'replaceAll'); }
   },
-  stop() {
-    if (this.ref) this.ref.off();
-    this.ref = null; this.active = false; this.status = 'off'; this.msg = ''; this.cfg = null;
-    this.saveCfg(null); renderSyncStatus();
+  async uploadPlanta(loteamentoId, dataUrl) {
+    const blob = await (await fetch(dataUrl)).blob();
+    const path = `${this.org.id}/${loteamentoId}.jpg`;
+    const { error } = await this.client.storage.from('plantas').upload(path, blob, { upsert: true, contentType: 'image/jpeg', cacheControl: '3600' });
+    if (error) throw new Error(error.message);
+    const { data } = this.client.storage.from('plantas').getPublicUrl(path);
+    return data.publicUrl + '?v=' + Date.now();
   },
-  toCloud(d) {
-    const out = { meta: d.meta, config: d.config };
-    COLLECTIONS.forEach(c => { const o = {}; d[c].forEach(r => { o[r.id] = r; }); out[c] = o; });
-    return out;
+  // --- funções do banco ---
+  criarOrganizacao(nome, usuarioNome, telefone) { return this.rpc('criar_organizacao', { p_nome: nome, p_usuario_nome: usuarioNome, p_telefone: telefone }); },
+  entrarComConvite(codigo, d) { return this.rpc('entrar_com_convite', { p_codigo: codigo, p_nome: d.nome || '', p_telefone: d.telefone || '', p_creci: d.creci || '', p_imobiliaria: d.imobiliaria || '' }); },
+  solicitarReserva(r) { return this.rpc('solicitar_reserva', { p_org: this.org.id, p_reserva: { id: r.id, lote_id: r.loteId, corretor: r.corretor, cliente: r.cliente, proposta: r.proposta, obs: r.obs } }); },
+  cancelarMinhaReserva(id, motivo) { return this.rpc('cancelar_minha_reserva', { p_org: this.org.id, p_id: id, p_motivo: motivo || '' }); },
+  atualizarMeuPerfil(d) { return this.rpc('atualizar_meu_perfil', { p_org: this.org.id, p_nome: d.nome, p_telefone: d.telefone, p_creci: d.creci, p_imobiliaria: d.imobiliaria }); },
+  limparDados() { return this.rpc('limpar_dados_org', { p_org: this.org.id }); },
+  async salvarMembro(m) { const { error } = await this.client.from('membros').update({ papel: m.papel, ativo: m.ativo, nome: m.nome, telefone: m.telefone, creci: m.creci, imobiliaria: m.imobiliaria }).eq('id', m.id); if (error) throw new Error(error.message); await this.loadEquipe(); },
+  async criarConvite(papel, descricao) {
+    const codigo = Math.random().toString(36).slice(2, 8).toUpperCase();
+    const { error } = await this.client.from('convites').insert({ org_id: this.org.id, codigo, papel, descricao: descricao || '', criado_por: this.user.id });
+    if (error) throw new Error(error.message); await this.loadEquipe(); return codigo;
   },
-  write(path, rec) { if (this.active && this.ref) this.ref.child(path).set(JSON.parse(JSON.stringify(rec))).catch(e => toast('⚠️', 'Falha ao sincronizar', e.message, true)); },
-  remove(path) { if (this.active && this.ref) this.ref.child(path).remove().catch(() => {}); },
-  pushAll() { if (this.active && this.ref) this.ref.set(this.toCloud(db)).catch(e => toast('⚠️', 'Falha ao enviar dados', e.message, true)); }
+  async apagarConvite(id) { const { error } = await this.client.from('convites').delete().eq('id', id); if (error) throw new Error(error.message); await this.loadEquipe(); }
 };
 function renderSyncStatus() {
+  const on = Cloud.enabled;
   $$('.sync-pill').forEach(el => {
-    el.className = 'sync-pill' + (Sync.status === 'on' ? ' on' : Sync.status === 'err' ? ' err' : '');
-    el.innerHTML = `<span class="dot"></span>${Sync.status === 'off' ? 'Somente neste dispositivo' : esc(Sync.msg)}`;
+    el.className = 'sync-pill' + (Cloud.status === 'on' ? ' on' : Cloud.status === 'offline' ? ' err' : '');
+    el.innerHTML = `<span class="dot"></span>${!on ? 'Somente neste dispositivo' : Cloud.status === 'off' ? 'Nuvem configurada' : esc(Cloud.msg)}`;
   });
-  const s = $('#syncStatusBox'); if (s) s.innerHTML = Sync.status === 'off' ? '<span class="badge neutral">Desativada</span>' : `<span class="badge ${Sync.status === 'on' ? 'pago' : Sync.status === 'err' ? 'atrasado' : 'pendente'}">${esc(Sync.msg)}</span>`;
+  const s = $('#syncStatusBox'); if (s) s.innerHTML = !on ? '<span class="badge neutral">Desativada</span>' : `<span class="badge ${Cloud.status === 'on' ? 'pago' : Cloud.status === 'offline' ? 'atrasado' : 'pendente'}">${esc(Cloud.msg || 'Conectando…')}</span>`;
 }
 
 // ---------------------------------------------------------------- estado / navegação
@@ -309,7 +461,8 @@ function loteShort(l) { return `Q${l.quadra}-L${l.numero}`; }
 function statusLabel(s) {
   return { disponivel: 'Disponível', reservado: 'Reservado', vendido: 'Vendido', bloqueado: 'Indisponível',
     pendente: 'Pendente', aprovada: 'Aprovada', recusada: 'Recusada', cancelada: 'Cancelada', expirada: 'Expirada', convertida: 'Virou venda',
-    pago: 'Pago', parcial: 'Parcial', atrasado: 'Atrasado', ativa: 'Ativa', quitada: 'Quitada', distrato: 'Distrato', paga: 'Paga' }[s] || s;
+    pago: 'Pago', parcial: 'Parcial', atrasado: 'Atrasado', ativa: 'Ativa', quitada: 'Quitada', distrato: 'Distrato', paga: 'Paga',
+    dono: 'Dono', admin: 'Administrador', financeiro: 'Financeiro', corretor: 'Corretor' }[s] || s;
 }
 function quadrasDo(lotId) { return [...new Set(lotesDo(lotId).map(l => l.quadra))].sort(naturalCmp); }
 
@@ -368,15 +521,20 @@ function atualizarStatusVenda(vendaId) {
   if (novo !== v.status) { v.status = novo; upsert('vendas', v); }
 }
 
-// corretor identificado neste dispositivo
-function corretorPerfil() { return prefs.corretor || { nome: '', creci: '', telefone: '', email: '', imobiliaria: '' }; }
+// corretor identificado neste dispositivo (modo local) ou pelo login (nuvem)
+function corretorPerfil() {
+  if (Cloud.active && Cloud.membro) { const m = Cloud.membro; return { nome: m.nome || '', creci: m.creci || '', telefone: m.telefone || '', email: m.email || '', imobiliaria: m.imobiliaria || '', userId: m.userId }; }
+  return prefs.corretor || { nome: '', creci: '', telefone: '', email: '', imobiliaria: '' };
+}
 function corretorMatch(c) {
-  const p = corretorPerfil();
   if (!c) return false;
+  if (Cloud.active) return !!Cloud.user && c.userId === Cloud.user.id;
+  const p = corretorPerfil();
   const tel = onlyDigits(p.telefone), creci = (p.creci || '').trim().toLowerCase();
   return (tel && onlyDigits(c.telefone) === tel) || (creci && (c.creci || '').trim().toLowerCase() === creci);
 }
-function registrarCorretor(c) { // mantém cadastro de corretores a partir das reservas
+function registrarCorretor(c) { // modo local: mantém cadastro de corretores a partir das reservas
+  if (Cloud.active) return null;
   const existente = db.corretores.find(x => (onlyDigits(x.telefone) && onlyDigits(x.telefone) === onlyDigits(c.telefone)) || (x.creci && c.creci && x.creci.trim().toLowerCase() === c.creci.trim().toLowerCase()));
   if (existente) {
     const upd = Object.assign({}, existente, { nome: c.nome || existente.nome, email: c.email || existente.email, imobiliaria: c.imobiliaria || existente.imobiliaria, creci: c.creci || existente.creci, telefone: c.telefone || existente.telefone });
@@ -411,10 +569,13 @@ function updateTopbars() {
     sel.innerHTML = db.loteamentos.length ? optionsHtml(db.loteamentos, lot ? lot.id : '') : '<option value="">Nenhum loteamento</option>';
     sel.style.display = db.loteamentos.length > 1 ? '' : 'none';
   });
-  $$('.lot-name').forEach(el => { el.textContent = lot ? lot.nome : 'Gestão de Loteamento'; });
+  $$('.lot-name').forEach(el => { el.textContent = lot ? lot.nome : (Cloud.org ? Cloud.org.nome : 'Gestão de Loteamento'); });
+  $$('.user-name').forEach(el => { el.textContent = Cloud.active ? (Cloud.membro.nome || Cloud.user.email || '') : ''; el.style.display = Cloud.active ? '' : 'none'; });
+  $$('.btn-ver-corretor').forEach(el => { el.style.display = (state.role === 'admin') ? '' : 'none'; });
+  $$('.btn-voltar-admin').forEach(el => { el.style.display = (state.role === 'corretor' && (Cloud.active ? Cloud.admin : sessionStorage.getItem('gl_admin') === '1')) ? '' : 'none'; });
 }
 
-// ---------------------------------------------------------------- autenticação simples
+// ---------------------------------------------------------------- acesso (modo local: PIN e código)
 function enterAdmin() {
   const body = `<p class="small muted mb">Digite o PIN do administrador.</p>
     <div class="fg"><input type="password" inputmode="numeric" id="pinInput" class="pin-input" maxlength="8" autocomplete="off" placeholder="••••"></div>
@@ -444,20 +605,26 @@ function checkCodigo() {
   closeModal(); startRole('corretor');
 }
 function startRole(role) {
+  if (role === 'admin' && Cloud.active && !Cloud.admin) role = 'corretor';
   state.role = role;
   prefs.lastRole = role; savePrefs();
   showScreen(role);
   updateTopbars();
   switchTab(role === 'admin' ? (db.loteamentos.length ? 'painel' : 'cadastros') : 'planta');
 }
-function sair() {
+function voltarAdmin() { if (Cloud.active ? Cloud.admin : sessionStorage.getItem('gl_admin') === '1') startRole('admin'); }
+async function sair() {
   sessionStorage.removeItem('gl_admin');
-  state.role = 'landing'; prefs.lastRole = null; savePrefs();
+  prefs.lastRole = null; savePrefs();
+  if (Cloud.enabled) { state.role = 'landing'; showScreen('landing'); renderAuth('carregando'); await Cloud.signOut(); renderAuth('login'); return; }
+  state.role = 'landing';
   showScreen('landing'); renderLanding();
 }
 
-// ---------------------------------------------------------------- landing
+// ---------------------------------------------------------------- tela inicial (modo local)
 function renderLanding() {
+  if (Cloud.enabled) { renderAuth(); return; }
+  $('#authBox').style.display = 'none'; $('#localBox').style.display = '';
   const lot = curLot();
   const box = $('#landingEmpreend');
   if (!lot) {
@@ -486,27 +653,28 @@ async function importarBackup(input) {
     const data = JSON.parse(await readFileAsText(f));
     if (!data || !data.config) throw new Error('Arquivo inválido');
     if (!confirm('Importar este backup vai SUBSTITUIR todos os dados atuais. Continuar?')) { input.value = ''; return; }
-    replaceDB(data);
+    if (Cloud.active) { delete data.config.adminPin; data.config = Object.assign({}, db.config, data.config); }
+    await replaceDB(data);
     toast('✅', 'Backup importado', '');
     renderCurrent();
   } catch (e) { toast('⚠️', 'Falha ao importar', e.message, true); }
   input.value = '';
 }
-function apagarTudo() {
+async function apagarTudo() {
   if (!confirm('Apagar TODOS os dados deste loteamento (lotes, reservas, vendas, custos)? Esta ação não pode ser desfeita.')) return;
   if (!confirm('Tem certeza? Recomendamos exportar um backup antes.')) return;
   const cfg = db.config;
-  replaceDB(Object.assign(defaultDB(), { config: cfg }));
+  await replaceDB(Object.assign(defaultDB(), { config: cfg }));
   state.lotId = null;
   toast('🗑️', 'Dados apagados', '');
   renderCurrent();
 }
 
 // ---------------------------------------------------------------- dados de exemplo
-function carregarDemo() {
+async function carregarDemo() {
   if (db.lotes.length && !confirm('Já existem dados cadastrados. Carregar os dados de exemplo vai substituí-los. Continuar?')) return;
   const d = defaultDB();
-  d.config = Object.assign(d.config, { empresa: 'Sua Incorporadora', comissaoPct: 5 });
+  d.config = Cloud.active ? Object.assign({}, db.config, { comissaoPct: 5 }) : Object.assign(d.config, { empresa: 'Sua Incorporadora', comissaoPct: 5 });
   const lot = { id: 'demo-lot', nome: 'Residencial Vista Verde', cidade: 'Rio do Sul / SC', endereco: 'Rod. BR-470, km 140', descricao: 'Loteamento residencial com 32 lotes, infraestrutura completa: asfalto, água, energia, iluminação em LED e área de lazer.',
     cond: { entradaMinPct: 10, maxParcelas: 120, jurosMes: 0.8, descontoVistaPct: 6 }, orcamento: { terraplanagem: 380000, pavimentacao: 620000, 'rede-eletrica': 210000, 'agua-esgoto': 260000, documentacao: 60000, projetos: 90000, marketing: 80000, terreno: 1500000 }, criadoEm: new Date().toISOString() };
   d.loteamentos.push(lot);
@@ -587,30 +755,24 @@ function carregarDemo() {
     d.custos.push({ id: 'cu-' + i, loteamentoId: lot.id, descricao: desc, categoriaId: cat, fornecedor: forn, valor, dataCompetencia: comp, vencimento: venc, status: st === 'pago' ? 'pago' : 'pendente', dataPagamento: st === 'pago' ? venc : null, formaPagamento: 'Transferência', obs: '' });
   });
   d.log.push({ id: genId(), ts: new Date().toISOString(), who: 'Sistema', msg: 'Dados de exemplo carregados.' });
-  replaceDB(d);
+  await replaceDB(d);
+  if (Cloud.active) db.corretores = Cloud.membros.filter(m => m.papel === 'corretor').map(membroToCorretor);
   state.lotId = lot.id; prefs.lotId = lot.id; savePrefs();
-  toast('✨', 'Dados de exemplo carregados', 'Explore como corretor e como administrador (PIN 1234).');
+  toast('✨', 'Dados de exemplo carregados', Cloud.active ? 'Explore o painel, a planta e as reservas.' : 'Explore como corretor e como administrador (PIN 1234).');
   renderCurrent();
 }
 
+
 // ---------------------------------------------------------------- boot
-function bootLinks() {
-  // link compartilhado pelo admin: ?modo=corretor&sync=<base64 do config firebase>
-  const p = new URLSearchParams(location.search);
-  if (p.get('sync')) {
-    try { const cfg = JSON.parse(decodeURIComponent(escape(atob(p.get('sync'))))); if (cfg && cfg.databaseURL) Sync.saveCfg(cfg); } catch (e) { /* ignora */ }
-  }
-  return p.get('modo');
-}
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('./sw.js').catch(() => {});
   $('#modalOverlay').addEventListener('click', e => { if (e.target.id === 'modalOverlay') closeModal(); });
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('#modalOverlay').classList.contains('open')) closeModal(); });
-  const modo = bootLinks();
-  const syncCfg = Sync.loadCfg();
-  if (syncCfg) Sync.start(syncCfg);
   state.role = 'landing';
-  showScreen('landing'); renderLanding();
+  showScreen('landing');
+  if (Cloud.enabled) { Cloud.init(); await Cloud.boot(); return; }
+  renderLanding();
+  const modo = new URLSearchParams(location.search).get('modo');
   if (modo === 'corretor') enterCorretor();
   else if (sessionStorage.getItem('gl_admin') === '1') startRole('admin');
   else if (prefs.lastRole === 'corretor') startRole('corretor');
