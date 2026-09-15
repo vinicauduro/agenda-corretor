@@ -6,21 +6,35 @@ const pdfImp = { doc: null, lib: null, pageNum: 1, page: null, ext: null, det: n
 async function importarPlantaPDF(input) {
   const f = input.files[0]; input.value = ''; if (!f) return;
   const lot = curLot(); if (!lot) return;
-  openModal({ title: '📄 Importar planta do PDF', body: `<div class="empty"><div class="ic">⏳</div><p>Lendo o PDF…</p></div>`, wide: true });
+  const isDxf = /\.dxf$/i.test(f.name);
+  pdfImp.titulo = isDxf ? '📐 Importar planta do DXF' : '📄 Importar planta do PDF';
+  openModal({ title: pdfImp.titulo, body: `<div class="empty"><div class="ic">⏳</div><p>Lendo o arquivo…</p></div>`, wide: true });
   try {
-    pdfImp.fileName = f.name;
-    const buf = await f.arrayBuffer();
-    pdfImp.lib = await PlantaPDF.getLib();
-    pdfImp.doc = await PlantaPDF.abrir(new Uint8Array(buf), pdfImp.lib);
+    pdfImp.fileName = f.name; pdfImp.kind = isDxf ? 'dxf' : 'pdf'; pdfImp.dxfCamadas = null; pdfImp.dxfAngulo = null; pdfImp.dxfAberto = false;
+    if (isDxf) {
+      const txt = PlantaDXF.decodificar(await f.arrayBuffer());
+      await new Promise(r => setTimeout(r, 30));
+      pdfImp.dxf = PlantaDXF.parse(txt);
+      pdfImp.doc = { numPages: 1 };
+    } else {
+      const buf = await f.arrayBuffer();
+      pdfImp.lib = await PlantaPDF.getLib();
+      pdfImp.doc = await PlantaPDF.abrir(new Uint8Array(buf), pdfImp.lib);
+    }
     pdfImp.pageNum = 1;
     await pdfCarregarPagina();
-  } catch (e) { console.error(e); openModal({ title: '📄 Importar planta do PDF', body: `<div class="alert" style="cursor:default"><span>Não foi possível ler este PDF: ${esc(e.message || e)}</span></div>`, footer: `<button class="btn btn-secondary" onclick="closeModal()">Fechar</button>` }); }
+  } catch (e) { console.error(e); openModal({ title: pdfImp.titulo, body: `<div class="alert" style="cursor:default"><span>Não foi possível ler este arquivo: ${esc(e.message || e)}</span></div>`, footer: `<button class="btn btn-secondary" onclick="closeModal()">Fechar</button>` }); }
 }
+function pdfRender(scale, clip, canvas) { return pdfImp.kind === 'dxf' ? Promise.resolve(PlantaDXF.renderizar(pdfImp.ext, scale, clip, canvas)) : PlantaPDF.renderizar(pdfImp.page, scale, clip, canvas); }
 async function pdfCarregarPagina() {
-  pdfImp.page = await pdfImp.doc.getPage(pdfImp.pageNum);
-  $('#modalBody').innerHTML = `<div class="empty"><div class="ic">🔎</div><p>Analisando vetores e textos da página ${pdfImp.pageNum}…</p></div>`;
+  $('#modalBody').innerHTML = `<div class="empty"><div class="ic">🔎</div><p>Analisando vetores e textos…</p></div>`;
   await new Promise(r => setTimeout(r, 30));
-  pdfImp.ext = await PlantaPDF.extrair(pdfImp.page, pdfImp.lib);
+  if (pdfImp.kind === 'dxf') {
+    if (!pdfImp.dxfCamadas) pdfImp.dxfCamadas = PlantaDXF.camadas(pdfImp.dxf);
+    if (pdfImp.dxfAngulo === undefined) pdfImp.dxfAngulo = null;
+    pdfImp.ext = PlantaDXF.extrair(pdfImp.dxf, { layers: new Set(pdfImp.dxfCamadas.filter(c => c.on).map(c => c.name)), angle: pdfImp.dxfAngulo });
+  }
+  else { pdfImp.page = await pdfImp.doc.getPage(pdfImp.pageNum); pdfImp.ext = await PlantaPDF.extrair(pdfImp.page, pdfImp.lib); }
   const det = PlantaPDF.detectar(pdfImp.ext);
   // recorte sugerido: caixa dos lotes encontrados com margem
   if (det.lotes.length) {
@@ -41,7 +55,7 @@ function pdfRenderModal() {
   const qs = Object.keys(porQ).sort(naturalCmp);
   const novos = det.lotes.filter(l => !existentes.find(e => e.quadra.toUpperCase() === l.quadra.toUpperCase() && String(e.numero) === l.numero)).length;
   const resumo = det.lotes.length ? `
-    <div class="alert ok" style="cursor:default"><span><b>${det.lotes.length} lotes encontrados</b> em ${qs.length} quadra(s)${det.temTabela ? ' · áreas lidas do quadro de áreas' : ''}${det.semPoligono.length ? ` · <span style="color:#b45309">${det.semPoligono.length} número(s) sem contorno: ${esc(det.semPoligono.map(s => s.numero).join(', '))}</span>` : ''}</span></div>
+    <div class="alert ok" style="cursor:default"><span><b>${det.lotes.length} lotes encontrados</b> em ${qs.length} quadra(s)${det.temTabela ? ' · áreas lidas do quadro de áreas' : (pdfImp.kind === 'dxf' ? ' · áreas calculadas do desenho' : '')}${det.semPoligono.length ? ` · <span style="color:#b45309">${det.semPoligono.length} número(s) sem contorno: ${esc(det.semPoligono.map(s => s.numero).join(', '))}</span>` : ''}</span></div>
     <div class="small muted mb">${qs.map(q => `<span class="badge ${porQ[q].inc ? 'pendente' : 'neutral'}" title="${porQ[q].inc ? porQ[q].inc + ' lote(s) com quadra incerta' : ''}">${esc(q)}: ${porQ[q].n}${det.esperado && det.esperado[q] ? '/' + det.esperado[q] : ''}${porQ[q].inc ? '?' : ''}</span>`).join(' ')}</div>
     <p class="help mb">${novos} lote(s) serão criados e ${det.lotes.length - novos} já existentes receberão a posição na planta. Quadras marcadas com <b>?</b> não tinham a letra dentro do bloco e foram deduzidas pela proximidade — confira depois na aba Lotes.</p>`
     : `<div class="alert warn" style="cursor:default"><span>Nenhum lote detectado automaticamente${det.erro ? ' (' + esc(det.erro) + ')' : ''}. A imagem da planta será importada e você poderá desenhar os lotes manualmente.</span></div>`;
@@ -53,8 +67,11 @@ function pdfRenderModal() {
       <div class="btn-row" style="margin-top:8px"><button class="btn btn-secondary btn-sm" onclick="pdfClipAuto()">Recorte automático</button><button class="btn btn-secondary btn-sm" onclick="pdfClipTudo()">Página inteira</button></div></div>
     <div class="frow">
       <div class="fg"><label>Resolução da imagem</label><select id="pdfRes"><option value="3000">Normal (3000 px)</option><option value="4500" ${Cloud.active ? 'selected' : ''}>Alta (4500 px)</option><option value="6000">Máxima (6000 px)</option></select>${Cloud.active ? '' : '<div class="hint">No modo local a imagem é limitada a 2500 px para caber no armazenamento do navegador.</div>'}</div>
-      <div class="fg"><label>Lotes</label><label class="check" style="margin-top:8px"><input type="checkbox" id="pdfDetect" ${det.lotes.length ? 'checked' : 'disabled'}> Cadastrar/posicionar automaticamente</label><label class="check"><input type="checkbox" id="pdfAreas" ${det.temTabela ? 'checked' : ''}> Atualizar áreas com as do PDF</label></div>
+      <div class="fg"><label>Lotes</label><label class="check" style="margin-top:8px"><input type="checkbox" id="pdfDetect" ${det.lotes.length ? 'checked' : 'disabled'}> Cadastrar/posicionar automaticamente</label><label class="check"><input type="checkbox" id="pdfAreas" ${det.temTabela || pdfImp.kind === 'dxf' ? 'checked' : ''}> Atualizar áreas com as do arquivo</label></div>
     </div>
+    ${pdfImp.kind === 'dxf' ? `<details ${pdfImp.dxfAberto ? 'open' : ''} ontoggle="pdfImp.dxfAberto=this.open"><summary class="small" style="cursor:pointer;font-weight:700;color:var(--primary)">⚙️ Rotação e camadas do desenho (avançado)</summary>
+      <div class="frow" style="margin-top:8px"><div class="fg"><label>Rotação (graus)</label><div style="display:flex;gap:6px"><input type="number" id="dxfAng" step="1" value="${pdfImp.ext.angulo}" onchange="pdfImp.dxfAngulo=Number(this.value);pdfCarregarPagina()"><button class="btn btn-secondary btn-sm" onclick="pdfImp.dxfAngulo=null;pdfCarregarPagina()">Auto</button></div><div class="hint">O desenho é girado para as divisas ficarem retas. Ajuste se preferir outra orientação.</div></div>
+      <div class="fg"><label>Camadas visíveis (${pdfImp.dxfCamadas.filter(c => c.on).length} de ${pdfImp.dxfCamadas.length})</label><div style="max-height:160px;overflow:auto;border:1px solid var(--border);border-radius:8px;padding:6px 8px;background:#f8fafc">${pdfImp.dxfCamadas.map((c, i) => `<label class="check tiny" style="padding:2px 0"><input type="checkbox" ${c.on ? 'checked' : ''} onchange="pdfImp.dxfCamadas[${i}].on=this.checked;pdfCarregarPagina()"> ${esc(c.name)} <span class="muted">(${c.total})</span></label>`).join('')}</div></div></div></details>` : ''}
     <div id="pdfProgresso" class="small muted"></div>`;
   $('#modalFoot').innerHTML = `<button class="btn btn-secondary" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" id="pdfBtnImportar" onclick="pdfExecutarImportacao()">Importar</button>`;
   $('#modalFoot').style.display = 'flex';
@@ -66,7 +83,7 @@ async function pdfRenderPreview() {
   const wrap = $('#pdfPrevWrap'); const w = wrap.clientWidth || 700;
   const scale = Math.min(1, w / pdfImp.ext.W) * (window.devicePixelRatio > 1 ? 1.5 : 1);
   pdfImp.prev = { scale };
-  await PlantaPDF.renderizar(pdfImp.page, scale, null, cv);
+  await pdfRender(scale, null, cv);
   // lotes detectados em verde
   const ctx = cv.getContext('2d'); const W = pdfImp.ext.W, H = pdfImp.ext.H;
   ctx.fillStyle = 'rgba(34,197,94,0.35)'; ctx.strokeStyle = 'rgba(21,128,61,0.8)'; ctx.lineWidth = 1;
@@ -88,12 +105,12 @@ async function pdfExecutarImportacao() {
   try {
     const clip = pdfImp.clip; const scale = alvo / clip.w;
     prog.textContent = 'Renderizando a imagem…'; await new Promise(r => setTimeout(r, 30));
-    const canvas = await PlantaPDF.renderizar(pdfImp.page, scale, clip);
+    const canvas = await pdfRender(scale, clip);
     const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
     let img = dataUrl;
     if (Cloud.active) { prog.textContent = 'Enviando a imagem para a nuvem…'; img = await Cloud.uploadPlanta(lot.id, dataUrl); }
     else if (dataUrl.length > 3.5 * 1024 * 1024) throw new Error('Imagem grande demais para o modo local. Escolha uma resolução menor ou um recorte mais justo.');
-    upsert('loteamentos', Object.assign({}, lot, { planta: { img, w: canvas.width, h: canvas.height, origem: 'pdf', arquivo: pdfImp.fileName } }));
+    upsert('loteamentos', Object.assign({}, lot, { planta: { img, w: canvas.width, h: canvas.height, origem: pdfImp.kind, arquivo: pdfImp.fileName } }));
     let criados = 0, posicionados = 0, areas = 0;
     if (detectar) {
       prog.textContent = 'Cadastrando lotes…'; await new Promise(r => setTimeout(r, 30));
@@ -111,11 +128,11 @@ async function pdfExecutarImportacao() {
           criados++;
         }
       });
-      logAct(`Planta importada do PDF (${pdfImp.fileName}): ${criados} lote(s) criados, ${posicionados} posicionados`);
-    } else logAct(`Planta importada do PDF (${pdfImp.fileName})`);
+      logAct(`Planta importada (${pdfImp.fileName}): ${criados} lote(s) novos, ${posicionados} já cadastrados posicionados`);
+    } else logAct(`Planta importada (${pdfImp.fileName})`);
     prefs.aModo = 'imagem'; savePrefs(); state.plantaAdmin = null;
     closeModal(); renderPlantaEditor();
-    toast('✅', 'Planta importada', detectar ? `${criados} lote(s) criados · ${posicionados} posicionados${areas ? ' · ' + areas + ' áreas atualizadas' : ''}` : 'Agora desenhe os lotes sobre a planta.');
+    toast('✅', 'Planta importada', detectar ? `${criados} lote(s) novos posicionados${posicionados ? ' · ' + posicionados + ' já cadastrados posicionados' : ''}${areas ? ' · ' + areas + ' áreas atualizadas' : ''}` : 'Agora desenhe os lotes sobre a planta.');
     if (criados) setTimeout(() => toast('💲', 'Defina os preços', 'Use "Reajustar preços" na aba Lotes para aplicar um valor por m².'), 1200);
   } catch (e) { console.error(e); btn.disabled = false; btn.textContent = 'Importar'; prog.textContent = ''; toast('⚠️', 'Falha na importação', e.message || String(e), true); }
 }
