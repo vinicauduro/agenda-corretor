@@ -5,6 +5,7 @@
 
 const PlantaPDF = {
   lib: null,
+  _inside(x, y, poly) { let ins = false; for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) { const xi = poly[i][0], yi = poly[i][1], xj = poly[j][0], yj = poly[j][1]; if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi + 1e-12) + xi) ins = !ins; } return ins; },
   async getLib() {
     if (this.lib) return this.lib;
     const m = await import('./vendor/pdf.js');
@@ -88,16 +89,26 @@ const PlantaPDF = {
     // números de lote: inteiros de 1-3 dígitos no tamanho de fonte mais comum
     const ints = texts.filter(t => /^\d{1,3}$/.test(t.str));
     const bySize = {}; ints.forEach(t => { const k = Math.round(t.size * 10); bySize[k] = (bySize[k] || 0) + 1; });
-    const sizeKey = Object.keys(bySize).sort((a, b) => bySize[b] - bySize[a])[0];
+    let sizeKey = Object.keys(bySize).sort((a, b) => bySize[b] - bySize[a])[0];
     if (!sizeKey) return { lotes: [], letras: [], semPoligono: [], erro: 'Nenhum número de lote encontrado nesta região.' };
+    // se houver polígonos fechados, prefere o tamanho de fonte cujos números mais caem dentro deles
+    const fechados = ext.paths.filter(p => p.closed && p.pts.length >= 3 && !p.circle).map(p => ({ p: p.pts, bb: [Math.min(...p.pts.map(q => q[0])), Math.min(...p.pts.map(q => q[1])), Math.max(...p.pts.map(q => q[0])), Math.max(...p.pts.map(q => q[1]))] }));
+    if (fechados.length >= 5) {
+      const dentroDe = (x, y) => fechados.some(o => x >= o.bb[0] && x <= o.bb[2] && y >= o.bb[1] && y <= o.bb[3] && PlantaPDF._inside(x, y, o.p));
+      const score = {}; ints.forEach(t => { const k = Math.round(t.size * 10); if (dentroDe(t.cx, t.cy)) score[k] = (score[k] || 0) + 1; });
+      const best = Object.keys(score).sort((a, b) => score[b] - score[a] || bySize[b] - bySize[a])[0];
+      if (best && score[best] >= 3) sizeKey = best;
+    }
     const numSize = Number(sizeKey) / 10;
-    const nums = ints.filter(t => Math.abs(t.size - numSize) <= 0.15).map(t => ({ n: String(parseInt(t.str, 10)), x: t.cx, y: t.cy }));
-    const letras = texts.filter(t => /^[A-Z]{1,2}$/.test(t.str) && t.size >= numSize * 0.9 && t.size <= numSize * 2.2).map(t => ({ l: t.str, x: t.cx, y: t.cy }));
+    // remove cópias sobrepostas do mesmo texto (comum em DXF)
+    const dedupe = (arr, k, d) => { const out = []; arr.forEach(t => { if (!out.some(o => o[k] === t[k] && Math.hypot(o.x - t.x, o.y - t.y) < d)) out.push(t); }); return out; };
+    const nums = dedupe(ints.filter(t => Math.abs(t.size - numSize) <= 0.15).map(t => ({ n: String(parseInt(t.str, 10)), x: t.cx, y: t.cy })), 'n', numSize * 2);
+    const letras = dedupe(texts.filter(t => /^[A-Z]{1,2}$/.test(t.str) && t.size >= numSize * 0.9 && t.size <= numSize * 2.2).map(t => ({ l: t.str, x: t.cx, y: t.cy })), 'l', numSize * 3);
     // segmentos e polígonos diretos (linhas pretas/cinza)
     const isGray = c => Math.max(...c) <= 0.78 && (Math.max(...c) - Math.min(...c)) <= 0.06;
     const segs = [], direct = [];
     ext.paths.forEach(p => {
-      if (!isGray(p.color)) return;
+      if (!isGray(p.color) || p.circle) return;
       const pts = p.pts.filter(q => inClip(q[0], q[1]) || true);
       if (!pts.some(q => inClip(q[0], q[1]))) return;
       for (let i = 0; i + 1 < pts.length; i++) segs.push([pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1]]);
@@ -105,7 +116,9 @@ const PlantaPDF = {
       if (poly.length >= 4 && Math.hypot(poly[0][0] - poly[poly.length - 1][0], poly[0][1] - poly[poly.length - 1][1]) < 0.5) poly = poly.slice(0, -1);
       if (poly.length >= 3 && (p.closed || pts.length !== poly.length)) { segs.push([poly[poly.length - 1][0], poly[poly.length - 1][1], poly[0][0], poly[0][1]]); if (poly.length >= 4) direct.push(poly); }
     });
-    const good = segs.filter(s => Math.hypot(s[2] - s[0], s[3] - s[1]) > 0.3);
+    const ex = { x0: clip.x - clip.w * 0.2, y0: clip.y - clip.h * 0.2, x1: clip.x + clip.w * 1.2, y1: clip.y + clip.h * 1.2 };
+    const okPt = (x, y) => Number.isFinite(x) && Number.isFinite(y) && x >= ex.x0 && x <= ex.x1 && y >= ex.y0 && y <= ex.y1;
+    const good = segs.filter(s => okPt(s[0], s[1]) && okPt(s[2], s[3]) && Math.hypot(s[2] - s[0], s[3] - s[1]) > 0.3);
     // divide nas interseções e junções em T
     const TOL = 0.35, cell = 40;
     const key = (x, y) => Math.round(x / TOL) + ',' + Math.round(y / TOL);
@@ -149,7 +162,7 @@ const PlantaPDF = {
       if (face.length >= 3) faces.push(face.map(k => coord.get(k)));
     }
     const area = p => Math.abs(p.reduce((s, q, i) => { const r = p[(i + 1) % p.length]; return s + q[0] * r[1] - r[0] * q[1]; }, 0) / 2);
-    const inside = (x, y, poly) => { let ins = false; for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) { const xi = poly[i][0], yi = poly[i][1], xj = poly[j][0], yj = poly[j][1]; if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi + 1e-12) + xi) ins = !ins; } return ins; };
+    const inside = PlantaPDF._inside;
     const polys = [...direct, ...faces].map(p => ({ p, a: area(p), bb: [Math.min(...p.map(q => q[0])), Math.min(...p.map(q => q[1])), Math.max(...p.map(q => q[0])), Math.max(...p.map(q => q[1]))] })).filter(o => o.a > 1);
     // cada número → menor polígono que o contém sem outro número dentro
     const found = []; const semPoligono = [];
@@ -177,8 +190,18 @@ const PlantaPDF = {
       const cx0 = ids.reduce((s, i) => s + lotes[i].x, 0) / ids.length, cy0 = ids.reduce((s, i) => s + lotes[i].y, 0) / ids.length;
       const freq = {}; letras.forEach(L => { freq[L.l] = (freq[L.l] || 0) + 1; });
       const dentro = letras.filter(L => ids.some(i => inside(L.x, L.y, lotes[i].pts))).sort((p, q) => (Math.hypot(p.x - cx0, p.y - cy0) - Math.hypot(q.x - cx0, q.y - cy0)) || (freq[p.l] - freq[q.l]));
-      if (dentro.length > 1) { // quadras coladas sem rua entre elas: cada lote vai para a letra mais próxima
-        ids.forEach(i => { const L = dentro.slice().sort((p, q) => Math.hypot(p.x - lotes[i].x, p.y - lotes[i].y) - Math.hypot(q.x - lotes[i].x, q.y - lotes[i].y))[0]; lotes[i].quadra = L.l; lotes[i].quadraIncerta = false; });
+      if (dentro.length > 1) { // quadras coladas sem rua entre elas: propaga cada letra pelos lotes vizinhos (BFS multi-origem)
+        const idSet = new Set(ids); const viz = new Map(); ids.forEach(i => viz.set(i, new Set()));
+        for (const vs of vmap.values()) { const inC = vs.filter(i => idSet.has(i)); for (const a of inC) for (const b of inC) if (a !== b) viz.get(a).add(b); }
+        // Dijkstra multi-origem: custo = distância acumulada entre centros de lotes vizinhos, partindo de cada letra
+        const dist = new Map(), label = new Map(); const done = new Set();
+        dentro.forEach(L => { ids.forEach(i => { if (inside(L.x, L.y, lotes[i].pts)) { const d0 = Math.hypot(L.x - lotes[i].x, L.y - lotes[i].y); if (!dist.has(i) || d0 < dist.get(i)) { dist.set(i, d0); label.set(i, L.l); } } }); });
+        while (true) {
+          let best = null; for (const [i, d] of dist) if (!done.has(i) && (best === null || d < dist.get(best))) best = i;
+          if (best === null) break; done.add(best);
+          for (const b of viz.get(best)) { const nd = dist.get(best) + Math.hypot(lotes[b].x - lotes[best].x, lotes[b].y - lotes[best].y); if (!dist.has(b) || nd < dist.get(b)) { dist.set(b, nd); label.set(b, label.get(best)); } }
+        }
+        ids.forEach(i => { let l = label.get(i); if (!l) l = dentro.slice().sort((p, q) => Math.hypot(p.x - lotes[i].x, p.y - lotes[i].y) - Math.hypot(q.x - lotes[i].x, q.y - lotes[i].y))[0].l; lotes[i].quadra = l; lotes[i].quadraIncerta = !label.has(i); });
         continue;
       }
       if (dentro.length) letra = dentro[0].l;
@@ -190,10 +213,13 @@ const PlantaPDF = {
       if (!letra) { letra = 'Q' + ci; incerto = true; quadrasSemLetra.push(letra); }
       ids.forEach(i => { lotes[i].quadra = letra; lotes[i].quadraIncerta = incerto; });
     }
+    // número repetido na mesma quadra: provavelmente outra quadra sem letra — marca para conferência
+    const visto = new Set();
+    lotes.forEach(l => { const k = l.quadra + '-' + l.numero; if (visto.has(k)) { l.quadra = l.quadra.replace(/\?$/, '') + '?'; l.quadraIncerta = true; } else visto.add(k); });
     // tabela de áreas (opcional)
     const tabela = this.lerTabelaAreas(ext.texts);
-    let ptPorM = null;
-    if (tabela.size) {
+    let ptPorM = ext.ptPorM || null;
+    if (tabela.size && !ext.ptPorM) {
       const pares = lotes.map(l => [l.areaPt, tabela.get(l.quadra + '-' + l.numero)]).filter(p => p[1] > 0);
       if (pares.length) { const r = pares.map(p => Math.sqrt(p[0] / p[1])).sort((a, b) => a - b); ptPorM = r[Math.floor(r.length / 2)]; }
     }

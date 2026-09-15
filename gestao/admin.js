@@ -100,7 +100,7 @@ function renderPlantaEditor() {
   if (!state.plantaAdmin || !v.querySelector('.planta-wrap')) {
     v.innerHTML = `
       <div class="toolbar">
-        <label class="btn btn-primary btn-sm" style="cursor:pointer">📄 ${hasImg ? 'Importar outro PDF' : 'Importar planta em PDF'}<input type="file" accept=".pdf,application/pdf" style="display:none" onchange="importarPlantaPDF(this)"></label>
+        <label class="btn btn-primary btn-sm" style="cursor:pointer">📄 ${hasImg ? 'Importar outro PDF/DXF' : 'Importar planta (PDF ou DXF)'}<input type="file" accept=".pdf,.dxf,application/pdf" style="display:none" onchange="importarPlantaPDF(this)"></label>
         <label class="btn btn-outline btn-sm" style="cursor:pointer">🖼️ ${hasImg ? 'Trocar por imagem' : 'Enviar imagem (JPG/PNG)'}<input type="file" accept="image/*" style="display:none" onchange="uploadPlanta(this)"></label>
         ${hasImg ? `<button class="btn btn-outline-danger btn-sm" onclick="removerPlanta()">Remover imagem</button>` : ''}
         <select id="aPlantaModo" onchange="aTrocarModo(this.value)" style="width:auto;flex:none;padding:6px 10px;font-size:0.8rem"><option value="imagem" ${!hasImg ? 'disabled' : ''}>🗺️ Planta real</option><option value="esquema">▦ Esquemática</option></select>
@@ -113,7 +113,8 @@ function renderPlantaEditor() {
         </div>
         <div>
           <div class="card" style="padding:10px 12px"><h3 style="margin-bottom:6px">Lotes <span class="small muted" id="aPosInfo"></span></h3>
-            <input type="text" id="aPickBusca" placeholder="🔎 Filtrar" oninput="renderLotePicker()" style="margin-bottom:8px">
+            <div class="filters" style="margin-bottom:8px"><input type="text" id="aPickBusca" placeholder="🔎 Filtrar" oninput="renderLotePicker()"><button class="btn btn-primary btn-sm" onclick="abrirLoteForm()" title="Cadastrar um lote novo e posicionar na planta">＋ Lote</button></div>
+            <label class="check small" style="margin-bottom:8px"><input type="checkbox" id="aPickSemPos" onchange="renderLotePicker()"> Só lotes sem posição</label>
             <div class="lote-picker" id="lotePicker"></div>
             <p class="help mt" id="aEditorHelp"></p>
           </div>
@@ -167,7 +168,8 @@ function selecionarLoteEditor(id) {
 function renderLotePicker() {
   const lot = curLot(); const ls = lotesDo(lot.id); const q = (val('aPickBusca') || '').toLowerCase();
   const box = $('#lotePicker'); if (!box) return;
-  const list = ls.filter(l => !q || loteLabel(l).toLowerCase().includes(q));
+  const soSem = checked('aPickSemPos');
+  const list = ls.filter(l => (!q || loteLabel(l).toLowerCase().includes(q)) && (!soSem || !(l.pts && l.pts.length >= 3)));
   const pos = ls.filter(l => l.pts && l.pts.length >= 3).length;
   $('#aPosInfo').textContent = state.plantaAdmin.mode === 'imagem' ? `${pos}/${ls.length} posicionados` : `${ls.length}`;
   box.innerHTML = list.map(l => `<div class="row ${state.editorLoteId === l.id ? 'sel' : ''}" onclick="pickLote('${l.id}')"><span class="dot ${l.status}"></span>${esc(loteLabel(l))}<span class="pos ${l.pts && l.pts.length >= 3 ? 'ok' : ''}">${l.pts && l.pts.length >= 3 ? '✓ na planta' : (state.plantaAdmin.mode === 'imagem' ? 'sem posição' : '')}</span></div>`).join('') || '<div class="row muted">Nenhum lote. Cadastre em "Lotes".</div>';
@@ -316,7 +318,15 @@ function salvarLote(id) {
   const stEl = $('#lfStatus'); if (stEl && !stEl.disabled) rec.status = stEl.value;
   upsert('lotes', rec);
   if (!prev) logAct(`Lote cadastrado: ${loteLabel(rec)} — ${fmtMoney(rec.preco)}`);
-  closeModal(); renderCurrent(); toast('✅', 'Lote salvo', loteLabel(rec));
+  closeModal();
+  if (state.tab === 'planta' && state.role === 'admin') {
+    state.editorLoteId = rec.id; renderCurrent();
+    const pv = state.plantaAdmin;
+    if (pv && pv.mode === 'imagem' && !(rec.pts && rec.pts.length >= 3)) { pv.setTool('rect'); renderEditorTools(); toast('▭', 'Agora desenhe o lote', `Arraste sobre a planta para marcar ${loteShort(rec)}.`); }
+    else toast('✅', 'Lote salvo', loteLabel(rec));
+    return;
+  }
+  renderCurrent(); toast('✅', 'Lote salvo', loteLabel(rec));
 }
 function excluirLote(id) {
   const l = getLote(id); if (!l) return;
