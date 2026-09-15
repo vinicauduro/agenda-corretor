@@ -197,6 +197,12 @@ const PlantaPDF = {
       const pares = lotes.map(l => [l.areaPt, tabela.get(l.quadra + '-' + l.numero)]).filter(p => p[1] > 0);
       if (pares.length) { const r = pares.map(p => Math.sqrt(p[0] / p[1])).sort((a, b) => a - b); ptPorM = r[Math.floor(r.length / 2)]; }
     }
+    // descarta contornos incompatíveis: muito maiores que a mediana ou destoando da área da tabela
+    for (let i = lotes.length - 1; i >= 0; i--) {
+      const l = lotes[i]; const tab = tabela.get(l.quadra + '-' + l.numero);
+      const est = ptPorM ? l.areaPt / (ptPorM * ptPorM) : null;
+      if (l.areaPt > med * 6 || (tab && est && Math.abs(est / tab - 1) > 0.5)) { semPoligono.push({ numero: l.numero, quadra: l.quadra, x: l.x, y: l.y }); lotes.splice(i, 1); }
+    }
     lotes.forEach(l => {
       l.areaTabela = tabela.get(l.quadra + '-' + l.numero) || null;
       l.areaEstimada = ptPorM ? Math.round(l.areaPt / (ptPorM * ptPorM) * 100) / 100 : null;
