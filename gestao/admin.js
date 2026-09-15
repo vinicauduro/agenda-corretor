@@ -205,7 +205,9 @@ async function uploadPlanta(input) {
     const { dataUrl, w, h } = await resizeImage(raw, 2200);
     if (dataUrl.length > 3.5 * 1024 * 1024) { toast('⚠️', 'Imagem muito grande', 'Use uma imagem menor (até ~3 MB).', true); return; }
     const lot = curLot();
-    upsert('loteamentos', Object.assign({}, lot, { planta: { img: dataUrl, w, h } }));
+    let img = dataUrl;
+    if (Cloud.active) { toast('☁️', 'Enviando imagem…', ''); img = await Cloud.uploadPlanta(lot.id, dataUrl); }
+    upsert('loteamentos', Object.assign({}, lot, { planta: { img, w, h } }));
     prefs.aModo = 'imagem'; savePrefs();
     state.plantaAdmin = null;
     toast('🖼️', 'Planta enviada', 'Agora selecione cada lote e desenhe sua posição.');
@@ -490,12 +492,14 @@ function abrirReservaAdminForm(loteId) {
   openModal({ title: '📝 Nova reserva', body, footer: `<button class="btn btn-secondary" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" onclick="salvarReservaAdminNova()">Reservar</button>` });
 }
 function raPreencheCorr() { const c = db.corretores.find(x => x.id === val('raCorr')); if (!c) return; setVal('rkNome', c.nome); setVal('rkCreci', c.creci); setVal('rkTel', c.telefone); setVal('rkImob', c.imobiliaria); }
+function corretorSelecionado(selId) { const c = db.corretores.find(x => x.id === val(selId)); return c || null; }
 function salvarReservaAdminNova() {
   const l = getLote(val('raLote')); if (!l || l.status !== 'disponivel') { toast('⚠️', 'Lote indisponível', '', true); return; }
   if (!val('rlNome') || !val('rlTel')) { toast('⚠️', 'Informe nome e telefone do cliente', '', true); return; }
   const hoje = todayStr(); const dias = Math.max(1, Math.round(num(val('raDias')) || 7));
-  const corretor = { nome: val('rkNome') || 'Venda direta', creci: val('rkCreci'), telefone: val('rkTel'), email: '', imobiliaria: val('rkImob') };
-  const r = { id: genId(), loteId: l.id, loteamentoId: l.loteamentoId, corretor, cliente: { nome: val('rlNome'), cpf: val('rlCpf'), telefone: val('rlTel'), email: val('rlEmail'), cidade: val('rlCidade'), endereco: val('rlEnd') },
+  const cSel = corretorSelecionado('raCorr');
+  const corretor = { nome: val('rkNome') || 'Venda direta', creci: val('rkCreci'), telefone: val('rkTel'), email: cSel ? cSel.email || '' : '', imobiliaria: val('rkImob'), userId: cSel ? cSel.userId || null : null };
+  const r = { id: genId(), loteId: l.id, loteamentoId: l.loteamentoId, corretor, corretorUserId: corretor.userId || null, cliente: { nome: val('rlNome'), cpf: val('rlCpf'), telefone: val('rlTel'), email: val('rlEmail'), cidade: val('rlCidade'), endereco: val('rlEnd') },
     dataReserva: hoje, validade: addDays(hoje, dias), status: 'aprovada', aprovadaEm: hoje, proposta: { valor: l.preco, entrada: 0, nParcelas: 0 }, obs: val('raObs'), criadoEm: new Date().toISOString() };
   upsert('reservas', r); upsert('lotes', Object.assign({}, l, { status: 'reservado', reservaId: r.id }));
   if (corretor.telefone || corretor.creci) registrarCorretor(corretor);
@@ -558,6 +562,7 @@ function abrirVendaForm(id, loteId, reservaId) {
   const lot = curLot(); const x = id ? getVenda(id) : null;
   const res = reservaId ? getReserva(reservaId) : null;
   const cond = lot.cond || {};
+  window.vfReservaId = reservaId || null;
   const lotes = lotesDo(lot.id).filter(l => l.status === 'disponivel' || (x && l.id === x.loteId) || (loteId && l.id === loteId));
   if (!x && !lotes.length) { toast('⚠️', 'Nenhum lote disponível para venda', '', true); return; }
   const c = x ? x.cliente : (res ? res.cliente : {}); const k = x ? x.corretor : (res ? res.corretor : { nome: db.config.empresa || 'Venda direta' });
@@ -618,7 +623,7 @@ function vfCalc() {
 }
 function vfCalcPct() { const total = num(val('vfTotal')), v = num(val('vkVal')); if (total) setVal('vkPct', Math.round(v / total * 1000) / 10); }
 function salvarVenda(id, reservaId) {
-  const lot = curLot(); const x = id ? getVenda(id) : null;
+  const lot = curLot(); const x = id ? getVenda(id) : null; const res = reservaId ? getReserva(reservaId) : null;
   const l = getLote(x ? x.loteId : val('vfLote'));
   if (!l) { toast('⚠️', 'Selecione o lote', '', true); return; }
   if (!x && l.status !== 'disponivel' && !(reservaId && l.status === 'reservado')) { toast('⚠️', 'Lote não está disponível', '', true); return; }
@@ -629,7 +634,8 @@ function salvarVenda(id, reservaId) {
   const baloes = (window.vfBaloes || []).filter(b => b.data && num(b.valor) > 0);
   const venda = Object.assign({}, x || { id: genId(), loteId: l.id, loteamentoId: lot.id, status: 'ativa', reservaId: reservaId || null, criadoEm: new Date().toISOString(), comissaoPaga: false, comissaoData: null }, {
     cliente: { nome: val('vcNome'), cpf: val('vcCpf'), telefone: val('vcTel'), email: val('vcEmail'), cidade: val('vcCidade'), endereco: val('vcEnd'), profissao: val('vcProf') },
-    corretor: { nome: val('vkNome') || 'Venda direta', creci: val('vkCreci'), telefone: val('vkTel'), imobiliaria: val('vkImob'), email: (x && x.corretor.email) || '' },
+    corretor: { nome: val('vkNome') || 'Venda direta', creci: val('vkCreci'), telefone: val('vkTel'), imobiliaria: val('vkImob'), email: (x && x.corretor.email) || '', userId: (x && x.corretor.userId) || (res && res.corretor && res.corretor.userId) || (corretorSelecionado('vkSel') || {}).userId || null },
+    corretorUserId: (x && x.corretorUserId) || (res && res.corretorUserId) || (corretorSelecionado('vkSel') || {}).userId || null,
     dataVenda: val('vfData'), valorTotal: total, entrada: num(val('vfEntrada')), dataEntrada: val('vfDataEntrada') || val('vfData'), nParcelas: n, jurosMes: num(val('vfJuros')),
     valorParcela: num(val('vfParcela')), primeiroVencimento: val('vfPrimeiro') || val('vfData'), baloes, comissaoPct: num(val('vkPct')), comissaoValor: num(val('vkVal')), obs: val('vfObs')
   });
@@ -662,14 +668,14 @@ function distratoVenda(id) {
 function renderCadastros() {
   const v = $('#av-cadastros'); const sub = state.sub.cad || (curLot() ? 'loteamento' : 'loteamentos');
   state.sub.cad = sub;
-  const tabs = [['loteamento', '🏘️ Loteamento'], ['loteamentos', '📋 Todos'], ['corretores', '🧑‍💼 Corretores'], ['categorias', '🏷️ Categorias'], ['config', '⚙️ Configurações'], ['nuvem', '☁️ Nuvem'], ['backup', '💾 Backup']];
+  const tabs = [['loteamento', '🏘️ Loteamento'], ['loteamentos', '📋 Todos'], ['corretores', Cloud.active ? '👥 Equipe' : '🧑‍💼 Corretores'], ['categorias', '🏷️ Categorias'], ['config', '⚙️ Configurações'], ['nuvem', Cloud.active ? '☁️ Conta' : '☁️ Nuvem'], ['backup', '💾 Backup']];
   let html = `<div class="subtabs">${tabs.map(([k, l]) => `<div class="chip ${sub === k ? 'active' : ''}" onclick="state.sub.cad='${k}';renderCadastros()">${l}</div>`).join('')}</div>`;
   if (sub === 'loteamento') html += cadLoteamentoHtml();
   else if (sub === 'loteamentos') html += cadLoteamentosHtml();
-  else if (sub === 'corretores') html += cadCorretoresHtml();
+  else if (sub === 'corretores') html += Cloud.active ? cadEquipeHtml() : cadCorretoresHtml();
   else if (sub === 'categorias') html += cadCategoriasHtml();
   else if (sub === 'config') html += cadConfigHtml();
-  else if (sub === 'nuvem') html += cadNuvemHtml();
+  else if (sub === 'nuvem') html += Cloud.active ? cadContaHtml() : cadNuvemHtml();
   else if (sub === 'backup') html += cadBackupHtml();
   v.innerHTML = html;
   if (sub === 'nuvem') renderSyncStatus();
@@ -773,11 +779,11 @@ function cadConfigHtml() {
     <div class="frow3"><div class="fg"><label>Validade da reserva (dias)</label><input type="number" id="cgDias" value="${c.reservaDias}"></div><div class="fg"><label>Comissão padrão (%)</label><input type="number" id="cgCom" step="0.1" value="${c.comissaoPct}"></div><div class="fg"><label>Multa por atraso (%)</label><input type="number" id="cgMulta" step="0.1" value="${c.multaPct}"></div></div>
     <div class="frow"><div class="fg"><label>Juros de mora (% ao mês)</label><input type="number" id="cgJuros" step="0.01" value="${c.jurosMesPct}"></div><div class="fg"><label>Corretor vê preço de lotes vendidos?</label><select id="cgMostra"><option value="1" ${c.mostrarPrecoVendido ? 'selected' : ''}>Sim</option><option value="0" ${!c.mostrarPrecoVendido ? 'selected' : ''}>Não</option></select></div></div>
     <button class="btn btn-primary" onclick="salvarConfig()">Salvar configurações</button></div>
-    <div class="card"><h3>🔐 Acesso</h3>
+    ${Cloud.active ? '' : `<div class="card"><h3>🔐 Acesso</h3>
     <div class="frow"><div class="fg"><label>Novo PIN do administrador</label><input type="password" inputmode="numeric" id="cgPin" placeholder="mín. 4 dígitos" autocomplete="new-password"><div class="hint">${c.pinPadrao ? '<b style="color:#b45309">Você ainda usa o PIN padrão 1234. Troque agora.</b>' : 'PIN personalizado ativo.'}</div></div>
       <div class="fg"><label>Código de acesso dos corretores</label><input type="text" id="cgCod" value="${esc(c.codigoCorretor)}" placeholder="vazio = acesso livre"><div class="hint">Se definido, o corretor precisa digitar este código na primeira vez que abrir o app.</div></div></div>
     <button class="btn btn-primary" onclick="salvarAcesso()">Salvar acesso</button>
-    <p class="help mt">⚠️ Este controle de acesso é simples (sem servidor). Serve para organizar o uso, não para proteger dados sigilosos.</p></div>`;
+    <p class="help mt">⚠️ Este controle de acesso é simples (sem servidor). Serve para organizar o uso, não para proteger dados sigilosos.</p></div>`}`;
 }
 function salvarConfig() {
   setConfig({ empresa: val('cgEmpresa'), adminWhatsapp: val('cgWa'), reservaDias: Math.max(1, Math.round(num(val('cgDias')) || 7)), comissaoPct: num(val('cgCom')), multaPct: num(val('cgMulta')), jurosMesPct: num(val('cgJuros')), mostrarPrecoVendido: val('cgMostra') === '1' });
@@ -789,31 +795,20 @@ function salvarAcesso() {
   setConfig(patch); toast('✅', 'Acesso atualizado', pin ? 'Novo PIN ativo.' : ''); renderCadastros();
 }
 function cadNuvemHtml() {
-  const cfg = Sync.loadCfg();
-  const link = cfg ? location.origin + location.pathname + '?modo=corretor&sync=' + btoa(unescape(encodeURIComponent(JSON.stringify(cfg)))) : location.origin + location.pathname + '?modo=corretor';
+  const link = location.origin + location.pathname + '?modo=corretor';
   return `<div class="card"><h3>☁️ Sincronização em nuvem <span id="syncStatusBox"></span></h3>
-    <p class="help mb">Por padrão, os dados ficam salvos <b>somente neste aparelho</b>. Para que os corretores vejam a planta atualizada e você receba os pedidos de reserva em tempo real, ative a sincronização gratuita com o <b>Firebase Realtime Database</b> (Google).</p>
+    <p class="help mb">Este aparelho está no <b>modo local</b>: os dados ficam salvos só neste navegador. Para trabalhar em equipe (corretores em qualquer aparelho, pedidos de reserva em tempo real, login por usuário), o app usa o <b>Supabase</b>.</p>
     <ol class="steps mb">
-      <li>Acesse <a href="https://console.firebase.google.com" target="_blank">console.firebase.google.com</a> e crie um projeto (gratuito).</li>
-      <li>No menu <b>Criação › Realtime Database</b>, clique em "Criar banco de dados" e escolha <b>modo de teste</b> (depois ajuste as regras de segurança).</li>
-      <li>Em <b>Configurações do projeto › Seus apps › Web (&lt;/&gt;)</b>, registre um app e copie o objeto <code>firebaseConfig</code>.</li>
-      <li>Cole abaixo e clique em Ativar. Depois, gere o link e envie aos corretores.</li>
+      <li>Crie o projeto em <a href="https://supabase.com" target="_blank">supabase.com</a> e rode o arquivo <code>gestao/supabase/schema.sql</code> no SQL Editor.</li>
+      <li>Em <b>Project Settings › API</b>, copie a <b>Project URL</b> e a chave <b>anon public</b>.</li>
+      <li>Preencha os dois valores em <code>gestao/config.js</code> e publique. O app passa a abrir com tela de login; crie sua conta e a empresa.</li>
     </ol>
-    <div class="fg"><label>Configuração (JSON do firebaseConfig)</label><textarea id="syncCfg" style="min-height:120px;font-family:monospace;font-size:0.76rem" placeholder='{"apiKey":"...","authDomain":"...","databaseURL":"https://SEU-PROJETO-default-rtdb.firebaseio.com","projectId":"..."}'>${cfg ? esc(JSON.stringify(cfg, null, 1)) : ''}</textarea></div>
-    <div class="btn-row"><button class="btn btn-primary" onclick="ativarSync()">${cfg ? '🔄 Reconectar' : '☁️ Ativar sincronização'}</button>${cfg ? `<button class="btn btn-outline-danger" onclick="desativarSync()">Desativar</button>` : ''}</div>
-    ${cfg ? '<p class="help mt">Com a nuvem ativa, o que já está nela prevalece sobre os dados locais. Se a nuvem estiver vazia, seus dados atuais são enviados como ponto de partida.</p>' : ''}</div>
-    <div class="card"><h3>🔗 Link para os corretores</h3>
-    <p class="help mb">Envie este link aos corretores. Ele abre direto na área do corretor${cfg ? ' e já configura a sincronização no aparelho deles' : ''}.${db.config.codigoCorretor ? ' O código de acesso configurado será solicitado.' : ''}</p>
+    <p class="help">O guia completo está em <code>gestao/supabase/README.md</code>.</p></div>
+    <div class="card"><h3>🔗 Link para os corretores (modo local)</h3>
+    <p class="help mb">Abre direto na área do corretor. Sem a nuvem, cada aparelho tem os próprios dados; use apenas para demonstração.${db.config.codigoCorretor ? ' O código de acesso configurado será solicitado.' : ''}</p>
     <div class="code-box" id="linkCorretor">${esc(link)}</div>
-    <div class="btn-row"><button class="btn btn-secondary" onclick="copiarTexto(document.getElementById('linkCorretor').textContent)">📋 Copiar link</button><a class="btn btn-wa" target="_blank" href="${'https://wa.me/?text=' + encodeURIComponent('Acesse a planta do ' + (curLot() ? curLot().nome : 'loteamento') + ' e faça suas reservas por aqui: ' + link)}">💬 Enviar por WhatsApp</a></div></div>`;
+    <div class="btn-row"><button class="btn btn-secondary" onclick="copiarTexto(document.getElementById('linkCorretor').textContent)">📋 Copiar link</button></div></div>`;
 }
-function ativarSync() {
-  let cfg; try { cfg = JSON.parse(val('syncCfg')); } catch (e) { toast('⚠️', 'JSON inválido', 'Copie o objeto firebaseConfig inteiro, entre chaves.', true); return; }
-  if (!cfg.databaseURL) { toast('⚠️', 'Falta o campo databaseURL', 'Crie o Realtime Database no console e copie a URL.', true); return; }
-  Sync.saveCfg(cfg); if (Sync.ref) Sync.stop(), Sync.saveCfg(cfg);
-  Sync.start(cfg); toast('☁️', 'Conectando…', ''); renderCadastros();
-}
-function desativarSync() { if (!confirm('Desativar a sincronização neste aparelho? Os dados continuam salvos localmente.')) return; Sync.stop(); renderCadastros(); }
 function copiarTexto(t) { (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => toast('📋', 'Copiado', '')).catch(() => prompt('Copie o link:', t)); }
 function cadBackupHtml() {
   const size = Math.round((localStorage.getItem(DB_KEY) || '').length / 1024);

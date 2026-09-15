@@ -359,3 +359,9 @@ canvas.chart { width: 100%; display: block; }
   #printArea th, #printArea td { border: 1px solid #999; padding: 4px 6px; text-align: left; }
   #printArea .num { text-align: right; }
 }
+
+/* ---------- autenticação ---------- */
+.auth-card { background: white; color: var(--text); border-radius: 16px; padding: 20px 18px; margin-top: 22px; box-shadow: 0 10px 40px rgba(0,0,0,0.25); text-align: left; }
+.auth-card h2 { font-size: 1.15rem; font-weight: 800; margin-bottom: 12px; }
+.auth-links { display: flex; justify-content: space-between; gap: 10px; margin-top: 12px; font-size: 0.82rem; }
+.auth-card .item { cursor: pointer; }

@@ -23,12 +23,15 @@
     <h1>Gestão de Loteamento</h1>
     <div class="sub">Planta interativa, reservas, vendas, recebíveis e custos em um só lugar.</div>
     <div class="sync-pill"><span class="dot"></span>Somente neste dispositivo</div>
-    <div class="landing-empreend" id="landingEmpreend"></div>
-    <div class="landing-btns">
-      <button class="landing-btn" onclick="enterCorretor()"><span class="ic">🧑‍💼</span><span>Sou corretor<small>Ver planta, preços, disponibilidade e solicitar reservas</small></span></button>
-      <button class="landing-btn ghost" onclick="enterAdmin()"><span class="ic">🔐</span><span>Administrador<small>Cadastrar planta e lotes, aprovar reservas, vendas, recebíveis e custos</small></span></button>
+    <div id="localBox" style="width:100%;max-width:440px;display:flex;flex-direction:column;align-items:center">
+      <div class="landing-empreend" id="landingEmpreend"></div>
+      <div class="landing-btns">
+        <button class="landing-btn" onclick="enterCorretor()"><span class="ic">🧑‍💼</span><span>Sou corretor<small>Ver planta, preços, disponibilidade e solicitar reservas</small></span></button>
+        <button class="landing-btn ghost" onclick="enterAdmin()"><span class="ic">🔐</span><span>Administrador<small>Cadastrar planta e lotes, aprovar reservas, vendas, recebíveis e custos</small></span></button>
+      </div>
+      <div class="landing-warn" id="landingWarn" style="display:none">⚠️ O PIN do administrador ainda é o padrão (1234). Troque em Cadastros › Configurações.</div>
     </div>
-    <div class="landing-warn" id="landingWarn" style="display:none">⚠️ O PIN do administrador ainda é o padrão (1234). Troque em Cadastros › Configurações.</div>
+    <div id="authBox" style="width:100%;max-width:440px;display:none"></div>
     <div class="landing-foot"><a href="../index.html">📅 Agenda</a> · <a href="../loteamento/index.html">🏗️ Custos (app anterior)</a> · <a href="../planta/index.html">📐 Planta baixa</a></div>
   </div>
 </section>
@@ -37,7 +40,7 @@
 <section class="screen" id="screen-corretor">
   <div class="topbar">
     <div class="brand"><span>🏘️</span><div><h1 class="lot-name">Loteamento</h1><div class="role">Área do corretor</div></div></div>
-    <div class="right"><select class="lot-select" onchange="setCurLot(this.value)"></select><button class="top-link" onclick="sair()">Sair</button></div>
+    <div class="right"><span class="user-name small" style="display:none;opacity:.85"></span><select class="lot-select" onchange="setCurLot(this.value)"></select><button class="top-link btn-voltar-admin" style="display:none" onclick="voltarAdmin()" title="Voltar à administração">🔐 Admin</button><button class="top-link" onclick="sair()">Sair</button></div>
   </div>
   <div class="tabs">
     <div class="tab active" data-tab="planta" onclick="switchTab('planta')">🗺️ Planta</div>
@@ -55,7 +58,7 @@
 <section class="screen" id="screen-admin">
   <div class="topbar">
     <div class="brand"><span>🔐</span><div><h1 class="lot-name">Loteamento</h1><div class="role">Administração</div></div></div>
-    <div class="right"><select class="lot-select" onchange="setCurLot(this.value)"></select><button class="top-link" onclick="startRole('corretor')" title="Ver como o corretor vê">👁️</button><button class="top-link" onclick="sair()">Sair</button></div>
+    <div class="right"><select class="lot-select" onchange="setCurLot(this.value)"></select><span class="user-name small" style="display:none;opacity:.85"></span><button class="top-link btn-ver-corretor" onclick="startRole('corretor')" title="Ver como o corretor vê">👁️</button><button class="top-link" onclick="sair()">Sair</button></div>
   </div>
   <div class="tabs">
     <div class="tab active" data-tab="painel" onclick="switchTab('painel')">📊 Painel</div>
@@ -90,10 +93,13 @@
 
 <div id="printArea"></div>
 
+<script src="config.js"></script>
+<script src="vendor/supabase.js"></script>
 <script src="core.js"></script>
 <script src="planta.js"></script>
 <script src="corretor.js"></script>
 <script src="admin.js"></script>
 <script src="financeiro.js"></script>
+<script src="auth.js"></script>
 </body>
 </html>
