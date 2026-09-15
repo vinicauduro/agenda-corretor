@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Gestão de Loteamento</title>
+<link rel="manifest" href="manifest.json">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Lotes">
+<link rel="apple-touch-icon" href="../icon-192.png">
+<meta name="theme-color" content="#0e4c73">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- ===================== LANDING ===================== -->
+<section class="screen active" id="screen-landing">
+  <div class="landing">
+    <div class="landing-logo">🏘️</div>
+    <h1>Gestão de Loteamento</h1>
+    <div class="sub">Planta interativa, reservas, vendas, recebíveis e custos em um só lugar.</div>
+    <div class="sync-pill"><span class="dot"></span>Somente neste dispositivo</div>
+    <div class="landing-empreend" id="landingEmpreend"></div>
+    <div class="landing-btns">
+      <button class="landing-btn" onclick="enterCorretor()"><span class="ic">🧑‍💼</span><span>Sou corretor<small>Ver planta, preços, disponibilidade e solicitar reservas</small></span></button>
+      <button class="landing-btn ghost" onclick="enterAdmin()"><span class="ic">🔐</span><span>Administrador<small>Cadastrar planta e lotes, aprovar reservas, vendas, recebíveis e custos</small></span></button>
+    </div>
+    <div class="landing-warn" id="landingWarn" style="display:none">⚠️ O PIN do administrador ainda é o padrão (1234). Troque em Cadastros › Configurações.</div>
+    <div class="landing-foot"><a href="../index.html">📅 Agenda</a> · <a href="../loteamento/index.html">🏗️ Custos (app anterior)</a> · <a href="../planta/index.html">📐 Planta baixa</a></div>
+  </div>
+</section>
+
+<!-- ===================== CORRETOR ===================== -->
+<section class="screen" id="screen-corretor">
+  <div class="topbar">
+    <div class="brand"><span>🏘️</span><div><h1 class="lot-name">Loteamento</h1><div class="role">Área do corretor</div></div></div>
+    <div class="right"><select class="lot-select" onchange="setCurLot(this.value)"></select><button class="top-link" onclick="sair()">Sair</button></div>
+  </div>
+  <div class="tabs">
+    <div class="tab active" data-tab="planta" onclick="switchTab('planta')">🗺️ Planta</div>
+    <div class="tab" data-tab="lotes" onclick="switchTab('lotes')">📋 Lotes</div>
+    <div class="tab" data-tab="reservas" onclick="switchTab('reservas')">📝 Reservas <span class="tab-badge" id="cBadgeReservas" style="display:none">0</span></div>
+    <div class="tab" data-tab="perfil" onclick="switchTab('perfil')">👤 Perfil</div>
+  </div>
+  <div class="view active" id="cv-planta"></div>
+  <div class="view" id="cv-lotes"></div>
+  <div class="view" id="cv-reservas"></div>
+  <div class="view" id="cv-perfil"></div>
+</section>
+
+<!-- ===================== ADMIN ===================== -->
+<section class="screen" id="screen-admin">
+  <div class="topbar">
+    <div class="brand"><span>🔐</span><div><h1 class="lot-name">Loteamento</h1><div class="role">Administração</div></div></div>
+    <div class="right"><select class="lot-select" onchange="setCurLot(this.value)"></select><button class="top-link" onclick="startRole('corretor')" title="Ver como o corretor vê">👁️</button><button class="top-link" onclick="sair()">Sair</button></div>
+  </div>
+  <div class="tabs">
+    <div class="tab active" data-tab="painel" onclick="switchTab('painel')">📊 Painel</div>
+    <div class="tab" data-tab="planta" onclick="switchTab('planta')">🗺️ Planta</div>
+    <div class="tab" data-tab="lotes" onclick="switchTab('lotes')">📦 Lotes</div>
+    <div class="tab" data-tab="reservas" onclick="switchTab('reservas')">📝 Reservas <span class="tab-badge" id="aBadgeReservas" style="display:none">0</span></div>
+    <div class="tab" data-tab="vendas" onclick="switchTab('vendas')">💰 Vendas</div>
+    <div class="tab" data-tab="recebiveis" onclick="switchTab('recebiveis')">📆 Recebíveis</div>
+    <div class="tab" data-tab="custos" onclick="switchTab('custos')">🧾 Custos</div>
+    <div class="tab" data-tab="cadastros" onclick="switchTab('cadastros')">⚙️ Cadastros</div>
+  </div>
+  <div class="view active" id="av-painel"></div>
+  <div class="view" id="av-planta"></div>
+  <div class="view" id="av-lotes"></div>
+  <div class="view" id="av-reservas"></div>
+  <div class="view" id="av-vendas"></div>
+  <div class="view" id="av-recebiveis"></div>
+  <div class="view" id="av-custos"></div>
+  <div class="view" id="av-cadastros"></div>
+</section>
+
+<button class="fab" id="fab" title="Adicionar">＋</button>
+
+<!-- MODAL genérico -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal" id="modalBox">
+    <div class="modal-head"><h2 id="modalTitle"></h2><button class="modal-close" onclick="closeModal()" title="Fechar">✕</button></div>
+    <div class="modal-body" id="modalBody"></div>
+    <div class="modal-foot" id="modalFoot"></div>
+  </div>
+</div>
+
+<div id="printArea"></div>
+
+<script src="core.js"></script>
+<script src="planta.js"></script>
+<script src="corretor.js"></script>
+<script src="admin.js"></script>
+<script src="financeiro.js"></script>
+</body>
+</html>
