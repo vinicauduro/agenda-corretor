@@ -30,7 +30,7 @@ function renderAuth(tela, aviso) {
       <button class="btn btn-primary btn-block" onclick="authCadastro()">Criar conta</button>
       <div class="auth-links"><a href="#" onclick="renderAuth('login');return false">Já tenho conta</a></div>
     </div>`;
-    setTimeout(() => $('#auNome').focus(), 50);
+    setTimeout(() => { const el = $('#auNome'); if (el) el.focus(); }, 50);
   } else if (tela === 'recuperar') {
     box.innerHTML = `<div class="auth-card">${alerta}
       <h2>Recuperar senha</h2>

@@ -100,7 +100,8 @@ function renderPlantaEditor() {
   if (!state.plantaAdmin || !v.querySelector('.planta-wrap')) {
     v.innerHTML = `
       <div class="toolbar">
-        <label class="btn btn-primary btn-sm" style="cursor:pointer">🖼️ ${hasImg ? 'Trocar imagem da planta' : 'Enviar imagem da planta'}<input type="file" accept="image/*" style="display:none" onchange="uploadPlanta(this)"></label>
+        <label class="btn btn-primary btn-sm" style="cursor:pointer">📄 ${hasImg ? 'Importar outro PDF' : 'Importar planta em PDF'}<input type="file" accept=".pdf,application/pdf" style="display:none" onchange="importarPlantaPDF(this)"></label>
+        <label class="btn btn-outline btn-sm" style="cursor:pointer">🖼️ ${hasImg ? 'Trocar por imagem' : 'Enviar imagem (JPG/PNG)'}<input type="file" accept="image/*" style="display:none" onchange="uploadPlanta(this)"></label>
         ${hasImg ? `<button class="btn btn-outline-danger btn-sm" onclick="removerPlanta()">Remover imagem</button>` : ''}
         <select id="aPlantaModo" onchange="aTrocarModo(this.value)" style="width:auto;flex:none;padding:6px 10px;font-size:0.8rem"><option value="imagem" ${!hasImg ? 'disabled' : ''}>🗺️ Planta real</option><option value="esquema">▦ Esquemática</option></select>
       </div>
@@ -136,7 +137,7 @@ function renderEditorTools() {
   const hasImg = !!(lot.planta && lot.planta.img);
   const box = $('#aTools'); const help = $('#aEditorHelp');
   if (pv.mode !== 'imagem') {
-    box.innerHTML = `<span class="small muted">Modo esquemático: os lotes são organizados automaticamente por quadra. ${hasImg ? 'Mude para "Planta real" para desenhar sobre a imagem.' : 'Envie a imagem da planta para posicionar os lotes sobre ela.'}</span>`;
+    box.innerHTML = `<span class="small muted">Modo esquemático: os lotes são organizados automaticamente por quadra. ${hasImg ? 'Mude para "Planta real" para desenhar sobre a imagem.' : 'Importe a planta em PDF (os lotes são detectados sozinhos) ou envie uma imagem para posicionar os lotes sobre ela.'}</span>`;
     pv.setHint(''); help.textContent = 'Toque em um lote para ver ou editar.';
     return;
   }

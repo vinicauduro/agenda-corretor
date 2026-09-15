@@ -157,7 +157,7 @@ class PlantaView {
       });
     }
 
-    const opacity = this.mode === 'imagem' ? 0.6 : 0.92;
+    const opacity = this.mode === 'imagem' ? 0.5 : 0.92;
     this.lotes.forEach(l => {
       const pts = this.absPts(l); if (!pts) return;
       const poly = document.createElementNS(SVG_NS, 'polygon');
@@ -170,7 +170,7 @@ class PlantaView {
       poly.dataset.id = l.id;
       this.gLotes.appendChild(poly);
       const bb = PlantaView.bbox(pts); const c = PlantaView.centroid(pts);
-      const fs = Math.max(6, Math.min(bb.w * 0.28, bb.h * 0.45, this.mode === 'imagem' ? 60 : 26));
+      const fs = Math.max(6, Math.min(bb.w * (this.mode === 'imagem' ? 0.22 : 0.28), bb.h * (this.mode === 'imagem' ? 0.32 : 0.45), this.mode === 'imagem' ? 60 : 26));
       const t = document.createElementNS(SVG_NS, 'text');
       t.setAttribute('class', 'lote-label'); t.setAttribute('x', c.cx); t.setAttribute('y', c.cy - (this.mode === 'esquema' ? fs * 0.35 : 0)); t.setAttribute('font-size', fs);
       t.textContent = this.mode === 'esquema' ? l.numero : (l.numero);
