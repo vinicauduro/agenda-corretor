@@ -2,5 +2,5 @@
 // (Project Settings › API). Com a chave vazia, o app funciona só neste dispositivo.
 window.GL_CONFIG = {
   supabaseUrl: 'https://teieibbzphgoqhynztyg.supabase.co',
-  supabaseAnonKey: ''
+  supabaseAnonKey: 'sb_publishable_mfYKCuZEJmCZHDfseigGZw_G6EuZa7p'
 };
