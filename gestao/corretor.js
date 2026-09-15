@@ -103,7 +103,7 @@ function loteCardHtml(l, onclick) {
       <div class="title">${esc(loteLabel(l))} ${l.tipo === 'comercial' ? '<span class="badge neutral">Comercial</span>' : ''}</div>
       <div class="meta"><span>📐 ${fmtNum(l.area, 0)} m²</span>${l.frente ? `<span>· ${fmtNum(l.frente, 1)}m × ${fmtNum(l.fundos || 0, 1)}m</span>` : ''}${m2 ? `<span>· ${fmtMoney(m2)}/m²</span>` : ''}${l.obs ? `<span>· ${esc(l.obs)}</span>` : ''}</div>
     </div>
-    <div class="side"><div class="value">${mostrarPreco ? fmtMoney(l.preco) : '—'}</div><span class="badge ${l.status}">${statusLabel(l.status)}</span></div>
+    <div class="side"><div class="value${!num(l.preco) ? ' small muted' : ''}">${mostrarPreco ? (num(l.preco) ? fmtMoney(l.preco) : 'Sob consulta') : '—'}</div><span class="badge ${l.status}">${statusLabel(l.status)}</span></div>
   </div>`;
 }
 
@@ -124,7 +124,7 @@ function abrirLoteCorretor(id) {
   const body = `
     ${statusBox}
     <div class="row-between mb">
-      <div><div class="price-big">${fmtMoney(l.preco)}</div>${m2 ? `<div class="price-sub">${fmtMoney(m2)} por m²</div>` : ''}${desc}</div>
+      <div><div class="price-big"${!num(l.preco) ? ' style="font-size:1.1rem;color:var(--muted)"' : ''}>${num(l.preco) ? fmtMoney(l.preco) : 'Preço sob consulta'}</div>${m2 ? `<div class="price-sub">${fmtMoney(m2)} por m²</div>` : ''}${num(l.preco) ? desc : ''}</div>
       <span class="badge ${l.status}" style="font-size:0.75rem">${statusLabel(l.status)}</span>
     </div>
     <div class="detail-grid">
