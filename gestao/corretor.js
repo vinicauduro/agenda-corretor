@@ -137,6 +137,7 @@ function abrirLoteCorretor(id) {
     ${simuladorHtml(l, cond)}
     ${lot.descricao ? `<p class="small muted mt">${esc(lot.descricao)}</p>` : ''}`;
   let footer = `<button class="btn btn-wa" onclick="compartilharLote('${l.id}')">💬 Compartilhar</button>`;
+  if (l.status !== 'vendido' && l.status !== 'bloqueado') footer += `<button class="btn btn-outline" onclick="abrirPropostaForm('${l.id}')">📄 Proposta</button>`;
   if (l.status === 'disponivel') footer += `<button class="btn btn-primary" onclick="abrirReservaForm('${l.id}')">📝 Solicitar reserva</button>`;
   else if (minha && res && res.status === 'pendente') footer += `<button class="btn btn-outline-danger" onclick="cancelarMinhaReserva('${res.id}')">Cancelar pedido</button>`;
   openModal({ title: `📍 ${esc(loteLabel(l))}`, body, footer });

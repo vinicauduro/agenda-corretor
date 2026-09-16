@@ -418,6 +418,24 @@ begin
 end $$;
 
 -- ---------------------------------------------------------------------
+-- 5a. Modelos de documento (proposta e contrato da própria empresa)
+-- ---------------------------------------------------------------------
+create table if not exists public.modelos (
+  org_id    uuid not null references public.organizacoes(id) on delete cascade,
+  id        text not null,
+  nome      text not null,
+  tipo      text not null default 'contrato' check (tipo in ('proposta','contrato')),
+  corpo     text not null default '',
+  criado_em timestamptz not null default now(),
+  primary key (org_id, id)
+);
+alter table public.modelos enable row level security;
+drop policy if exists modelos_select on public.modelos;
+drop policy if exists modelos_write on public.modelos;
+create policy modelos_select on public.modelos for select to authenticated using (public.eh_membro(org_id));
+create policy modelos_write on public.modelos for all to authenticated using (public.eh_admin(org_id)) with check (public.eh_admin(org_id));
+
+-- ---------------------------------------------------------------------
 -- 5b. Vitrine pública (link do loteamento para o cliente final) e leads
 -- ---------------------------------------------------------------------
 create table if not exists public.vitrines (
@@ -541,7 +559,7 @@ do $$
 declare t text;
 begin
   if exists (select 1 from pg_publication where pubname = 'supabase_realtime') then
-    foreach t in array array['organizacoes','membros','loteamentos','categorias','lotes','reservas','vendas','recebiveis','custos','log','vitrines','leads'] loop
+    foreach t in array array['organizacoes','membros','loteamentos','categorias','lotes','reservas','vendas','recebiveis','custos','log','vitrines','leads','modelos'] loop
       if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = t) then
         execute format('alter publication supabase_realtime add table public.%I', t);
       end if;

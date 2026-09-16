@@ -568,7 +568,7 @@ function abrirVendaAdmin(id) {
     <div class="table-wrap"><table class="tbl"><thead><tr><th>Parcela</th><th>Venc.</th><th class="num">Valor</th><th class="num">Pago</th><th>Status</th><th></th></tr></thead>
     <tbody>${recs.map(rc => { const st = recStatus(rc); return `<tr><td>${esc(rc.descricao)}</td><td>${fmtDate(rc.vencimento)}</td><td class="num">${fmtMoney(rc.valor)}</td><td class="num">${rc.valorPago ? fmtMoney(rc.valorPago) + (rc.dataPagamento ? `<br><span class="tiny muted">${fmtDate(rc.dataPagamento)}</span>` : '') : '—'}</td><td><span class="badge ${st}">${statusLabel(st)}</span>${st === 'atrasado' ? `<br><span class="tiny" style="color:var(--danger)">atual. ${fmtMoney(recAtualizado(rc))}</span>` : ''}</td><td>${x.status !== 'distrato' ? (st === 'pago' ? `<button class="btn-icon" title="Estornar" onclick="estornarPagamento('${rc.id}','${x.id}')">↩</button>` : `<button class="btn-icon ok" title="Registrar pagamento" onclick="abrirPagamento('${rc.id}','${x.id}')">💵</button>`) : ''} <button class="btn-icon" title="Editar parcela" onclick="editarRecebivel('${rc.id}','${x.id}')">✏️</button></td></tr>`; }).join('')}</tbody>
     <tfoot><tr><td colspan="2">Total</td><td class="num">${fmtMoney(r.total)}</td><td class="num">${fmtMoney(r.pago)}</td><td colspan="2"></td></tr></tfoot></table></div>`;
-  let footer = `<button class="btn btn-secondary" onclick="abrirVendaForm('${x.id}')">✏️ Editar</button><button class="btn btn-outline" onclick="imprimirExtrato('${x.id}')">🖨️ Extrato</button>`;
+  let footer = `<button class="btn btn-secondary" onclick="abrirVendaForm('${x.id}')">✏️ Editar</button><button class="btn btn-outline" onclick="imprimirExtrato('${x.id}')">🖨️ Extrato</button><button class="btn btn-outline" onclick="gerarContratoVenda('${x.id}')">📄 Contrato</button>`;
   if (c.telefone) footer += `<a class="btn btn-wa" target="_blank" href="${waLink(c.telefone, extratoTexto(x))}">💬 Enviar resumo</a>`;
   if (x.status !== 'distrato') footer += `<button class="btn btn-outline-danger" onclick="distratoVenda('${x.id}')">Distrato</button>`;
   openModal({ title: `💰 Venda · ${l ? esc(loteShort(l)) : ''}`, body, footer, wide: true });
@@ -683,12 +683,13 @@ function distratoVenda(id) {
 function renderCadastros() {
   const v = $('#av-cadastros'); const sub = state.sub.cad || (curLot() ? 'loteamento' : 'loteamentos');
   state.sub.cad = sub;
-  const tabs = [['loteamento', '🏘️ Loteamento'], ['loteamentos', '📋 Todos'], ['corretores', Cloud.active ? '👥 Equipe' : '🧑‍💼 Corretores'], ['categorias', '🏷️ Categorias'], ['vitrine', '🌐 Vitrine'], ['config', '⚙️ Configurações'], ['nuvem', Cloud.active ? '☁️ Conta' : '☁️ Nuvem'], ['backup', '💾 Backup']];
+  const tabs = [['loteamento', '🏘️ Loteamento'], ['loteamentos', '📋 Todos'], ['corretores', Cloud.active ? '👥 Equipe' : '🧑‍💼 Corretores'], ['categorias', '🏷️ Categorias'], ['documentos', '📄 Documentos'], ['vitrine', '🌐 Vitrine'], ['config', '⚙️ Configurações'], ['nuvem', Cloud.active ? '☁️ Conta' : '☁️ Nuvem'], ['backup', '💾 Backup']];
   let html = `<div class="subtabs">${tabs.map(([k, l]) => `<div class="chip ${sub === k ? 'active' : ''}" onclick="state.sub.cad='${k}';renderCadastros()">${l}</div>`).join('')}</div>`;
   if (sub === 'loteamento') html += cadLoteamentoHtml();
   else if (sub === 'loteamentos') html += cadLoteamentosHtml();
   else if (sub === 'corretores') html += Cloud.active ? cadEquipeHtml() : cadCorretoresHtml();
   else if (sub === 'categorias') html += cadCategoriasHtml();
+  else if (sub === 'documentos') html += cadDocumentosHtml();
   else if (sub === 'vitrine') html += cadVitrineHtml();
   else if (sub === 'config') html += cadConfigHtml();
   else if (sub === 'nuvem') html += Cloud.active ? cadContaHtml() : cadNuvemHtml();
@@ -795,11 +796,22 @@ function cadConfigHtml() {
     <div class="frow3"><div class="fg"><label>Validade da reserva (dias)</label><input type="number" id="cgDias" value="${c.reservaDias}"></div><div class="fg"><label>Comissão padrão (%)</label><input type="number" id="cgCom" step="0.1" value="${c.comissaoPct}"></div><div class="fg"><label>Multa por atraso (%)</label><input type="number" id="cgMulta" step="0.1" value="${c.multaPct}"></div></div>
     <div class="frow"><div class="fg"><label>Juros de mora (% ao mês)</label><input type="number" id="cgJuros" step="0.01" value="${c.jurosMesPct}"></div><div class="fg"><label>Corretor vê preço de lotes vendidos?</label><select id="cgMostra"><option value="1" ${c.mostrarPrecoVendido ? 'selected' : ''}>Sim</option><option value="0" ${!c.mostrarPrecoVendido ? 'selected' : ''}>Não</option></select></div></div>
     <button class="btn btn-primary" onclick="salvarConfig()">Salvar configurações</button></div>
+    <div class="card"><h3>🏢 Dados da empresa para documentos</h3>
+    <p class="help">Usados para preencher propostas e contratos automaticamente.</p>
+    <div class="frow"><div class="fg"><label>CNPJ</label><input type="text" id="cgCnpj" value="${esc(c.cnpj || '')}"></div><div class="fg"><label>Cidade (foro)</label><input type="text" id="cgCidade" value="${esc(c.cidade || '')}"></div></div>
+    <div class="fg"><label>Endereço completo</label><input type="text" id="cgEnd" value="${esc(c.endereco || '')}" placeholder="Rua, número, bairro, cidade/UF"></div>
+    <div class="frow"><div class="fg"><label>Telefone</label><input type="tel" id="cgTel" value="${esc(c.telefone || '')}"></div><div class="fg"><label>E-mail</label><input type="email" id="cgEmail" value="${esc(c.email || '')}"></div></div>
+    <div class="frow"><div class="fg"><label>Quem assina pela empresa</label><input type="text" id="cgRep" value="${esc(c.representante || '')}"></div><div class="fg"><label>CPF de quem assina</label><input type="text" id="cgRepCpf" value="${esc(c.repCpf || '')}"></div></div>
+    <button class="btn btn-primary" onclick="salvarEmpresaDocs()">Salvar dados da empresa</button></div>
     ${Cloud.active ? '' : `<div class="card"><h3>🔐 Acesso</h3>
     <div class="frow"><div class="fg"><label>Novo PIN do administrador</label><input type="password" inputmode="numeric" id="cgPin" placeholder="mín. 4 dígitos" autocomplete="new-password"><div class="hint">${c.pinPadrao ? '<b style="color:#b45309">Você ainda usa o PIN padrão 1234. Troque agora.</b>' : 'PIN personalizado ativo.'}</div></div>
       <div class="fg"><label>Código de acesso dos corretores</label><input type="text" id="cgCod" value="${esc(c.codigoCorretor)}" placeholder="vazio = acesso livre"><div class="hint">Se definido, o corretor precisa digitar este código na primeira vez que abrir o app.</div></div></div>
     <button class="btn btn-primary" onclick="salvarAcesso()">Salvar acesso</button>
     <p class="help mt">⚠️ Este controle de acesso é simples (sem servidor). Serve para organizar o uso, não para proteger dados sigilosos.</p></div>`}`;
+}
+function salvarEmpresaDocs() {
+  setConfig({ cnpj: val('cgCnpj'), cidade: val('cgCidade'), endereco: val('cgEnd'), telefone: val('cgTel'), email: val('cgEmail'), representante: val('cgRep'), repCpf: val('cgRepCpf') });
+  toast('✅', 'Dados da empresa salvos', 'Já valem para os próximos documentos.'); renderCadastros();
 }
 function salvarConfig() {
   setConfig({ empresa: val('cgEmpresa'), adminWhatsapp: val('cgWa'), reservaDias: Math.max(1, Math.round(num(val('cgDias')) || 7)), comissaoPct: num(val('cgCom')), multaPct: num(val('cgMulta')), jurosMesPct: num(val('cgJuros')), mostrarPrecoVendido: val('cgMostra') === '1' });

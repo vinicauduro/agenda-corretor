@@ -47,6 +47,19 @@ com PIN do administrador e dados só no navegador.
 4. Em **Cadastros › Equipe › ＋ Convite** gere um link e envie aos corretores. Quem abrir o
    link cria a conta (ou entra) e já fica vinculado à sua empresa como corretor.
 
+## Documentos (proposta e contrato)
+
+O texto é da empresa, não do sistema. Em **Cadastros › 📄 Documentos** você cola a proposta
+e o contrato que já usa e marca as partes que mudam a cada negócio com os campos do sistema
+(`{{cliente.nome}}`, `{{lote.identificacao}}`, `{{pagamento.resumo}}` e assim por diante).
+Qualquer campo inventado, por exemplo `{{foro}}`, vira um preenchimento na hora de gerar.
+
+- O corretor gera a **proposta** pelo lote, com simulação de entrada, parcelas, juros e
+  reforço anual, e envia por WhatsApp ou PDF.
+- O administrador gera o **contrato** pela venda, com os valores e as parcelas já preenchidos.
+- A prévia é editável antes de imprimir ou salvar em PDF.
+- Os dados da empresa usados nos documentos ficam em **Cadastros › Configurações**.
+
 ## Vitrine pública (link do loteamento para o cliente final)
 
 A vitrine é uma página aberta, **sem login**, com a planta e os lotes à venda, para mandar
