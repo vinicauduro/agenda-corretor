@@ -26,6 +26,7 @@ const PERMISSOES = [
     ['custos.editar', 'Lançar e editar custos']
   ]],
   ['Cadastros e configuração', [
+    ['relatorios.ver', 'Ver os relatórios'],
     ['documentos.editar', 'Editar modelos de proposta e contrato'],
     ['indices.editar', 'Cadastrar índices e lançar valores'],
     ['vitrine.gerenciar', 'Publicar a vitrine pública'],
@@ -45,7 +46,7 @@ const PERM_PADRAO = {
     'comissao.gerenciar': true,
     'financeiro.ver': true, 'financeiro.baixar': true, 'financeiro.antecipar': true,
     'cobranca.ver': true, 'cobranca.registrar': true, 'custos.ver': true, 'custos.editar': true,
-    'documentos.editar': false, 'indices.editar': true, 'vitrine.gerenciar': false, 'leads.ver': true,
+    'relatorios.ver': true, 'documentos.editar': false, 'indices.editar': true, 'vitrine.gerenciar': false, 'leads.ver': true,
     'equipe.gerenciar': false, 'config.editar': false, 'backup.usar': false
   },
   corretor: { nenhuma: true }   // o corretor usa a área dele, não a administração
@@ -80,7 +81,7 @@ function pode(chave) {
 function meuPapel() { return Cloud.active ? (Cloud.papel || 'corretor') : 'dono'; }
 
 /* Abas da administração que a pessoa enxerga. */
-const TAB_PERM = { lotes: 'lotes.editar', planta: 'planta.editar', reservas: 'reservas.aprovar', vendas: 'vendas.criar', recebiveis: 'financeiro.ver', custos: 'custos.ver', leads: 'leads.ver' };
+const TAB_PERM = { relatorios: 'relatorios.ver', lotes: 'lotes.editar', planta: 'planta.editar', reservas: 'reservas.aprovar', vendas: 'vendas.criar', recebiveis: 'financeiro.ver', custos: 'custos.ver', leads: 'leads.ver' };
 function aplicarPermissoesNasAbas() {
   if (!Cloud.active) return;
   let precisaTrocar = false;
