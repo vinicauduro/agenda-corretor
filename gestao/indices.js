@@ -17,13 +17,19 @@ function mesAtual() { return todayStr().slice(0, 7); }
 function mesAnterior(m) { const [y, mm] = m.split('-').map(Number); const d = new Date(y, mm - 2, 1); return d.getFullYear() + '-' + pad2(d.getMonth() + 1); }
 function mesSeguinte(m) { const [y, mm] = m.split('-').map(Number); const d = new Date(y, mm, 1); return d.getFullYear() + '-' + pad2(d.getMonth() + 1); }
 
-/* Fator de correção entre o mês base (exclusive) e o mês alvo (inclusive).
+/* Correção aplicada a uma parcela que vence em mesParcela, num contrato com mês base mesBase.
+   O índice de um mês só é divulgado no mês seguinte, então a parcela usa o índice do mês
+   anterior ao seu vencimento: a de setembro corrige pelo índice de agosto.
+   Na prática acumula os meses de mesBase até mesParcela - 1.
    percentual: multiplica (1 + variação do mês) mês a mês.
    pontos (CUB): variação mês a mês do valor publicado.
    Deflação não corrige para baixo: mês negativo entra como 0%. */
-function fatorIndice(indiceId, mesBase, mesAlvo) {
+function fatorIndice(indiceId, mesBase, mesParcela) {
   const ind = getIndice(indiceId);
-  if (!ind || !mesBase || !mesAlvo || mesAlvo <= mesBase) return 1;
+  if (!ind || !mesBase || !mesParcela) return 1;
+  const mesAlvo = mesAnterior(mesParcela);
+  mesBase = mesAnterior(mesBase); // o índice do próprio mês base já conta
+  if (mesAlvo <= mesBase) return 1;
   const vals = indiceValores(ind);
   let f = 1, m = mesSeguinte(mesBase), guard = 0;
   if (ind.tipo === 'pontos') {
@@ -43,11 +49,12 @@ function valorPontoAte(vals, mes) { // último ponto conhecido até o mês
   const ms = Object.keys(vals).filter(k => k <= mes).sort();
   return ms.length ? Number(vals[ms[ms.length - 1]]) || 0 : 0;
 }
-/* Meses sem lançamento entre a base e o alvo — o que falta atualizar. */
-function mesesFaltando(indiceId, mesBase, mesAlvo) {
-  const ind = getIndice(indiceId); if (!ind || ind.tipo === 'pontos' || !mesBase) return [];
+/* Meses sem lançamento necessários para corrigir uma parcela que vence em mesParcela. */
+function mesesFaltando(indiceId, mesBase, mesParcela) {
+  const ind = getIndice(indiceId); if (!ind || ind.tipo === 'pontos' || !mesBase || !mesParcela) return [];
   const vals = indiceValores(ind); const out = [];
-  let m = mesSeguinte(mesBase), guard = 0;
+  const mesAlvo = mesAnterior(mesParcela);
+  let m = mesBase, guard = 0;
   while (m <= mesAlvo && guard++ < 600) { if (!isFinite(Number(vals[m]))) out.push(m); m = mesSeguinte(m); }
   return out;
 }
@@ -83,7 +90,7 @@ function cadIndicesHtml() {
   const usados = {};
   db.vendas.forEach(v => { if (v.indiceId) usados[v.indiceId] = (usados[v.indiceId] || 0) + 1; });
   return `<div class="card"><h3>📈 Índices de correção</h3>
-    <p class="help">Cadastre aqui a variação de cada mês. A correção é mensal: o percentual do mês vale para todas as parcelas que vencem nesse mês, não importa o dia do vencimento. Cada contrato escolhe qual índice usa, na tela da venda.</p>
+    <p class="help">Cadastre aqui a variação de cada mês. A correção é mensal: o índice de um mês corrige as parcelas que vencem no mês seguinte, já que ele só é divulgado depois. Vale para todas as parcelas do mês, não importa o dia do vencimento. Cada contrato escolhe qual índice usa, na tela da venda.</p>
     <div class="btn-row mt"><button class="btn btn-primary" onclick="abrirIndiceForm()">＋ Novo índice</button>
     ${db.indices.length < INDICES_PADRAO.length ? `<button class="btn btn-secondary" onclick="criarIndicesPadrao()">📈 Criar IGP-M, INPC, IPCA e CUB</button>` : ''}</div></div>
     ${list.length ? list.map(ind => indiceCardHtml(ind, usados[ind.id] || 0)).join('') : `<div class="empty"><div class="ic">📈</div><p>Nenhum índice cadastrado.</p><p class="small">Crie os índices que você usa e lance a variação de cada mês.</p></div>`}`;
@@ -147,7 +154,7 @@ function abrirLancarIndice(id, mes) {
     title: `＋ ${esc(ind.codigo)} · lançar mês`,
     body: `<div class="frow"><div class="fg"><label>Mês de referência *</label><input type="month" id="lxMes" value="${m}"></div>
       <div class="fg"><label>${ind.tipo === 'pontos' ? 'Valor do índice *' : 'Variação no mês (%) *'}</label><input type="number" id="lxValor" step="0.0001" value="${atual != null ? atual : ''}" placeholder="${ind.tipo === 'pontos' ? '2.350,00' : '0,55'}"></div></div>
-      <p class="help">${ind.tipo === 'pontos' ? 'Lance o valor publicado do índice no mês.' : 'Pode ser negativo em caso de deflação, por exemplo -0,15: o valor fica registrado, mas entra como 0% nos contratos, porque a correção não reduz as parcelas. Vale para todas as parcelas que vencem neste mês.'}</p>
+      <p class="help">${ind.tipo === 'pontos' ? 'Lance o valor publicado do índice no mês.' : 'Pode ser negativo em caso de deflação, por exemplo -0,15: o valor fica registrado, mas entra como 0% nos contratos, porque a correção não reduz as parcelas. Este é o índice apurado no mês informado, que corrige as parcelas do mês seguinte.'}</p>
       ${atual != null ? `<button class="btn btn-outline-danger btn-sm mt" onclick="apagarValorIndice('${id}','${m}')">Apagar o lançamento deste mês</button>` : ''}`,
     footer: `<button class="btn btn-secondary" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" onclick="salvarValorIndice('${id}')">Salvar</button>`
   });
@@ -200,8 +207,8 @@ function indiceSelectHtml(selId, selBase, dataVenda) {
   const base = selBase || monthKey(dataVenda || todayStr());
   return `<div class="frow"><div class="fg"><label>Índice de correção</label>
       <select id="vfIndice"><option value="">— sem correção —</option>${db.indices.slice().sort((a, b) => a.nome.localeCompare(b.nome)).map(i => `<option value="${i.id}" ${selId === i.id ? 'selected' : ''}>${esc(i.nome)}</option>`).join('')}</select>
-      <div class="hint">Corrige mês a mês até o vencimento de cada parcela. Depois de vencida, só multa e juros. Deflação entra como 0%.</div></div>
-    <div class="fg"><label>Mês base da correção</label><input type="month" id="vfIndiceBase" value="${base}"><div class="hint">A correção começa no mês seguinte a este.</div></div></div>`;
+      <div class="hint">Cada parcela usa o índice do mês anterior ao vencimento, que é quando ele foi divulgado. Depois de vencida, só multa e juros. Deflação entra como 0%.</div></div>
+    <div class="fg"><label>Mês base da correção</label><input type="month" id="vfIndiceBase" value="${base}"><div class="hint">O índice deste mês é o primeiro a ser aplicado, na parcela do mês seguinte.</div></div></div>`;
 }
 
 function correcaoResumoVenda(v) {

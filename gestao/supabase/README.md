@@ -53,16 +53,20 @@ Em **Cadastros › 📈 Índices** ficam o IGP-M, INPC, IPCA, CUB e qualquer out
 Você lança a variação de cada mês (ou o valor em pontos, no caso do CUB) e o sistema avisa
 quando falta lançar o mês corrente.
 
-A correção é **mensal**: a variação apurada no mês vale para todas as parcelas que vencem
-naquele mês, qualquer que seja o dia do vencimento. Cada contrato escolhe o índice e o mês
-base na tela da venda, e a correção começa no mês seguinte ao mês base.
+A correção é **mensal e defasada em um mês**, do jeito que o mercado trabalha: o índice de um
+mês só é divulgado no mês seguinte, então a parcela de setembro é corrigida pelo índice de
+agosto, a de outubro pelo de setembro e assim por diante. Dentro do mês vale para todas as
+parcelas, qualquer que seja o dia do vencimento. Cada contrato escolhe o índice e o mês base
+na tela da venda: o índice do mês base é o primeiro a ser aplicado, já na parcela do mês
+seguinte.
 
 Regras do cálculo:
 
 - **Deflação não reduz parcela.** Mês negativo fica registrado no índice, mas entra como 0%
   nos contratos, para preservar o equilíbrio do negócio.
-- **Parcela vencida congela.** A correção vai até o mês do vencimento. Depois disso a parcela
-  responde só por multa e juros de mora, calculados sobre o valor já corrigido.
+- **Parcela vencida congela.** A correção vai até o índice do mês anterior ao vencimento.
+  Depois disso a parcela responde só por multa e juros de mora, calculados sobre o valor já
+  corrigido.
 - **Parcela paga congela** o valor pago, mesmo que o índice daquele mês mude depois.
 - **A entrada nunca é corrigida.**
 - Mês sem lançamento não corrige, e o sistema mostra quantos meses faltam lançar.
