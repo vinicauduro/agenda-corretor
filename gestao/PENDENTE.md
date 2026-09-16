@@ -1,7 +1,7 @@
 # Pendências para testar no computador
 
 Lista do que foi construído e ainda não foi testado por você, mais as decisões que dependem da
-sua conferência. Atualizada em 16/09/2026.
+sua conferência. Atualizada em 16/09/2026, depois da entrega das permissões por função.
 
 ---
 
@@ -116,18 +116,27 @@ antecipação ou limitar o desconto, é só dizer.
 
 ---
 
+## 7b. Permissões por função
+
+- [ ] Em **Cadastros › 🔐 Permissões**, revisar o que cada papel pode.
+- [ ] Convidar alguém como financeiro e conferir que ele não vê vendas nem reservas.
+- [ ] Testar desmarcar uma permissão e ver a aba sumir para quem tem aquele papel.
+
+---
+
 ## 8. O que ainda não foi construído
 
 Em ordem de prioridade acordada:
 
-1. **Permissões por função** — o administrador define o que cada funcionário acessa. Importante
-   antes de a equipe crescer, porque envolve valores.
-2. **Relatórios** — espelho de vendas, contas a receber, inadimplência, comissões, em formato
+1. **Relatórios** — espelho de vendas, contas a receber, inadimplência, comissões, em formato
    para imprimir e exportar.
-3. **Cobrança bancária** — remessa e retorno em CNAB, com baixa automática. Precisa saber com
+1. **Relatórios** — espelho de vendas, contas a receber, inadimplência, comissões, em formato
+   para imprimir e exportar.
+2. **Cobrança bancária** — remessa e retorno em CNAB, com baixa automática. Precisa saber com
    qual banco você trabalha e pegar o manual de layout dele.
-4. **Portal do comprador** — segunda via e extrato para o cliente final.
-5. **Distrato e transferência de lote.**
+3. **Portal do comprador** — segunda via e extrato para o cliente final.
+4. **Distrato e transferência de lote.**
+5. **Planos do SaaS** — definir o que entra em cada plano e travar por plano no sistema.
 
 Descartado por decisão sua: assinatura digital, que é serviço contratado à parte. Sem
 necessidade: anexar documentos do cliente no sistema e comissão fixa por corretor, já que a
