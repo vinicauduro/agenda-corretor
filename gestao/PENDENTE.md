@@ -130,8 +130,6 @@ Em ordem de prioridade acordada:
 
 1. **Relatórios** — espelho de vendas, contas a receber, inadimplência, comissões, em formato
    para imprimir e exportar.
-1. **Relatórios** — espelho de vendas, contas a receber, inadimplência, comissões, em formato
-   para imprimir e exportar.
 2. **Cobrança bancária** — remessa e retorno em CNAB, com baixa automática. Precisa saber com
    qual banco você trabalha e pegar o manual de layout dele.
 3. **Portal do comprador** — segunda via e extrato para o cliente final.
