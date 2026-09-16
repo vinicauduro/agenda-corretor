@@ -213,7 +213,7 @@ O preço certo e ajustado é de {{pagamento.valorTotal}} ({{pagamento.valorTotal
 {{pagamento.tabela}}
 
 {{#se pagamento.indice}}## CLÁUSULA TERCEIRA — DA CORREÇÃO MONETÁRIA
-As parcelas são corrigidas mensalmente pela variação do {{pagamento.indice}}, a partir do mês base de {{pagamento.indiceBase}}. A variação apurada em cada mês incide sobre todas as parcelas vencíveis naquele mês, qualquer que seja o dia do vencimento. Apurada variação negativa em determinado mês, esta será considerada igual a zero, não havendo redução do valor das parcelas. A parcela não paga no vencimento deixa de sofrer correção e passa a responder apenas pelos encargos de mora previstos neste instrumento.
+As parcelas são corrigidas mensalmente pela variação do {{pagamento.indice}}, a partir do mês base de {{pagamento.indiceBase}}. A variação apurada em cada mês incide sobre as parcelas vencíveis no mês subsequente ao de sua divulgação, qualquer que seja o dia do vencimento. Apurada variação negativa em determinado mês, esta será considerada igual a zero, não havendo redução do valor das parcelas. A parcela não paga no vencimento deixa de sofrer correção e passa a responder apenas pelos encargos de mora previstos neste instrumento.
 
 {{/se}}## CLÁUSULA TERCEIRA — DO ATRASO
 O atraso no pagamento de qualquer parcela sujeita o promitente comprador a multa e juros de mora previstos neste instrumento, sem prejuízo da correção monetária do saldo devedor.
