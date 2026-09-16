@@ -51,8 +51,14 @@ com PIN do administrador e dados só no navegador.
 
 Na tela da venda, o botão **💸 Antecipar / quitar** calcula quanto o cliente paga para
 antecipar parcelas ou quitar o contrato. As parcelas futuras são trazidas a valor presente
-pela mesma taxa de juros do contrato, então o cliente não paga o juro do prazo que não usou.
-Parcelas já vencidas entram pelo valor cheio, com multa e juros de mora.
+pela mesma taxa de juros do contrato, o que devolve exatamente o **saldo devedor** da tabela
+de amortização: sai apenas o juro dos meses que o cliente não vai usar, nunca mais do que
+isso. A tela traz a tabela de amortização aberta, com juro do mês, amortização e saldo, para
+conferência.
+
+O cálculo é por **mês fechado**, igual à cobrança de juros e à correção por índice: antecipar
+no dia 1 ou no dia 28 do mesmo mês dá o mesmo valor. Parcelas já vencidas entram pelo valor
+cheio, com multa e juros de mora.
 
 A tela mostra quanto custa quitar em cada um dos próximos doze meses, e permite três
 operações: quitar o contrato inteiro, antecipar as últimas parcelas (que é onde o desconto é
