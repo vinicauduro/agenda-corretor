@@ -412,10 +412,34 @@ begin
   delete from public.custos where org_id = p_org;
   delete from public.lotes where org_id = p_org;
   delete from public.leads where org_id = p_org;
+  delete from public.indices where org_id = p_org;
   delete from public.vitrines where org_id = p_org;
   delete from public.loteamentos where org_id = p_org;
   delete from public.log where org_id = p_org;
 end $$;
+
+-- ---------------------------------------------------------------------
+-- 4b. Índices de correção (IGP-M, INPC, IPCA, CUB…) e campos de correção
+-- ---------------------------------------------------------------------
+create table if not exists public.indices (
+  org_id    uuid not null references public.organizacoes(id) on delete cascade,
+  id        text not null,
+  codigo    text not null,
+  nome      text not null,
+  tipo      text not null default 'percentual' check (tipo in ('percentual','pontos')),
+  valores   jsonb not null default '{}'::jsonb,
+  criado_em timestamptz not null default now(),
+  primary key (org_id, id)
+);
+alter table public.indices enable row level security;
+drop policy if exists indices_select on public.indices;
+drop policy if exists indices_write on public.indices;
+create policy indices_select on public.indices for select to authenticated using (public.eh_membro(org_id));
+create policy indices_write on public.indices for all to authenticated using (public.eh_admin(org_id)) with check (public.eh_admin(org_id));
+
+alter table public.vendas add column if not exists indice_id text;
+alter table public.vendas add column if not exists indice_base text;
+alter table public.recebiveis add column if not exists valor_corrigido double precision;
 
 -- ---------------------------------------------------------------------
 -- 5a. Modelos de documento (proposta e contrato da própria empresa)
@@ -559,7 +583,7 @@ do $$
 declare t text;
 begin
   if exists (select 1 from pg_publication where pubname = 'supabase_realtime') then
-    foreach t in array array['organizacoes','membros','loteamentos','categorias','lotes','reservas','vendas','recebiveis','custos','log','vitrines','leads','modelos'] loop
+    foreach t in array array['organizacoes','membros','loteamentos','categorias','lotes','reservas','vendas','recebiveis','custos','log','vitrines','leads','modelos','indices'] loop
       if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = t) then
         execute format('alter publication supabase_realtime add table public.%I', t);
       end if;

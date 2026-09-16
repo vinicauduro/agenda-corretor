@@ -10,7 +10,7 @@ const DOC_CAMPOS = [
   ['Lote', [['lote.identificacao', 'Quadra e lote'], ['lote.quadra', 'Quadra'], ['lote.numero', 'Número'], ['lote.area', 'Área (m²)'], ['lote.areaExtenso', 'Área por extenso'], ['lote.frente', 'Frente'], ['lote.fundos', 'Fundos'], ['lote.matricula', 'Matrícula'], ['lote.tipo', 'Tipo']]],
   ['Comprador', [['cliente.nome', 'Nome'], ['cliente.cpf', 'CPF/CNPJ'], ['cliente.rg', 'RG'], ['cliente.nacionalidade', 'Nacionalidade'], ['cliente.estadoCivil', 'Estado civil'], ['cliente.profissao', 'Profissão'], ['cliente.telefone', 'Telefone'], ['cliente.email', 'E-mail'], ['cliente.endereco', 'Endereço'], ['cliente.cidade', 'Cidade']]],
   ['Corretor', [['corretor.nome', 'Nome'], ['corretor.creci', 'CRECI'], ['corretor.telefone', 'Telefone'], ['corretor.imobiliaria', 'Imobiliária']]],
-  ['Pagamento', [['pagamento.valorTotal', 'Valor total'], ['pagamento.valorTotalExtenso', 'Valor por extenso'], ['pagamento.entrada', 'Entrada'], ['pagamento.entradaExtenso', 'Entrada por extenso'], ['pagamento.dataEntrada', 'Data da entrada'], ['pagamento.nParcelas', 'Nº de parcelas'], ['pagamento.valorParcela', 'Valor da parcela'], ['pagamento.valorParcelaExtenso', 'Parcela por extenso'], ['pagamento.juros', 'Juros (% a.m.)'], ['pagamento.primeiroVencimento', '1º vencimento'], ['pagamento.saldo', 'Saldo financiado'], ['pagamento.reforcos', 'Reforços'], ['pagamento.resumo', 'Resumo em uma linha'], ['pagamento.tabela', 'Tabela de parcelas']]],
+  ['Pagamento', [['pagamento.valorTotal', 'Valor total'], ['pagamento.valorTotalExtenso', 'Valor por extenso'], ['pagamento.entrada', 'Entrada'], ['pagamento.entradaExtenso', 'Entrada por extenso'], ['pagamento.dataEntrada', 'Data da entrada'], ['pagamento.nParcelas', 'Nº de parcelas'], ['pagamento.valorParcela', 'Valor da parcela'], ['pagamento.valorParcelaExtenso', 'Parcela por extenso'], ['pagamento.juros', 'Juros (% a.m.)'], ['pagamento.primeiroVencimento', '1º vencimento'], ['pagamento.saldo', 'Saldo financiado'], ['pagamento.reforcos', 'Reforços'], ['pagamento.indice', 'Índice de correção'], ['pagamento.indiceBase', 'Mês base do índice'], ['pagamento.resumo', 'Resumo em uma linha'], ['pagamento.tabela', 'Tabela de parcelas']]],
   ['Documento', [['doc.data', 'Data'], ['doc.dataExtenso', 'Data por extenso'], ['doc.cidadeData', 'Cidade e data'], ['doc.validade', 'Validade da proposta']]]
 ];
 
@@ -88,6 +88,8 @@ function docContexto(o) {
     'pagamento.juros': p.jurosMes ? fmtNum(p.jurosMes, 2) + '% ao mês' : 'sem juros',
     'pagamento.primeiroVencimento': p.primeiroVencimento ? fmtDate(p.primeiroVencimento) : '',
     'pagamento.saldo': fmtMoney(Math.max(0, num(p.valorTotal) - num(p.entrada))),
+    'pagamento.indice': p.indiceId && typeof getIndice === 'function' && getIndice(p.indiceId) ? getIndice(p.indiceId).nome : '',
+    'pagamento.indiceBase': p.indiceBase ? monthLabel(p.indiceBase) : '',
     'pagamento.reforcos': reforcosTxt,
     'pagamento.resumo': [p.entrada ? `entrada de ${fmtMoney(p.entrada)}` : '', parcelasTxt, reforcosTxt ? (iguais ? reforcosTxt : `reforços de ${reforcosTxt}`) : ''].filter(Boolean).join(' + '),
     'pagamento.tabela': docTabelaParcelas(p),
@@ -210,7 +212,10 @@ O preço certo e ajustado é de {{pagamento.valorTotal}} ({{pagamento.valorTotal
 
 {{pagamento.tabela}}
 
-## CLÁUSULA TERCEIRA — DO ATRASO
+{{#se pagamento.indice}}## CLÁUSULA TERCEIRA — DA CORREÇÃO MONETÁRIA
+As parcelas são corrigidas mensalmente pela variação do {{pagamento.indice}}, a partir do mês base de {{pagamento.indiceBase}}. A variação apurada em cada mês incide sobre todas as parcelas vencíveis naquele mês.
+
+{{/se}}## CLÁUSULA TERCEIRA — DO ATRASO
 O atraso no pagamento de qualquer parcela sujeita o promitente comprador a multa e juros de mora previstos neste instrumento, sem prejuízo da correção monetária do saldo devedor.
 
 ## CLÁUSULA QUARTA — DA POSSE E DA ESCRITURA
@@ -394,7 +399,7 @@ function gerarContratoConfirma(vendaId) {
   if ($('#ctSalvar') && $('#ctSalvar').checked) upsert('vendas', Object.assign({}, v, { cliente }));
   const ctx = docContexto({
     loteamento: lot, lote: l, cliente, corretor: v.corretor,
-    pagamento: { valorTotal: v.valorTotal, entrada: v.entrada, dataEntrada: v.dataEntrada, nParcelas: v.nParcelas, valorParcela: v.valorParcela, jurosMes: v.jurosMes, primeiroVencimento: v.primeiroVencimento, baloes: v.baloes },
+    pagamento: { valorTotal: v.valorTotal, entrada: v.entrada, dataEntrada: v.dataEntrada, nParcelas: v.nParcelas, valorParcela: v.valorParcela, jurosMes: v.jurosMes, primeiroVencimento: v.primeiroVencimento, baloes: v.baloes, indiceId: v.indiceId, indiceBase: v.indiceBase },
     data: val('ctData') || v.dataVenda,
     extras: docLerLivres(docCamposLivres(mod.corpo), 'ctL_')
   });
