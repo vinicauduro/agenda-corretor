@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Lotes à venda</title>
+<meta name="description" content="Veja os lotes disponíveis, tamanhos e valores, e fale com o corretor.">
+<meta name="theme-color" content="#0e4c73">
+<meta property="og:type" content="website">
+<meta property="og:title" id="ogTitle" content="Lotes à venda">
+<meta property="og:description" id="ogDesc" content="Veja os lotes disponíveis, tamanhos e valores.">
+<link rel="apple-touch-icon" href="../icon-192.png">
+<link rel="stylesheet" href="style.css">
+<style>
+  body { background: #f8fafc; }
+  .v-top { background: linear-gradient(135deg, var(--primary) 0%, #1a6fa3 100%); color: white; padding: 10px 16px; display: flex; align-items: center; justify-content: space-between; gap: 12px; position: sticky; top: 0; z-index: 20; }
+  .v-top .emp { font-weight: 700; font-size: 0.95rem; display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .v-top .emp span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .v-zap { background: #25d366; color: #05331a; border: none; border-radius: 999px; padding: 9px 16px; font-weight: 800; font-size: 0.85rem; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+  .v-zap:hover { filter: brightness(1.05); }
+  .v-hero { background: white; border-bottom: 1px solid var(--border); padding: 26px 16px 22px; }
+  .v-wrap { max-width: 1120px; margin: 0 auto; }
+  .v-hero h1 { font-size: 1.7rem; line-height: 1.2; margin-bottom: 6px; }
+  .v-hero .local { color: var(--muted); font-size: 0.95rem; }
+  .v-hero .chamada { margin-top: 12px; font-size: 1.02rem; max-width: 62ch; }
+  .v-nums { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
+  .v-num { background: var(--primary-light); border-radius: var(--radius); padding: 12px 16px; min-width: 132px; }
+  .v-num b { display: block; font-size: 1.32rem; color: var(--primary-dark); line-height: 1.2; }
+  .v-num small { color: var(--muted); font-size: 0.76rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; }
+  .v-sec { padding: 22px 16px; }
+  .v-sec h2 { font-size: 1.12rem; margin-bottom: 4px; }
+  .v-sec .sub { color: var(--muted); font-size: 0.86rem; margin-bottom: 14px; }
+  .v-legend { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 10px; font-size: 0.82rem; color: var(--muted); }
+  .v-legend i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; margin-right: 5px; vertical-align: -1px; }
+  .lote-shape.indisponivel { fill: var(--st-bloqueado); }
+  .v-filtros { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; margin-bottom: 14px; }
+  .v-filtros label { font-size: 0.74rem; font-weight: 700; color: var(--muted); display: block; margin-bottom: 3px; text-transform: uppercase; letter-spacing: 0.03em; }
+  .v-filtros select, .v-filtros input { padding: 9px 11px; border: 1px solid var(--border); border-radius: 9px; font-size: 0.9rem; background: white; color: var(--text); min-width: 124px; font-family: inherit; }
+  .v-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
+  .v-card { background: white; border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; display: flex; flex-direction: column; gap: 8px; }
+  .v-card.indisponivel, .v-card.vendido, .v-card.reservado { opacity: 0.75; }
+  .v-card .tit { font-weight: 800; font-size: 1.02rem; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px; }
+  .v-card .tit > span:first-child { white-space: nowrap; }
+  .v-card .med { color: var(--muted); font-size: 0.85rem; }
+  .v-card .preco { font-size: 1.14rem; font-weight: 800; color: var(--primary-dark); }
+  .v-card .preco small { font-weight: 600; font-size: 0.74rem; color: var(--muted); display: block; }
+  .v-card button { margin-top: auto; background: var(--primary); color: white; border: none; border-radius: 9px; padding: 10px; font-weight: 700; font-size: 0.88rem; cursor: pointer; font-family: inherit; }
+  .v-card button:hover { background: var(--primary-dark); }
+  .v-card button[disabled] { background: #e2e8f0; color: var(--muted); cursor: default; }
+  .v-tag { font-size: 0.7rem; font-weight: 800; padding: 3px 9px; border-radius: 999px; text-transform: uppercase; letter-spacing: 0.03em; white-space: nowrap; }
+  .v-tag.disponivel { background: #dcfce7; color: #166534; }
+  .v-tag.reservado { background: #fef3c7; color: #92400e; }
+  .v-tag.vendido { background: #fee2e2; color: #991b1b; }
+  .v-tag.indisponivel { background: #e2e8f0; color: #475569; }
+  .v-vazio { background: white; border: 1px dashed var(--border); border-radius: var(--radius); padding: 30px; text-align: center; color: var(--muted); }
+  .v-foot { padding: 26px 16px 40px; text-align: center; color: var(--muted); font-size: 0.8rem; }
+  .v-form { display: flex; flex-direction: column; gap: 10px; }
+  .v-form label { font-size: 0.78rem; font-weight: 700; color: var(--muted); }
+  .v-form input, .v-form textarea { width: 100%; padding: 11px; border: 1px solid var(--border); border-radius: 9px; font-size: 1rem; font-family: inherit; color: var(--text); background: white; }
+  .v-form textarea { min-height: 76px; resize: vertical; }
+  .v-ok { text-align: center; padding: 12px 4px; }
+  .v-ok .ic { font-size: 2.4rem; }
+  .v-erro { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; border-radius: 9px; padding: 10px 12px; font-size: 0.86rem; }
+  .v-carregando { padding: 60px 20px; text-align: center; color: var(--muted); }
+  @media (max-width: 560px) { .v-hero h1 { font-size: 1.36rem; } .v-num { flex: 1 1 40%; min-width: 0; padding: 10px 12px; } .v-num b { font-size: 1.14rem; } .v-grid { grid-template-columns: repeat(auto-fill, minmax(158px, 1fr)); } .v-card { padding: 12px; } }
+</style>
+</head>
+<body>
+
+<div class="toast-container" id="toastContainer"></div>
+
+<div id="vApp">
+  <div class="v-carregando">Carregando os lotes…</div>
+</div>
+
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal" id="modalBox">
+    <div class="modal-head"><h2 id="modalTitle"></h2><button class="modal-close" onclick="fecharModal()" title="Fechar">✕</button></div>
+    <div class="modal-body" id="modalBody"></div>
+    <div class="modal-foot" id="modalFoot"></div>
+  </div>
+</div>
+
+<script src="config.js"></script>
+<script src="vendor/supabase.js"></script>
+<script src="planta.js"></script>
+<script src="vitrine.js"></script>
+</body>
+</html>

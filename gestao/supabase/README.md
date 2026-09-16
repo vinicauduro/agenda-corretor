@@ -47,6 +47,24 @@ com PIN do administrador e dados só no navegador.
 4. Em **Cadastros › Equipe › ＋ Convite** gere um link e envie aos corretores. Quem abrir o
    link cria a conta (ou entra) e já fica vinculado à sua empresa como corretor.
 
+## Vitrine pública (link do loteamento para o cliente final)
+
+A vitrine é uma página aberta, **sem login**, com a planta e os lotes à venda, para mandar
+por WhatsApp, colocar no Instagram ou no anúncio. Quem se interessa preenche um formulário
+curto e aparece na aba **Leads** da administração, em tempo real.
+
+1. Em **Cadastros › 🌐 Vitrine**, escolha o endereço do link, a chamada de vendas, o
+   WhatsApp de atendimento e se os preços aparecem.
+2. Clique em **Publicar vitrine** e copie o link (algo como
+   `https://vinicauduro.github.io/agenda-corretor/gestao/vitrine.html?l=residencial-hessen`).
+3. Os interessados caem na aba **🎯 Leads**, com botão de WhatsApp já com a mensagem pronta
+   e a opção **Criar reserva**, que abre a reserva com os dados do cliente preenchidos.
+
+O visitante vê apenas quadra, número, área, medidas, situação e (se você quiser) o preço.
+Matrícula, observações internas, reservas, vendas, custos e dados da equipe **nunca** saem
+pela vitrine: o banco devolve só esses campos, por uma função específica.
+Desmarcar **Vitrine no ar** derruba o link na hora.
+
 ## O que cada papel vê
 
 | Papel        | Planta e lotes | Reservas                | Vendas            | Recebíveis e custos | Equipe/config |
@@ -54,6 +72,9 @@ com PIN do administrador e dados só no navegador.
 | Dono / Admin | tudo           | todas                   | todas             | sim                 | sim           |
 | Financeiro   | tudo           | todas                   | todas             | sim                 | sim           |
 | Corretor     | vê e reserva   | só as próprias          | só as próprias    | não                 | não           |
+
+Os leads da vitrine são visíveis para toda a equipe (o corretor precisa atender), mas só
+administradores alteram ou excluem.
 
 As regras valem no banco (RLS), não só na tela: mesmo alguém usando a API direto só
 enxerga o que o papel permite. O pedido de reserva do corretor passa por uma função do banco
@@ -68,6 +89,8 @@ autenticar no Supabase. A partir daí o Claude consegue consultar e alterar o ba
 ## Manutenção
 
 - **Backup**: além do backup em JSON do app, o Supabase mantém backups diários no plano pago.
-- **Atualizar o esquema**: edite `schema.sql` e rode de novo no SQL Editor.
+- **Atualizar o esquema**: edite `schema.sql` e rode de novo no SQL Editor. Sempre que o app
+  ganhar recursos novos (como a vitrine pública), rode o arquivo inteiro outra vez — ele é
+  idempotente e não apaga nada.
 - **Limites do plano gratuito**: 500 MB de banco, 1 GB de Storage, 50 mil usuários ativos por
   mês. Mais que suficiente para dezenas de loteamentos.
