@@ -55,9 +55,17 @@ quando falta lançar o mês corrente.
 
 A correção é **mensal**: a variação apurada no mês vale para todas as parcelas que vencem
 naquele mês, qualquer que seja o dia do vencimento. Cada contrato escolhe o índice e o mês
-base na tela da venda, e a correção começa no mês seguinte ao mês base. Mês sem lançamento
-não corrige. A entrada nunca é corrigida, e a parcela quitada congela o valor pago, mesmo que
-o índice daquele mês mude depois.
+base na tela da venda, e a correção começa no mês seguinte ao mês base.
+
+Regras do cálculo:
+
+- **Deflação não reduz parcela.** Mês negativo fica registrado no índice, mas entra como 0%
+  nos contratos, para preservar o equilíbrio do negócio.
+- **Parcela vencida congela.** A correção vai até o mês do vencimento. Depois disso a parcela
+  responde só por multa e juros de mora, calculados sobre o valor já corrigido.
+- **Parcela paga congela** o valor pago, mesmo que o índice daquele mês mude depois.
+- **A entrada nunca é corrigida.**
+- Mês sem lançamento não corrige, e o sistema mostra quantos meses faltam lançar.
 
 O valor base e a correção aparecem lado a lado nos recebíveis, na tela da venda, no extrato e
 no CSV. Os juros de mora e a multa por atraso continuam sendo calculados à parte, sobre o
