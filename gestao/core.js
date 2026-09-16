@@ -162,6 +162,7 @@ function defaultConfig() {
     email: '',
     representante: '',
     repCpf: '',
+    pix: '',
     mostrarPrecoVendido: true
   };
 }
@@ -170,10 +171,10 @@ function defaultDB() {
     meta: { version: 1, createdAt: new Date().toISOString() },
     config: defaultConfig(),
     loteamentos: [], lotes: [], reservas: [], vendas: [], recebiveis: [], custos: [],
-    categorias: defaultCategorias(), corretores: [], leads: [], modelos: [], indices: [], log: []
+    categorias: defaultCategorias(), corretores: [], leads: [], modelos: [], indices: [], cobrancas: [], log: []
   };
 }
-const COLLECTIONS = ['loteamentos', 'lotes', 'reservas', 'vendas', 'recebiveis', 'custos', 'categorias', 'corretores', 'leads', 'modelos', 'indices', 'log'];
+const COLLECTIONS = ['loteamentos', 'lotes', 'reservas', 'vendas', 'recebiveis', 'custos', 'categorias', 'corretores', 'leads', 'modelos', 'indices', 'cobrancas', 'log'];
 function normalizeDB(data) {
   const d = data && typeof data === 'object' ? data : {};
   d.meta = d.meta || { version: 1 };
@@ -249,6 +250,7 @@ const TABLE_COLS = {
   custos: ['id', 'loteamentoId', 'loteId', 'descricao', 'categoriaId', 'fornecedor', 'valor', 'formaPagamento', 'dataCompetencia', 'vencimento', 'status', 'dataPagamento', 'obs', 'criadoEm'],
   modelos: ['id', 'nome', 'tipo', 'corpo', 'criadoEm'],
   indices: ['id', 'codigo', 'nome', 'tipo', 'valores', 'criadoEm'],
+  cobrancas: ['id', 'vendaId', 'loteamentoId', 'data', 'canal', 'faixa', 'dias', 'valor', 'obs', 'quem', 'criadoEm'],
   leads: ['id', 'loteamentoId', 'loteId', 'nome', 'telefone', 'email', 'msg', 'origem', 'status', 'obs', 'criadoEm'],
   log: ['id', 'ts', 'who', 'msg']
 };
@@ -407,7 +409,7 @@ const Cloud = {
   async replaceAll() {
     try {
       await this.rpc('limpar_dados_org', { p_org: this.org.id });
-      for (const t of ['loteamentos', 'categorias', 'lotes', 'reservas', 'vendas', 'recebiveis', 'custos', 'leads', 'modelos', 'indices', 'log']) {
+      for (const t of ['loteamentos', 'categorias', 'lotes', 'reservas', 'vendas', 'recebiveis', 'custos', 'leads', 'modelos', 'indices', 'cobrancas', 'log']) {
         const rows = db[t].map(r => toRow(t, r));
         for (let i = 0; i < rows.length; i += 400) {
           const { error } = await this.client.from(t).upsert(rows.slice(i, i + 400), { onConflict: 'org_id,id' });

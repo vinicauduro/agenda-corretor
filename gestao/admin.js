@@ -20,7 +20,7 @@ function renderAdminTab() {
   else if (tab === 'reservas') { renderAReservas(); fabShow('abrirReservaAdminForm()'); }
   else if (tab === 'leads') renderLeads();
   else if (tab === 'vendas') { renderAVendas(); fabShow('abrirVendaForm()'); }
-  else if (tab === 'recebiveis') renderRecebiveis();
+  else if (tab === 'recebiveis') { if (state.sub.rec === 'cobranca') renderCobranca(); else renderRecebiveis(); }
   else if (tab === 'custos') { renderCustos(); fabShow('abrirCustoForm()'); }
   else if (tab === 'cadastros') renderCadastros();
 }
@@ -57,7 +57,7 @@ function renderPainel() {
   if (resPend.length) alerts += `<div class="alert warn" onclick="switchTab('reservas')"><span><b>${resPend.length} reserva(s) aguardando aprovação</b></span><span>›</span></div>`;
   if (resExp.length) alerts += `<div class="alert" onclick="aSetFiltroRes('expirada')"><span><b>${resExp.length} reserva(s) vencida(s)</b> — libere o lote ou renove</span><span>›</span></div>`;
   if (resVencendo.length) alerts += `<div class="alert info" onclick="switchTab('reservas')"><span><b>${resVencendo.length} reserva(s) vencem em até 2 dias</b></span><span>›</span></div>`;
-  if (atrasados.length) alerts += `<div class="alert" onclick="aSetFiltroRec('atrasado')"><span><b>${atrasados.length} parcela(s) em atraso</b> — ${fmtMoney(atrasado)}</span><span>›</span></div>`;
+  if (atrasados.length) alerts += `<div class="alert" onclick="abrirPainelCobranca()"><span><b>${atrasados.length} parcela(s) em atraso</b> — ${fmtMoney(atrasado)} · cobrar</span><span>›</span></div>`;
   if (custosAtr.length) alerts += `<div class="alert" onclick="aSetFiltroCusto('atrasado')"><span><b>${custosAtr.length} conta(s) a pagar vencida(s)</b> — ${fmtMoney(custosAtr.reduce((s, c) => s + num(c.valor), 0))}</span><span>›</span></div>`;
   const semPreco = ls.filter(l => !num(l.preco)).length;
   if (semPreco) alerts += `<div class="alert info" onclick="switchTab('lotes')"><span><b>${semPreco} lote(s) sem preço</b></span><span>›</span></div>`;
@@ -76,7 +76,7 @@ function renderPainel() {
       <div class="kpi c-blue"><div class="lbl">Vendido</div><div class="val">${fmtMoneyShort(vendido)}</div><div class="sub">${vendas.length} venda(s)</div></div>
       <div class="kpi c-green"><div class="lbl">Recebido</div><div class="val">${fmtMoneyShort(recebido)}</div><div class="sub">${vendido ? Math.round(recebido / vendido * 100) : 0}% do vendido</div></div>
       <div class="kpi c-amber"><div class="lbl">A receber</div><div class="val">${fmtMoneyShort(aReceber)}</div><div class="sub">${fmtMoneyShort(prevMes)} previsto no mês</div></div>
-      <div class="kpi c-red"><div class="lbl">Em atraso</div><div class="val">${fmtMoneyShort(atrasado)}</div><div class="sub">${atrasados.length} parcela(s)</div></div>
+      <div class="kpi c-red" onclick="abrirPainelCobranca()" style="cursor:pointer"><div class="lbl">Em atraso</div><div class="val">${fmtMoneyShort(atrasado)}</div><div class="sub">${atrasados.length} parcela(s) · cobrar ›</div></div>
       <div class="kpi c-red"><div class="lbl">Custos</div><div class="val">${fmtMoneyShort(custoTotal)}</div><div class="sub">${fmtMoneyShort(custoPago)} pagos · ${fmtMoneyShort(custosMes)} a pagar no mês</div></div>
       <div class="kpi ${recebido - custoPago >= 0 ? 'c-green' : 'c-red'}"><div class="lbl">Caixa (receb. − pagos)</div><div class="val">${fmtMoneyShort(recebido - custoPago)}</div><div class="sub">Comissões a pagar ${fmtMoneyShort(comissoesPend)}</div></div>
       <div class="kpi ${vgv - (orcTotal || custoTotal) >= 0 ? 'c-green' : 'c-red'}"><div class="lbl">Resultado projetado</div><div class="val">${fmtMoneyShort(vgv - Math.max(orcTotal, custoTotal))}</div><div class="sub">VGV − ${orcTotal ? 'orçamento' : 'custos'} (${fmtMoneyShort(Math.max(orcTotal, custoTotal))})</div></div>
@@ -686,7 +686,7 @@ function distratoVenda(id) {
 function renderCadastros() {
   const v = $('#av-cadastros'); const sub = state.sub.cad || (curLot() ? 'loteamento' : 'loteamentos');
   state.sub.cad = sub;
-  const tabs = [['loteamento', '🏘️ Loteamento'], ['loteamentos', '📋 Todos'], ['corretores', Cloud.active ? '👥 Equipe' : '🧑‍💼 Corretores'], ['categorias', '🏷️ Categorias'], ['documentos', '📄 Documentos'], ['indices', '📈 Índices'], ['vitrine', '🌐 Vitrine'], ['config', '⚙️ Configurações'], ['nuvem', Cloud.active ? '☁️ Conta' : '☁️ Nuvem'], ['backup', '💾 Backup']];
+  const tabs = [['loteamento', '🏘️ Loteamento'], ['loteamentos', '📋 Todos'], ['corretores', Cloud.active ? '👥 Equipe' : '🧑‍💼 Corretores'], ['categorias', '🏷️ Categorias'], ['documentos', '📄 Documentos'], ['indices', '📈 Índices'], ['cobranca', '🔔 Cobrança'], ['vitrine', '🌐 Vitrine'], ['config', '⚙️ Configurações'], ['nuvem', Cloud.active ? '☁️ Conta' : '☁️ Nuvem'], ['backup', '💾 Backup']];
   let html = `<div class="subtabs">${tabs.map(([k, l]) => `<div class="chip ${sub === k ? 'active' : ''}" onclick="state.sub.cad='${k}';renderCadastros()">${l}</div>`).join('')}</div>`;
   if (sub === 'loteamento') html += cadLoteamentoHtml();
   else if (sub === 'loteamentos') html += cadLoteamentosHtml();
@@ -694,6 +694,7 @@ function renderCadastros() {
   else if (sub === 'categorias') html += cadCategoriasHtml();
   else if (sub === 'documentos') html += cadDocumentosHtml();
   else if (sub === 'indices') html += cadIndicesHtml();
+  else if (sub === 'cobranca') html += cadCobrancaHtml();
   else if (sub === 'vitrine') html += cadVitrineHtml();
   else if (sub === 'config') html += cadConfigHtml();
   else if (sub === 'nuvem') html += Cloud.active ? cadContaHtml() : cadNuvemHtml();

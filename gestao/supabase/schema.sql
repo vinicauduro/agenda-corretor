@@ -413,6 +413,7 @@ begin
   delete from public.lotes where org_id = p_org;
   delete from public.leads where org_id = p_org;
   delete from public.indices where org_id = p_org;
+  delete from public.cobrancas where org_id = p_org;
   delete from public.vitrines where org_id = p_org;
   delete from public.loteamentos where org_id = p_org;
   delete from public.log where org_id = p_org;
@@ -440,6 +441,31 @@ create policy indices_write on public.indices for all to authenticated using (pu
 alter table public.vendas add column if not exists indice_id text;
 alter table public.vendas add column if not exists indice_base text;
 alter table public.recebiveis add column if not exists valor_corrigido double precision;
+
+-- ---------------------------------------------------------------------
+-- 4c. Cobranças registradas (régua de inadimplência)
+-- ---------------------------------------------------------------------
+create table if not exists public.cobrancas (
+  org_id        uuid not null references public.organizacoes(id) on delete cascade,
+  id            text not null,
+  venda_id      text not null,
+  loteamento_id text not null default '',
+  data          date not null default current_date,
+  canal         text not null default 'whatsapp',
+  faixa         text not null default '',
+  dias          integer not null default 0,
+  valor         double precision not null default 0,
+  obs           text not null default '',
+  quem          text not null default '',
+  criado_em     timestamptz not null default now(),
+  primary key (org_id, id)
+);
+create index if not exists cobrancas_venda_idx on public.cobrancas (org_id, venda_id);
+alter table public.cobrancas enable row level security;
+drop policy if exists cobrancas_select on public.cobrancas;
+drop policy if exists cobrancas_write on public.cobrancas;
+create policy cobrancas_select on public.cobrancas for select to authenticated using (public.eh_admin(org_id));
+create policy cobrancas_write on public.cobrancas for all to authenticated using (public.eh_admin(org_id)) with check (public.eh_admin(org_id));
 
 -- ---------------------------------------------------------------------
 -- 5a. Modelos de documento (proposta e contrato da própria empresa)
@@ -583,7 +609,7 @@ do $$
 declare t text;
 begin
   if exists (select 1 from pg_publication where pubname = 'supabase_realtime') then
-    foreach t in array array['organizacoes','membros','loteamentos','categorias','lotes','reservas','vendas','recebiveis','custos','log','vitrines','leads','modelos','indices'] loop
+    foreach t in array array['organizacoes','membros','loteamentos','categorias','lotes','reservas','vendas','recebiveis','custos','log','vitrines','leads','modelos','indices','cobrancas'] loop
       if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = t) then
         execute format('alter publication supabase_realtime add table public.%I', t);
       end if;
