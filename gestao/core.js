@@ -170,10 +170,10 @@ function defaultDB() {
     meta: { version: 1, createdAt: new Date().toISOString() },
     config: defaultConfig(),
     loteamentos: [], lotes: [], reservas: [], vendas: [], recebiveis: [], custos: [],
-    categorias: defaultCategorias(), corretores: [], leads: [], modelos: [], log: []
+    categorias: defaultCategorias(), corretores: [], leads: [], modelos: [], indices: [], log: []
   };
 }
-const COLLECTIONS = ['loteamentos', 'lotes', 'reservas', 'vendas', 'recebiveis', 'custos', 'categorias', 'corretores', 'leads', 'modelos', 'log'];
+const COLLECTIONS = ['loteamentos', 'lotes', 'reservas', 'vendas', 'recebiveis', 'custos', 'categorias', 'corretores', 'leads', 'modelos', 'indices', 'log'];
 function normalizeDB(data) {
   const d = data && typeof data === 'object' ? data : {};
   d.meta = d.meta || { version: 1 };
@@ -244,10 +244,11 @@ const TABLE_COLS = {
   categorias: ['id', 'nome', 'cor'],
   lotes: ['id', 'loteamentoId', 'quadra', 'numero', 'area', 'frente', 'fundos', 'preco', 'tipo', 'status', 'obs', 'matricula', 'pts', 'reservaId', 'vendaId', 'criadoEm'],
   reservas: ['id', 'loteamentoId', 'loteId', 'corretor', 'corretorUserId', 'cliente', 'dataReserva', 'validade', 'status', 'proposta', 'obs', 'motivo', 'aprovadaEm', 'encerradaEm', 'criadoEm'],
-  vendas: ['id', 'loteamentoId', 'loteId', 'reservaId', 'cliente', 'corretor', 'corretorUserId', 'dataVenda', 'valorTotal', 'entrada', 'dataEntrada', 'nParcelas', 'jurosMes', 'valorParcela', 'primeiroVencimento', 'baloes', 'comissaoPct', 'comissaoValor', 'comissaoPaga', 'comissaoData', 'status', 'obs', 'motivo', 'distratoEm', 'criadoEm'],
-  recebiveis: ['id', 'loteamentoId', 'vendaId', 'tipo', 'numero', 'descricao', 'vencimento', 'valor', 'valorPago', 'dataPagamento', 'forma', 'obsPagamento'],
+  vendas: ['id', 'loteamentoId', 'loteId', 'reservaId', 'cliente', 'corretor', 'corretorUserId', 'dataVenda', 'valorTotal', 'entrada', 'dataEntrada', 'nParcelas', 'jurosMes', 'valorParcela', 'primeiroVencimento', 'baloes', 'indiceId', 'indiceBase', 'comissaoPct', 'comissaoValor', 'comissaoPaga', 'comissaoData', 'status', 'obs', 'motivo', 'distratoEm', 'criadoEm'],
+  recebiveis: ['id', 'loteamentoId', 'vendaId', 'tipo', 'numero', 'descricao', 'vencimento', 'valor', 'valorPago', 'valorCorrigido', 'dataPagamento', 'forma', 'obsPagamento'],
   custos: ['id', 'loteamentoId', 'loteId', 'descricao', 'categoriaId', 'fornecedor', 'valor', 'formaPagamento', 'dataCompetencia', 'vencimento', 'status', 'dataPagamento', 'obs', 'criadoEm'],
   modelos: ['id', 'nome', 'tipo', 'corpo', 'criadoEm'],
+  indices: ['id', 'codigo', 'nome', 'tipo', 'valores', 'criadoEm'],
   leads: ['id', 'loteamentoId', 'loteId', 'nome', 'telefone', 'email', 'msg', 'origem', 'status', 'obs', 'criadoEm'],
   log: ['id', 'ts', 'who', 'msg']
 };
@@ -406,7 +407,7 @@ const Cloud = {
   async replaceAll() {
     try {
       await this.rpc('limpar_dados_org', { p_org: this.org.id });
-      for (const t of ['loteamentos', 'categorias', 'lotes', 'reservas', 'vendas', 'recebiveis', 'custos', 'leads', 'modelos', 'log']) {
+      for (const t of ['loteamentos', 'categorias', 'lotes', 'reservas', 'vendas', 'recebiveis', 'custos', 'leads', 'modelos', 'indices', 'log']) {
         const rows = db[t].map(r => toRow(t, r));
         for (let i = 0; i < rows.length; i += 400) {
           const { error } = await this.client.from(t).upsert(rows.slice(i, i + 400), { onConflict: 'org_id,id' });
@@ -502,13 +503,13 @@ function reservaStatus(r) {
 // venda / recebíveis
 function vendaAtiva(loteId) { return db.vendas.find(v => v.loteId === loteId && (v.status === 'ativa' || v.status === 'quitada')); }
 function recStatus(r) {
-  const restante = (Number(r.valor) || 0) - (Number(r.valorPago) || 0);
+  const restante = recValor(r) - (Number(r.valorPago) || 0);
   if (restante <= 0.005) return 'pago';
   if ((Number(r.valorPago) || 0) > 0) return r.vencimento < todayStr() ? 'atrasado' : 'parcial';
   if (r.vencimento < todayStr()) return 'atrasado';
   return 'pendente';
 }
-function recRestante(r) { return Math.max(0, (Number(r.valor) || 0) - (Number(r.valorPago) || 0)); }
+function recRestante(r) { return Math.max(0, recValor(r) - (Number(r.valorPago) || 0)); }
 function recAtualizado(r) { // valor com multa e juros de mora
   const rest = recRestante(r);
   if (rest <= 0 || r.vencimento >= todayStr()) return rest;
@@ -535,7 +536,7 @@ function gerarRecebiveis(venda) {
 }
 function vendaResumo(v) {
   const recs = recebiveisDe(v.id);
-  const total = recs.reduce((s, r) => s + num(r.valor), 0);
+  const total = recs.reduce((s, r) => s + recValor(r), 0);
   const pago = recs.reduce((s, r) => s + num(r.valorPago), 0);
   const atrasado = recs.filter(r => recStatus(r) === 'atrasado').reduce((s, r) => s + recRestante(r), 0);
   const nPagas = recs.filter(r => recStatus(r) === 'pago').length;

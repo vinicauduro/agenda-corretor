@@ -47,6 +47,22 @@ com PIN do administrador e dados só no navegador.
 4. Em **Cadastros › Equipe › ＋ Convite** gere um link e envie aos corretores. Quem abrir o
    link cria a conta (ou entra) e já fica vinculado à sua empresa como corretor.
 
+## Índices de correção
+
+Em **Cadastros › 📈 Índices** ficam o IGP-M, INPC, IPCA, CUB e qualquer outro que você use.
+Você lança a variação de cada mês (ou o valor em pontos, no caso do CUB) e o sistema avisa
+quando falta lançar o mês corrente.
+
+A correção é **mensal**: a variação apurada no mês vale para todas as parcelas que vencem
+naquele mês, qualquer que seja o dia do vencimento. Cada contrato escolhe o índice e o mês
+base na tela da venda, e a correção começa no mês seguinte ao mês base. Mês sem lançamento
+não corrige. A entrada nunca é corrigida, e a parcela quitada congela o valor pago, mesmo que
+o índice daquele mês mude depois.
+
+O valor base e a correção aparecem lado a lado nos recebíveis, na tela da venda, no extrato e
+no CSV. Os juros de mora e a multa por atraso continuam sendo calculados à parte, sobre o
+valor já corrigido.
+
 ## Documentos (proposta e contrato)
 
 O texto é da empresa, não do sistema. Em **Cadastros › 📄 Documentos** você cola a proposta

@@ -11,7 +11,7 @@ function renderRecebiveis() {
   const meses = [...new Set(all.map(r => monthKey(r.vencimento)))].sort();
   const list = all.filter(r => grupos[f.status](r) && (f.mes === 'all' || monthKey(r.vencimento) === f.mes) && (!f.busca || clienteDe(r).toLowerCase().includes(f.busca.toLowerCase())))
     .sort((a, b) => a.vencimento.localeCompare(b.vencimento) || a.numero - b.numero);
-  const tot = all.reduce((s, r) => s + num(r.valor), 0), pago = all.reduce((s, r) => s + num(r.valorPago), 0);
+  const tot = all.reduce((s, r) => s + recValor(r), 0), pago = all.reduce((s, r) => s + num(r.valorPago), 0);
   const atr = all.filter(r => recStatus(r) === 'atrasado').reduce((s, r) => s + recRestante(r), 0);
   const mesKey = todayStr().slice(0, 7);
   const mes = all.filter(r => monthKey(r.vencimento) === mesKey && recStatus(r) !== 'pago').reduce((s, r) => s + recRestante(r), 0);
@@ -39,7 +39,7 @@ function recRowHtml(r) {
   const rest = recRestante(r);
   return `<div class="item ${st}" onclick="abrirVendaAdmin('${r.vendaId}')">
     <div class="info"><div class="title">${v ? esc(v.cliente.nome) : '—'} <span class="tiny muted">· ${l ? esc(loteShort(l)) : ''}</span></div>
-      <div class="meta"><span>${esc(r.descricao)}</span><span>· vence ${fmtDate(r.vencimento)}</span>${st === 'atrasado' ? `<span style="color:var(--danger)">· ${daysBetween(r.vencimento, todayStr())} dias · atualizado ${fmtMoney(recAtualizado(r))}</span>` : ''}${st === 'pago' && r.dataPagamento ? `<span>· pago em ${fmtDate(r.dataPagamento)}${r.forma ? ' (' + esc(r.forma) + ')' : ''}</span>` : ''}${st === 'parcial' ? `<span>· pago ${fmtMoney(r.valorPago)}, resta ${fmtMoney(rest)}</span>` : ''}</div></div>
+      <div class="meta"><span>${esc(r.descricao)}</span><span>· vence ${fmtDate(r.vencimento)}</span>${recCorrecao(r) > 0.005 && st !== 'pago' ? `<span title="Correção pelo índice do contrato">· base ${fmtMoney(r.valor)} + ${fmtMoney(recCorrecao(r))} de correção</span>` : ''}${st === 'atrasado' ? `<span style="color:var(--danger)">· ${daysBetween(r.vencimento, todayStr())} dias · atualizado ${fmtMoney(recAtualizado(r))}</span>` : ''}${st === 'pago' && r.dataPagamento ? `<span>· pago em ${fmtDate(r.dataPagamento)}${r.forma ? ' (' + esc(r.forma) + ')' : ''}</span>` : ''}${st === 'parcial' ? `<span>· pago ${fmtMoney(r.valorPago)}, resta ${fmtMoney(rest)}</span>` : ''}</div></div>
     <div class="side"><div class="value">${fmtMoney(st === 'pago' ? r.valorPago : rest)}</div><span class="badge ${st}">${statusLabel(st)}</span>
       <div class="btns" onclick="event.stopPropagation()">${st !== 'pago' && v && v.status !== 'distrato' ? `<button class="btn-icon ok" title="Registrar pagamento" onclick="abrirPagamento('${r.id}')">💵</button>` : ''}<button class="btn-icon" title="Editar" onclick="editarRecebivel('${r.id}')">✏️</button></div></div></div>`;
 }
@@ -47,7 +47,7 @@ function abrirPagamento(id, voltarVendaId) {
   const r = db.recebiveis.find(x => x.id === id); if (!r) return;
   const v = getVenda(r.vendaId); const rest = recRestante(r); const atual = recAtualizado(r);
   const body = `<p class="small mb"><b>${v ? esc(v.cliente.nome) : ''}</b> · ${esc(r.descricao)} · vencimento ${fmtDate(r.vencimento)}</p>
-    <div class="detail-grid"><div><div class="k">Valor da parcela</div><div class="v">${fmtMoney(r.valor)}</div></div><div><div class="k">Em aberto</div><div class="v">${fmtMoney(rest)}</div></div>${atual > rest + 0.01 ? `<div class="full"><div class="k">Com multa e juros (${fmtNum(db.config.multaPct, 1)}% + ${fmtNum(db.config.jurosMesPct, 2)}% a.m.)</div><div class="v" style="color:var(--danger)">${fmtMoney(atual)}</div></div>` : ''}</div>
+    <div class="detail-grid"><div><div class="k">Valor da parcela</div><div class="v">${fmtMoney(recValor(r))}${recCorrecao(r) > 0.005 ? `<div class="tiny muted">base ${fmtMoney(r.valor)} + ${fmtMoney(recCorrecao(r))} de correção</div>` : ''}</div></div><div><div class="k">Em aberto</div><div class="v">${fmtMoney(rest)}</div></div>${atual > rest + 0.01 ? `<div class="full"><div class="k">Com multa e juros (${fmtNum(db.config.multaPct, 1)}% + ${fmtNum(db.config.jurosMesPct, 2)}% a.m.)</div><div class="v" style="color:var(--danger)">${fmtMoney(atual)}</div></div>` : ''}</div>
     <div class="frow"><div class="fg"><label>Valor recebido (R$) *</label><input type="number" id="pgValor" step="0.01" value="${Math.round(rest * 100) / 100}"></div><div class="fg"><label>Data do pagamento *</label><input type="date" id="pgData" value="${todayStr()}"></div></div>
     <div class="frow"><div class="fg"><label>Forma</label><select id="pgForma"><option>PIX</option><option>Boleto</option><option>Transferência</option><option>Dinheiro</option><option>Cartão</option><option>Cheque</option><option>Permuta</option></select></div><div class="fg"><label>&nbsp;</label>${atual > rest + 0.01 ? `<button class="btn btn-outline btn-sm" onclick="setVal('pgValor',${Math.round(atual * 100) / 100})">Usar valor c/ juros</button>` : ''}</div></div>
     <div class="fg"><label>Observação</label><input type="text" id="pgObs" value="${esc(r.obsPagamento || '')}"></div>`;
@@ -59,7 +59,10 @@ function salvarPagamento(id, voltarVendaId) {
   if (!valor || !data) { toast('⚠️', 'Informe valor e data', '', true); return; }
   const novoPago = num(r.valorPago) + valor;
   // se pagou a mais (juros/multa), registra o valor efetivamente recebido e considera quitada
-  const upd = Object.assign({}, r, { valorPago: novoPago, valor: novoPago > num(r.valor) ? novoPago : r.valor, dataPagamento: data, forma: val('pgForma'), obsPagamento: val('pgObs') });
+  const devido = recValor(r);
+  const quitou = novoPago >= devido - 0.005;
+  const upd = Object.assign({}, r, { valorPago: novoPago, dataPagamento: data, forma: val('pgForma'), obsPagamento: val('pgObs'),
+    valorCorrigido: quitou ? Math.round(Math.max(devido, novoPago) * 100) / 100 : (r.valorCorrigido || null) });
   upsert('recebiveis', upd);
   atualizarStatusVenda(r.vendaId);
   const v = getVenda(r.vendaId);
@@ -80,7 +83,7 @@ function estornarPagamento(id, voltarVendaId) {
 function editarRecebivel(id, voltarVendaId) {
   const r = db.recebiveis.find(x => x.id === id); if (!r) return;
   const body = `<div class="fg"><label>Descrição</label><input type="text" id="erDesc" value="${esc(r.descricao)}"></div>
-    <div class="frow"><div class="fg"><label>Vencimento</label><input type="date" id="erVenc" value="${r.vencimento}"></div><div class="fg"><label>Valor (R$)</label><input type="number" id="erValor" step="0.01" value="${r.valor}"></div></div>
+    <div class="frow"><div class="fg"><label>Vencimento</label><input type="date" id="erVenc" value="${r.vencimento}"></div><div class="fg"><label>Valor base (R$)</label><input type="number" id="erValor" step="0.01" value="${r.valor}">${recCorrecao(r) > 0.005 ? `<div class="hint">Com a correção do contrato: ${fmtMoney(recValor(r))}</div>` : ''}</div></div>
     <div class="frow"><div class="fg"><label>Valor pago (R$)</label><input type="number" id="erPago" step="0.01" value="${r.valorPago || 0}"></div><div class="fg"><label>Data do pagamento</label><input type="date" id="erData" value="${r.dataPagamento || ''}"></div></div>`;
   openModal({ title: '✏️ Editar parcela', body, footer: `<button class="btn btn-outline-danger" onclick="excluirRecebivel('${r.id}','${voltarVendaId || ''}')">Excluir</button><button class="btn btn-secondary" onclick="${voltarVendaId ? `abrirVendaAdmin('${voltarVendaId}')` : 'closeModal()'}">Cancelar</button><button class="btn btn-primary" onclick="salvarRecebivel('${r.id}','${voltarVendaId || ''}')">Salvar</button>` });
 }
@@ -100,7 +103,7 @@ function excluirRecebivel(id, voltarVendaId) {
 }
 function exportarRecebiveisCSV() {
   const lot = curLot(); const rows = [['Cliente', 'Lote', 'Parcela', 'Vencimento', 'Valor', 'Pago', 'Data pagamento', 'Forma', 'Status']];
-  recebiveisDo(lot.id).sort((a, b) => a.vencimento.localeCompare(b.vencimento)).forEach(r => { const v = getVenda(r.vendaId); const l = v && getLote(v.loteId); rows.push([v ? v.cliente.nome : '', l ? loteShort(l) : '', r.descricao, fmtDate(r.vencimento), fmtNum(r.valor), fmtNum(r.valorPago), r.dataPagamento ? fmtDate(r.dataPagamento) : '', r.forma || '', statusLabel(recStatus(r))]); });
+  recebiveisDo(lot.id).sort((a, b) => a.vencimento.localeCompare(b.vencimento)).forEach(r => { const v = getVenda(r.vendaId); const l = v && getLote(v.loteId); rows.push([v ? v.cliente.nome : '', l ? loteShort(l) : '', r.descricao, fmtDate(r.vencimento), fmtNum(recValor(r)), fmtNum(r.valorPago), r.dataPagamento ? fmtDate(r.dataPagamento) : '', r.forma || '', statusLabel(recStatus(r))]); });
   download(`recebiveis-${todayStr()}.csv`, toCSV(rows), 'text/csv');
 }
 
@@ -124,7 +127,7 @@ function imprimirExtrato(vendaId) {
     <tr><th>Corretor</th><td>${esc(v.corretor.nome)}</td><th>Emitido em</th><td>${fmtDate(todayStr())}</td></tr></table>
     <h2>Parcelas</h2>
     <table><thead><tr><th>Parcela</th><th>Vencimento</th><th class="num">Valor</th><th class="num">Pago</th><th>Data pgto</th><th>Forma</th><th>Situação</th></tr></thead>
-    <tbody>${recs.map(x => `<tr><td>${esc(x.descricao)}</td><td>${fmtDate(x.vencimento)}</td><td class="num">${fmtMoney(x.valor)}</td><td class="num">${x.valorPago ? fmtMoney(x.valorPago) : ''}</td><td>${x.dataPagamento ? fmtDate(x.dataPagamento) : ''}</td><td>${esc(x.forma || '')}</td><td>${statusLabel(recStatus(x))}</td></tr>`).join('')}</tbody>
+    <tbody>${recs.map(x => `<tr><td>${esc(x.descricao)}</td><td>${fmtDate(x.vencimento)}</td><td class="num">${fmtMoney(recValor(x))}</td><td class="num">${x.valorPago ? fmtMoney(x.valorPago) : ''}</td><td>${x.dataPagamento ? fmtDate(x.dataPagamento) : ''}</td><td>${esc(x.forma || '')}</td><td>${statusLabel(recStatus(x))}</td></tr>`).join('')}</tbody>
     <tfoot><tr><th colspan="2">Total</th><th class="num">${fmtMoney(r.total)}</th><th class="num">${fmtMoney(r.pago)}</th><th colspan="3"></th></tr></tfoot></table>
     ${v.obs ? `<p style="margin-top:10px"><b>Observações:</b> ${esc(v.obs)}</p>` : ''}`;
   window.print();
@@ -247,7 +250,7 @@ function drawFluxoChart(cv, recs, custos) {
   if (!cv) return; const { ctx, w, h } = setupCanvas(cv);
   const months = []; const now = new Date();
   for (let i = -1; i < 11; i++) { const d = new Date(now.getFullYear(), now.getMonth() + i, 1); months.push(d.getFullYear() + '-' + pad2(d.getMonth() + 1)); }
-  const rIn = months.map(m => recs.filter(r => monthKey(r.vencimento) === m).reduce((s, r) => s + num(r.valor), 0));
+  const rIn = months.map(m => recs.filter(r => monthKey(r.vencimento) === m).reduce((s, r) => s + recValor(r), 0));
   const cOut = months.map(m => custos.filter(c => monthKey(c.vencimento || c.dataCompetencia) === m).reduce((s, c) => s + num(c.valor), 0));
   const max = Math.max(...rIn, ...cOut, 1);
   const padL = 8, padB = 22, padT = 14; const cw = w - padL * 2, ch = h - padB - padT; const gw = cw / months.length; const bw = gw * 0.34;

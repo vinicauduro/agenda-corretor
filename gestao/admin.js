@@ -564,9 +564,10 @@ function abrirVendaAdmin(id) {
       <div><div class="k">Entrada</div><div class="v">${fmtMoney(x.entrada)}</div></div><div><div class="k">Parcelas</div><div class="v">${x.nParcelas}× ${fmtMoney(x.valorParcela)}${x.baloes && x.baloes.length ? ` + ${x.baloes.length} reforço(s)` : ''}</div></div>
       ${x.obs ? `<div class="full"><div class="k">Observações</div><div class="v">${esc(x.obs)}</div></div>` : ''}
     </div>
+    ${correcaoResumoVenda(x)}
     <h3 class="small" style="margin:8px 0 6px;font-weight:800">📆 Parcelas</h3>
     <div class="table-wrap"><table class="tbl"><thead><tr><th>Parcela</th><th>Venc.</th><th class="num">Valor</th><th class="num">Pago</th><th>Status</th><th></th></tr></thead>
-    <tbody>${recs.map(rc => { const st = recStatus(rc); return `<tr><td>${esc(rc.descricao)}</td><td>${fmtDate(rc.vencimento)}</td><td class="num">${fmtMoney(rc.valor)}</td><td class="num">${rc.valorPago ? fmtMoney(rc.valorPago) + (rc.dataPagamento ? `<br><span class="tiny muted">${fmtDate(rc.dataPagamento)}</span>` : '') : '—'}</td><td><span class="badge ${st}">${statusLabel(st)}</span>${st === 'atrasado' ? `<br><span class="tiny" style="color:var(--danger)">atual. ${fmtMoney(recAtualizado(rc))}</span>` : ''}</td><td>${x.status !== 'distrato' ? (st === 'pago' ? `<button class="btn-icon" title="Estornar" onclick="estornarPagamento('${rc.id}','${x.id}')">↩</button>` : `<button class="btn-icon ok" title="Registrar pagamento" onclick="abrirPagamento('${rc.id}','${x.id}')">💵</button>`) : ''} <button class="btn-icon" title="Editar parcela" onclick="editarRecebivel('${rc.id}','${x.id}')">✏️</button></td></tr>`; }).join('')}</tbody>
+    <tbody>${recs.map(rc => { const st = recStatus(rc); return `<tr><td>${esc(rc.descricao)}</td><td>${fmtDate(rc.vencimento)}</td><td class="num">${fmtMoney(recValor(rc))}${recCorrecao(rc) > 0.005 ? `<br><span class="tiny muted">base ${fmtMoney(rc.valor)}</span>` : ''}</td><td class="num">${rc.valorPago ? fmtMoney(rc.valorPago) + (rc.dataPagamento ? `<br><span class="tiny muted">${fmtDate(rc.dataPagamento)}</span>` : '') : '—'}</td><td><span class="badge ${st}">${statusLabel(st)}</span>${st === 'atrasado' ? `<br><span class="tiny" style="color:var(--danger)">atual. ${fmtMoney(recAtualizado(rc))}</span>` : ''}</td><td>${x.status !== 'distrato' ? (st === 'pago' ? `<button class="btn-icon" title="Estornar" onclick="estornarPagamento('${rc.id}','${x.id}')">↩</button>` : `<button class="btn-icon ok" title="Registrar pagamento" onclick="abrirPagamento('${rc.id}','${x.id}')">💵</button>`) : ''} <button class="btn-icon" title="Editar parcela" onclick="editarRecebivel('${rc.id}','${x.id}')">✏️</button></td></tr>`; }).join('')}</tbody>
     <tfoot><tr><td colspan="2">Total</td><td class="num">${fmtMoney(r.total)}</td><td class="num">${fmtMoney(r.pago)}</td><td colspan="2"></td></tr></tfoot></table></div>`;
   let footer = `<button class="btn btn-secondary" onclick="abrirVendaForm('${x.id}')">✏️ Editar</button><button class="btn btn-outline" onclick="imprimirExtrato('${x.id}')">🖨️ Extrato</button><button class="btn btn-outline" onclick="gerarContratoVenda('${x.id}')">📄 Contrato</button>`;
   if (c.telefone) footer += `<a class="btn btn-wa" target="_blank" href="${waLink(c.telefone, extratoTexto(x))}">💬 Enviar resumo</a>`;
@@ -607,6 +608,7 @@ function abrirVendaForm(id, loteId, reservaId) {
       <div class="frow"><div class="fg"><label>Entrada (R$)</label><input type="number" id="vfEntrada" step="0.01" value="${entrada}" oninput="vfCalc()"></div><div class="fg"><label>Data da entrada</label><input type="date" id="vfDataEntrada" value="${x ? x.dataEntrada || x.dataVenda : hoje}"></div></div>
       <div class="frow3"><div class="fg"><label>Nº parcelas</label><input type="number" id="vfN" min="0" value="${n}" oninput="vfCalc()"></div><div class="fg"><label>Juros (% a.m.)</label><input type="number" id="vfJuros" step="0.01" value="${x ? (x.jurosMes || 0) : (cond.jurosMes || 0)}" oninput="vfCalc()"></div><div class="fg"><label>1º vencimento</label><input type="date" id="vfPrimeiro" value="${x ? x.primeiroVencimento : addMonths(hoje, 1)}"></div></div>
       <div class="fg"><label>Valor da parcela (R$) <span class="tiny muted">— calculado; pode ajustar</span></label><input type="number" id="vfParcela" step="0.01" value="${x ? x.valorParcela : ''}" oninput="vfManual=true;vfCalc()"></div>
+      ${indiceSelectHtml(x ? x.indiceId : '', x ? x.indiceBase : '', x ? x.dataVenda : hoje)}
       <div class="fg"><label>Reforços / balões (opcional)</label><div id="vfBaloes"></div><button class="btn btn-secondary btn-sm" onclick="addBalao()">＋ Adicionar reforço</button></div>
       <div class="sim-result" id="vfResumo"></div>
       ${temPagos ? '<p class="tiny muted mt">⚠️ Esta venda já tem pagamentos registrados: as parcelas <b>não serão regeradas</b> ao salvar. Edite parcelas individualmente na tela da venda.</p>' : ''}
@@ -652,7 +654,8 @@ function salvarVenda(id, reservaId) {
     corretor: { nome: val('vkNome') || 'Venda direta', creci: val('vkCreci'), telefone: val('vkTel'), imobiliaria: val('vkImob'), email: (x && x.corretor.email) || '', userId: (x && x.corretor.userId) || (res && res.corretor && res.corretor.userId) || (corretorSelecionado('vkSel') || {}).userId || null },
     corretorUserId: (x && x.corretorUserId) || (res && res.corretorUserId) || (corretorSelecionado('vkSel') || {}).userId || null,
     dataVenda: val('vfData'), valorTotal: total, entrada: num(val('vfEntrada')), dataEntrada: val('vfDataEntrada') || val('vfData'), nParcelas: n, jurosMes: num(val('vfJuros')),
-    valorParcela: num(val('vfParcela')), primeiroVencimento: val('vfPrimeiro') || val('vfData'), baloes, comissaoPct: num(val('vkPct')), comissaoValor: num(val('vkVal')), obs: val('vfObs')
+    valorParcela: num(val('vfParcela')), primeiroVencimento: val('vfPrimeiro') || val('vfData'), baloes, comissaoPct: num(val('vkPct')), comissaoValor: num(val('vkVal')), obs: val('vfObs'),
+    indiceId: val('vfIndice') || null, indiceBase: val('vfIndiceBase') || monthKey(val('vfData'))
   });
   upsert('vendas', venda);
   const temPagos = x && recebiveisDe(x.id).some(r => num(r.valorPago) > 0);
@@ -683,13 +686,14 @@ function distratoVenda(id) {
 function renderCadastros() {
   const v = $('#av-cadastros'); const sub = state.sub.cad || (curLot() ? 'loteamento' : 'loteamentos');
   state.sub.cad = sub;
-  const tabs = [['loteamento', '🏘️ Loteamento'], ['loteamentos', '📋 Todos'], ['corretores', Cloud.active ? '👥 Equipe' : '🧑‍💼 Corretores'], ['categorias', '🏷️ Categorias'], ['documentos', '📄 Documentos'], ['vitrine', '🌐 Vitrine'], ['config', '⚙️ Configurações'], ['nuvem', Cloud.active ? '☁️ Conta' : '☁️ Nuvem'], ['backup', '💾 Backup']];
+  const tabs = [['loteamento', '🏘️ Loteamento'], ['loteamentos', '📋 Todos'], ['corretores', Cloud.active ? '👥 Equipe' : '🧑‍💼 Corretores'], ['categorias', '🏷️ Categorias'], ['documentos', '📄 Documentos'], ['indices', '📈 Índices'], ['vitrine', '🌐 Vitrine'], ['config', '⚙️ Configurações'], ['nuvem', Cloud.active ? '☁️ Conta' : '☁️ Nuvem'], ['backup', '💾 Backup']];
   let html = `<div class="subtabs">${tabs.map(([k, l]) => `<div class="chip ${sub === k ? 'active' : ''}" onclick="state.sub.cad='${k}';renderCadastros()">${l}</div>`).join('')}</div>`;
   if (sub === 'loteamento') html += cadLoteamentoHtml();
   else if (sub === 'loteamentos') html += cadLoteamentosHtml();
   else if (sub === 'corretores') html += Cloud.active ? cadEquipeHtml() : cadCorretoresHtml();
   else if (sub === 'categorias') html += cadCategoriasHtml();
   else if (sub === 'documentos') html += cadDocumentosHtml();
+  else if (sub === 'indices') html += cadIndicesHtml();
   else if (sub === 'vitrine') html += cadVitrineHtml();
   else if (sub === 'config') html += cadConfigHtml();
   else if (sub === 'nuvem') html += Cloud.active ? cadContaHtml() : cadNuvemHtml();
