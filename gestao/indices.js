@@ -19,17 +19,24 @@ function mesSeguinte(m) { const [y, mm] = m.split('-').map(Number); const d = ne
 
 /* Fator de correção entre o mês base (exclusive) e o mês alvo (inclusive).
    percentual: multiplica (1 + variação do mês) mês a mês.
-   pontos (CUB): razão entre o valor do mês alvo e o do mês base. */
+   pontos (CUB): variação mês a mês do valor publicado.
+   Deflação não corrige para baixo: mês negativo entra como 0%. */
 function fatorIndice(indiceId, mesBase, mesAlvo) {
   const ind = getIndice(indiceId);
   if (!ind || !mesBase || !mesAlvo || mesAlvo <= mesBase) return 1;
   const vals = indiceValores(ind);
-  if (ind.tipo === 'pontos') {
-    const base = valorPontoAte(vals, mesBase), alvo = valorPontoAte(vals, mesAlvo);
-    return (base > 0 && alvo > 0) ? alvo / base : 1;
-  }
   let f = 1, m = mesSeguinte(mesBase), guard = 0;
-  while (m <= mesAlvo && guard++ < 600) { const p = Number(vals[m]); if (isFinite(p)) f *= 1 + p / 100; m = mesSeguinte(m); }
+  if (ind.tipo === 'pontos') {
+    let ant = valorPontoAte(vals, mesBase);
+    if (!(ant > 0)) return 1;
+    while (m <= mesAlvo && guard++ < 600) {
+      const v = valorPontoAte(vals, m);
+      if (v > 0) { f *= Math.max(1, v / ant); ant = v; }
+      m = mesSeguinte(m);
+    }
+    return f;
+  }
+  while (m <= mesAlvo && guard++ < 600) { const p = Number(vals[m]); if (isFinite(p)) f *= 1 + Math.max(0, p) / 100; m = mesSeguinte(m); }
   return f;
 }
 function valorPontoAte(vals, mes) { // último ponto conhecido até o mês
@@ -44,13 +51,21 @@ function mesesFaltando(indiceId, mesBase, mesAlvo) {
   while (m <= mesAlvo && guard++ < 600) { if (!isFinite(Number(vals[m]))) out.push(m); m = mesSeguinte(m); }
   return out;
 }
-function acumuladoIndice(ind, nMeses) {
+function acumuladoIndice(ind, nMeses, aplicado) { // aplicado = como entra nos contratos (sem deflação)
   const ms = mesesDoIndice(ind).slice(-nMeses); if (!ms.length) return null;
-  if (ind.tipo === 'pontos') { const v = indiceValores(ind); const a = Number(v[ms[0]]), b = Number(v[ms[ms.length - 1]]); return a > 0 ? (b / a - 1) * 100 : null; }
-  return (ms.reduce((f, m) => f * (1 + Number(indiceValores(ind)[m]) / 100), 1) - 1) * 100;
+  const v = indiceValores(ind);
+  if (ind.tipo === 'pontos') {
+    let f = 1, ant = Number(v[ms[0]]);
+    if (!(ant > 0)) return null;
+    ms.slice(1).forEach(m => { const x = Number(v[m]); if (x > 0) { const p = x / ant; f *= aplicado ? Math.max(1, p) : p; ant = x; } });
+    return (f - 1) * 100;
+  }
+  return (ms.reduce((f, m) => { const p = Number(v[m]) || 0; return f * (1 + (aplicado ? Math.max(0, p) : p) / 100); }, 1) - 1) * 100;
 }
 
-/* Valor devido de uma parcela, já corrigido. Congela quando a parcela é quitada. */
+/* Valor devido de uma parcela, já corrigido.
+   A correção vai só até o mês do vencimento: depois de vencida a parcela não recebe mais
+   índice, apenas multa e juros de mora. Quitada, o valor fica congelado. */
 function recValor(r) {
   if (r.valorCorrigido != null && num(r.valorCorrigido) > 0) return num(r.valorCorrigido);
   const base = num(r.valor);
@@ -78,15 +93,17 @@ function indiceCardHtml(ind, nContratos) {
   const ms = mesesDoIndice(ind);
   const ultimos = ms.slice(-6).reverse();
   const vals = indiceValores(ind);
-  const ac12 = acumuladoIndice(ind, 12);
+  const ac12 = acumuladoIndice(ind, 12), ac12ap = acumuladoIndice(ind, 12, true);
+  const temNegativo = ind.tipo === 'percentual' ? ms.some(m => Number(vals[m]) < 0) : false;
   const faltaMes = ind.tipo === 'percentual' && ms.length > 0 && !vals[mesAtual()];
   const unidade = ind.tipo === 'pontos' ? '' : '%';
   return `<div class="card"><div class="row-between">
       <div><b>${esc(ind.nome)}</b> <span class="badge neutral">${esc(ind.codigo)}</span> <span class="tiny muted">${ind.tipo === 'pontos' ? 'valor em pontos (R$/m²)' : 'variação % ao mês'}</span></div>
       <div class="btn-row" style="margin:0"><button class="btn btn-primary btn-sm" onclick="abrirLancarIndice('${ind.id}')">＋ Lançar mês</button><button class="btn btn-secondary btn-sm" onclick="abrirIndiceValores('${ind.id}')">📋 Todos os meses</button><button class="btn btn-secondary btn-sm" onclick="abrirIndiceForm('${ind.id}')">✏️</button>${nContratos ? '' : `<button class="btn btn-outline-danger btn-sm" onclick="excluirIndice('${ind.id}')">🗑️</button>`}</div></div>
-    <div class="small mt">${ms.length} mês(es) lançado(s)${ac12 != null ? ` · acumulado dos últimos 12: <b>${fmtNum(ac12, 2)}%</b>` : ''}${nContratos ? ` · usado em ${nContratos} contrato(s)` : ''}</div>
+    <div class="small mt">${ms.length} mês(es) lançado(s)${ac12 != null ? ` · acumulado dos últimos 12: <b>${fmtNum(ac12, 2)}%</b>${ac12ap != null && Math.abs(ac12ap - ac12) > 0.005 ? ` · aplicado nos contratos: <b>${fmtNum(ac12ap, 2)}%</b>` : ''}` : ''}${nContratos ? ` · usado em ${nContratos} contrato(s)` : ''}</div>
+    ${temNegativo ? '<p class="help mt">Meses negativos ficam registrados, mas entram como 0% nos contratos: a correção não reduz o valor das parcelas.</p>' : ''}
     ${faltaMes ? `<div class="alert warn" style="cursor:default;margin-top:8px"><span>Falta lançar ${monthLabel(mesAtual())}. Sem o lançamento, as parcelas deste mês ficam sem correção.</span></div>` : ''}
-    ${ultimos.length ? `<div class="chips mt">${ultimos.map(m => `<div class="chip" onclick="abrirLancarIndice('${ind.id}','${m}')">${monthLabel(m)}<span class="n">${fmtNum(vals[m], ind.tipo === 'pontos' ? 2 : 2)}${unidade}</span></div>`).join('')}</div>` : '<p class="help mt">Nenhum valor lançado ainda.</p>'}</div>`;
+    ${ultimos.length ? `<div class="chips mt">${ultimos.map(m => `<div class="chip" onclick="abrirLancarIndice('${ind.id}','${m}')" ${Number(vals[m]) < 0 ? 'title="Deflação: entra como 0% nos contratos"' : ''}>${monthLabel(m)}<span class="n">${fmtNum(vals[m], 2)}${unidade}</span>${Number(vals[m]) < 0 ? ' ⤵' : ''}</div>`).join('')}</div>` : '<p class="help mt">Nenhum valor lançado ainda.</p>'}</div>`;
 }
 
 function criarIndicesPadrao() {
@@ -130,7 +147,7 @@ function abrirLancarIndice(id, mes) {
     title: `＋ ${esc(ind.codigo)} · lançar mês`,
     body: `<div class="frow"><div class="fg"><label>Mês de referência *</label><input type="month" id="lxMes" value="${m}"></div>
       <div class="fg"><label>${ind.tipo === 'pontos' ? 'Valor do índice *' : 'Variação no mês (%) *'}</label><input type="number" id="lxValor" step="0.0001" value="${atual != null ? atual : ''}" placeholder="${ind.tipo === 'pontos' ? '2.350,00' : '0,55'}"></div></div>
-      <p class="help">${ind.tipo === 'pontos' ? 'Lance o valor publicado do índice no mês.' : 'Pode ser negativo em caso de deflação, por exemplo -0,15. Vale para todas as parcelas que vencem neste mês.'}</p>
+      <p class="help">${ind.tipo === 'pontos' ? 'Lance o valor publicado do índice no mês.' : 'Pode ser negativo em caso de deflação, por exemplo -0,15: o valor fica registrado, mas entra como 0% nos contratos, porque a correção não reduz as parcelas. Vale para todas as parcelas que vencem neste mês.'}</p>
       ${atual != null ? `<button class="btn btn-outline-danger btn-sm mt" onclick="apagarValorIndice('${id}','${m}')">Apagar o lançamento deste mês</button>` : ''}`,
     footer: `<button class="btn btn-secondary" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" onclick="salvarValorIndice('${id}')">Salvar</button>`
   });
@@ -183,7 +200,7 @@ function indiceSelectHtml(selId, selBase, dataVenda) {
   const base = selBase || monthKey(dataVenda || todayStr());
   return `<div class="frow"><div class="fg"><label>Índice de correção</label>
       <select id="vfIndice"><option value="">— sem correção —</option>${db.indices.slice().sort((a, b) => a.nome.localeCompare(b.nome)).map(i => `<option value="${i.id}" ${selId === i.id ? 'selected' : ''}>${esc(i.nome)}</option>`).join('')}</select>
-      <div class="hint">Corrige as parcelas mês a mês. Os juros do parcelamento são à parte.</div></div>
+      <div class="hint">Corrige mês a mês até o vencimento de cada parcela. Depois de vencida, só multa e juros. Deflação entra como 0%.</div></div>
     <div class="fg"><label>Mês base da correção</label><input type="month" id="vfIndiceBase" value="${base}"><div class="hint">A correção começa no mês seguinte a este.</div></div></div>`;
 }
 
@@ -195,5 +212,6 @@ function correcaoResumoVenda(v) {
   const falta = mesesFaltando(v.indiceId, base, mesAtual());
   const abertas = recebiveisDe(v.id).filter(r => recStatus(r) !== 'pago');
   const correcao = abertas.reduce((s, r) => s + recCorrecao(r), 0);
-  return `<div class="alert info" style="cursor:default"><span>📈 <b>${esc(ind.codigo)}</b> desde ${monthLabel(base)} · acumulado ${fmtNum((f - 1) * 100, 2)}%${correcao ? ` · ${fmtMoney(correcao)} de correção nas parcelas em aberto` : ''}${falta.length ? ` · <b>faltam lançar ${falta.length} mês(es)</b>` : ''}</span></div>`;
+  const vencidas = abertas.filter(r => r.vencimento < todayStr()).length;
+  return `<div class="alert info" style="cursor:default"><span>📈 <b>${esc(ind.codigo)}</b> desde ${monthLabel(base)} · acumulado ${fmtNum((f - 1) * 100, 2)}%${correcao ? ` · ${fmtMoney(correcao)} de correção nas parcelas em aberto` : ''}${falta.length ? ` · <b>faltam lançar ${falta.length} mês(es)</b>` : ''}${vencidas ? ` · ${vencidas} parcela(s) vencida(s) com valor congelado, só multa e juros` : ''}</span></div>`;
 }
