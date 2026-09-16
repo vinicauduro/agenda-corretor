@@ -47,6 +47,25 @@ com PIN do administrador e dados só no navegador.
 4. Em **Cadastros › Equipe › ＋ Convite** gere um link e envie aos corretores. Quem abrir o
    link cria a conta (ou entra) e já fica vinculado à sua empresa como corretor.
 
+## Relatórios
+
+A aba **📊 Relatórios** reúne sete relatórios, todos com filtro de período, atalhos de mês e
+ano, impressão em PDF e exportação em CSV:
+
+- **Resumo gerencial** — lotes, VGV, vendas, recebimentos, custos e caixa do período.
+- **Espelho de vendas** — situação atual de cada lote, agrupado por quadra, com cliente e
+  corretor de quem já comprou.
+- **Vendas** — contratos do período, com filtro por corretor, ticket médio e saldo a receber.
+- **Contas a receber** — parcelas por vencimento, agrupadas por mês, já com o valor corrigido.
+- **Inadimplência** — contratos em atraso por faixa de dias, com valor atualizado e a última
+  cobrança registrada.
+- **Comissões** — agrupadas por corretor, separando pagas e a pagar.
+- **Despesas** — filtro por categoria, fornecedor, situação e data considerada (competência,
+  vencimento ou pagamento), agrupamento por categoria, fornecedor, mês ou lote, e o
+  comparativo de orçado contra realizado por categoria.
+
+O acesso é controlado pela permissão "Ver os relatórios".
+
 ## Inadimplência e régua de cobrança
 
 Na aba **Recebíveis**, o chip **🔔 Cobrança** abre o painel de inadimplência. Ele agrupa o

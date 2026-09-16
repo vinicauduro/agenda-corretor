@@ -124,13 +124,23 @@ antecipação ou limitar o desconto, é só dizer.
 
 ---
 
+## 7c. Relatórios
+
+- [ ] Abrir a aba **📊 Relatórios** e passar pelos sete: resumo gerencial, espelho de vendas,
+      vendas, contas a receber, inadimplência, comissões e despesas.
+- [ ] No de despesas, testar os filtros de categoria, fornecedor, situação e data considerada,
+      além dos agrupamentos por categoria, fornecedor, mês e lote.
+- [ ] Conferir o comparativo de orçado contra realizado.
+- [ ] Imprimir um relatório em PDF e conferir se está apresentável.
+- [ ] Exportar um CSV e abrir na planilha.
+
+---
+
 ## 8. O que ainda não foi construído
 
 Em ordem de prioridade acordada:
 
-1. **Relatórios** — espelho de vendas, contas a receber, inadimplência, comissões, em formato
-   para imprimir e exportar.
-2. **Cobrança bancária** — remessa e retorno em CNAB, com baixa automática. Precisa saber com
+1. **Cobrança bancária** — remessa e retorno em CNAB, com baixa automática. Precisa saber com
    qual banco você trabalha e pegar o manual de layout dele.
 3. **Portal do comprador** — segunda via e extrato para o cliente final.
 4. **Distrato e transferência de lote.**

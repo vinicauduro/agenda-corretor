@@ -24,6 +24,7 @@ function renderAdminTab() {
   else if (tab === 'vendas') { if (!bloqueia('vendas.criar', 'vendas')) { renderAVendas(); if (pode('vendas.criar')) fabShow('abrirVendaForm()'); } }
   else if (tab === 'recebiveis') { if (!bloqueia('financeiro.ver', 'recebíveis')) { if (state.sub.rec === 'cobranca') renderCobranca(); else renderRecebiveis(); } }
   else if (tab === 'custos') { if (!bloqueia('custos.ver', 'custos')) { renderCustos(); if (pode('custos.editar')) fabShow('abrirCustoForm()'); } }
+  else if (tab === 'relatorios') renderRelatorios();
   else if (tab === 'cadastros') renderCadastros();
 }
 function fabShow(action) { const f = $('#fab'); f.classList.add('show'); f.setAttribute('onclick', action); }
