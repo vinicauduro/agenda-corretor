@@ -161,6 +161,7 @@ function abrirLancarIndice(id, mes) {
   setTimeout(() => { const el = $('#lxValor'); if (el) el.focus(); }, 60);
 }
 function salvarValorIndice(id) {
+  if (!pode('indices.editar')) { toast('🔒', 'Sem permissão', 'Seu perfil não lança índices.', true); return; }
   const ind = getIndice(id); if (!ind) return;
   const mes = val('lxMes'), v = val('lxValor');
   if (!mes || v === '') { toast('⚠️', 'Informe mês e valor', '', true); return; }

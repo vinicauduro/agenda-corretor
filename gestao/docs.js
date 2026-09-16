@@ -463,6 +463,7 @@ function modTestar() {
   openModal({ title: '👁️ Exemplo preenchido', wide: true, body: `<p class="help mb">Dados fictícios só para conferir o texto. Os espaços em branco são campos sem valor no cadastro.</p><div class="doc-folha">${html}</div>`, footer: `<button class="btn btn-primary" onclick="abrirModeloForm('${esc(window.__modEditId || '')}')">Voltar ao editor</button>` });
 }
 function salvarModelo(id) {
+  if (!pode('documentos.editar')) { toast('🔒', 'Sem permissão', 'Seu perfil não edita modelos.', true); return; }
   const nome = val('mdNome'); if (!nome) { toast('⚠️', 'Dê um nome ao modelo', '', true); return; }
   const corpo = val('mdCorpo'); if (corpo.length < 20) { toast('⚠️', 'O texto está muito curto', '', true); return; }
   const prev = id ? db.modelos.find(x => x.id === id) : null;

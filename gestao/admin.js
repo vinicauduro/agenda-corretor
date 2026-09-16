@@ -14,14 +14,16 @@ function renderAdminTab() {
     $('#av-' + tab).innerHTML = `<div class="card"><div class="empty"><div class="ic">🏘️</div><p><b>Bem-vindo!</b> Cadastre o seu primeiro loteamento para começar.</p><div class="btn-row" style="justify-content:center"><button class="btn btn-primary" style="flex:none" onclick="abrirLoteamentoForm()">＋ Cadastrar loteamento</button><button class="btn btn-secondary" style="flex:none" onclick="carregarDemo()">✨ Ver com dados de exemplo</button></div></div></div>`;
     return;
   }
+  aplicarPermissoesNasAbas();
+  const bloqueia = (chave, oQue) => { if (pode(chave)) return false; $('#av-' + state.tab).innerHTML = semPermissaoHtml(oQue); return true; };
   if (tab === 'painel') renderPainel();
-  else if (tab === 'planta') renderPlantaEditor();
-  else if (tab === 'lotes') { renderALotes(); fabShow('abrirLoteForm()'); }
-  else if (tab === 'reservas') { renderAReservas(); fabShow('abrirReservaAdminForm()'); }
-  else if (tab === 'leads') renderLeads();
-  else if (tab === 'vendas') { renderAVendas(); fabShow('abrirVendaForm()'); }
-  else if (tab === 'recebiveis') { if (state.sub.rec === 'cobranca') renderCobranca(); else renderRecebiveis(); }
-  else if (tab === 'custos') { renderCustos(); fabShow('abrirCustoForm()'); }
+  else if (tab === 'planta') { if (!bloqueia('planta.editar', 'edição da planta')) renderPlantaEditor(); }
+  else if (tab === 'lotes') { if (!bloqueia('lotes.editar', 'cadastro de lotes')) { renderALotes(); fabShow('abrirLoteForm()'); } }
+  else if (tab === 'reservas') { if (!bloqueia('reservas.aprovar', 'gestão de reservas')) { renderAReservas(); fabShow('abrirReservaAdminForm()'); } }
+  else if (tab === 'leads') { if (!bloqueia('leads.ver', 'lista de leads')) renderLeads(); }
+  else if (tab === 'vendas') { if (!bloqueia('vendas.criar', 'vendas')) { renderAVendas(); if (pode('vendas.criar')) fabShow('abrirVendaForm()'); } }
+  else if (tab === 'recebiveis') { if (!bloqueia('financeiro.ver', 'recebíveis')) { if (state.sub.rec === 'cobranca') renderCobranca(); else renderRecebiveis(); } }
+  else if (tab === 'custos') { if (!bloqueia('custos.ver', 'custos')) { renderCustos(); if (pode('custos.editar')) fabShow('abrirCustoForm()'); } }
   else if (tab === 'cadastros') renderCadastros();
 }
 function fabShow(action) { const f = $('#fab'); f.classList.add('show'); f.setAttribute('onclick', action); }
@@ -429,7 +431,7 @@ function abrirReservaAdmin(id) {
   const r = getReserva(id); if (!r) return; const l = getLote(r.loteId); const st = reservaStatus(r);
   const body = reservaDetalheHtml(r);
   let footer = '';
-  if (r.status === 'pendente') footer += `<button class="btn btn-success" onclick="aprovarReserva('${r.id}')">✔ Aprovar</button><button class="btn btn-outline-danger" onclick="encerrarReserva('${r.id}','recusada')">Recusar</button>`;
+  if (r.status === 'pendente' && pode('reservas.aprovar')) footer += `<button class="btn btn-success" onclick="aprovarReserva('${r.id}')">✔ Aprovar</button><button class="btn btn-outline-danger" onclick="encerrarReserva('${r.id}','recusada')">Recusar</button>`;
   if (['pendente', 'aprovada'].includes(r.status)) footer += `<button class="btn btn-primary" onclick="abrirVendaForm(null,'${r.loteId}','${r.id}')">💰 Converter em venda</button><button class="btn btn-secondary" onclick="renovarReserva('${r.id}')">🔁 Renovar prazo</button>${r.status === 'aprovada' ? `<button class="btn btn-outline-danger" onclick="encerrarReserva('${r.id}','cancelada')">Liberar lote</button>` : ''}`;
   footer += `<button class="btn btn-secondary" onclick="editarReservaAdmin('${r.id}')">✏️ Editar dados</button>`;
   if (r.corretor.telefone) footer += `<a class="btn btn-wa" target="_blank" href="${waLink(r.corretor.telefone, `Olá ${r.corretor.nome.split(' ')[0]}, sobre a reserva do ${l ? loteLabel(l) : 'lote'} para ${r.cliente.nome}: `)}">💬 Corretor</a>`;
@@ -567,11 +569,11 @@ function abrirVendaAdmin(id) {
     ${correcaoResumoVenda(x)}
     <h3 class="small" style="margin:8px 0 6px;font-weight:800">📆 Parcelas</h3>
     <div class="table-wrap"><table class="tbl"><thead><tr><th>Parcela</th><th>Venc.</th><th class="num">Valor</th><th class="num">Pago</th><th>Status</th><th></th></tr></thead>
-    <tbody>${recs.map(rc => { const st = recStatus(rc); return `<tr><td>${esc(rc.descricao)}</td><td>${fmtDate(rc.vencimento)}</td><td class="num">${fmtMoney(recValor(rc))}${recCorrecao(rc) > 0.005 ? `<br><span class="tiny muted">base ${fmtMoney(rc.valor)}</span>` : ''}</td><td class="num">${rc.valorPago ? fmtMoney(rc.valorPago) + (rc.dataPagamento ? `<br><span class="tiny muted">${fmtDate(rc.dataPagamento)}</span>` : '') : '—'}</td><td><span class="badge ${st}">${statusLabel(st)}</span>${st === 'atrasado' ? `<br><span class="tiny" style="color:var(--danger)">atual. ${fmtMoney(recAtualizado(rc))}</span>` : ''}</td><td>${x.status !== 'distrato' ? (st === 'pago' ? `<button class="btn-icon" title="Estornar" onclick="estornarPagamento('${rc.id}','${x.id}')">↩</button>` : `<button class="btn-icon ok" title="Registrar pagamento" onclick="abrirPagamento('${rc.id}','${x.id}')">💵</button>`) : ''} <button class="btn-icon" title="Editar parcela" onclick="editarRecebivel('${rc.id}','${x.id}')">✏️</button></td></tr>`; }).join('')}</tbody>
+    <tbody>${recs.map(rc => { const st = recStatus(rc); return `<tr><td>${esc(rc.descricao)}</td><td>${fmtDate(rc.vencimento)}</td><td class="num">${fmtMoney(recValor(rc))}${recCorrecao(rc) > 0.005 ? `<br><span class="tiny muted">base ${fmtMoney(rc.valor)}</span>` : ''}</td><td class="num">${rc.valorPago ? fmtMoney(rc.valorPago) + (rc.dataPagamento ? `<br><span class="tiny muted">${fmtDate(rc.dataPagamento)}</span>` : '') : '—'}</td><td><span class="badge ${st}">${statusLabel(st)}</span>${st === 'atrasado' ? `<br><span class="tiny" style="color:var(--danger)">atual. ${fmtMoney(recAtualizado(rc))}</span>` : ''}</td><td>${x.status !== 'distrato' ? (!pode('financeiro.baixar') ? '' : st === 'pago' ? `<button class="btn-icon" title="Estornar" onclick="estornarPagamento('${rc.id}','${x.id}')">↩</button>` : `<button class="btn-icon ok" title="Registrar pagamento" onclick="abrirPagamento('${rc.id}','${x.id}')">💵</button>`) : ''} <button class="btn-icon" title="Editar parcela" onclick="editarRecebivel('${rc.id}','${x.id}')">✏️</button></td></tr>`; }).join('')}</tbody>
     <tfoot><tr><td colspan="2">Total</td><td class="num">${fmtMoney(r.total)}</td><td class="num">${fmtMoney(r.pago)}</td><td colspan="2"></td></tr></tfoot></table></div>`;
-  let footer = `<button class="btn btn-secondary" onclick="abrirVendaForm('${x.id}')">✏️ Editar</button><button class="btn btn-outline" onclick="imprimirExtrato('${x.id}')">🖨️ Extrato</button><button class="btn btn-outline" onclick="gerarContratoVenda('${x.id}')">📄 Contrato</button>${x.status !== 'distrato' && vendaResumo(x).restante > 0.005 ? `<button class="btn btn-success" onclick="abrirAntecipacao('${x.id}')">💸 Antecipar / quitar</button>` : ''}`;
+  let footer = `${pode('vendas.editar') ? `<button class="btn btn-secondary" onclick="abrirVendaForm('${x.id}')">✏️ Editar</button>` : ''}<button class="btn btn-outline" onclick="imprimirExtrato('${x.id}')">🖨️ Extrato</button><button class="btn btn-outline" onclick="gerarContratoVenda('${x.id}')">📄 Contrato</button>${x.status !== 'distrato' && vendaResumo(x).restante > 0.005 && pode('financeiro.antecipar') ? `<button class="btn btn-success" onclick="abrirAntecipacao('${x.id}')">💸 Antecipar / quitar</button>` : ''}`;
   if (c.telefone) footer += `<a class="btn btn-wa" target="_blank" href="${waLink(c.telefone, extratoTexto(x))}">💬 Enviar resumo</a>`;
-  if (x.status !== 'distrato') footer += `<button class="btn btn-outline-danger" onclick="distratoVenda('${x.id}')">Distrato</button>`;
+  if (x.status !== 'distrato' && pode('vendas.distrato')) footer += `<button class="btn btn-outline-danger" onclick="distratoVenda('${x.id}')">Distrato</button>`;
   openModal({ title: `💰 Venda · ${l ? esc(loteShort(l)) : ''}`, body, footer, wide: true });
 }
 function abrirVendaForm(id, loteId, reservaId) {
@@ -684,9 +686,15 @@ function distratoVenda(id) {
 
 // ================================================================ CADASTROS
 function renderCadastros() {
-  const v = $('#av-cadastros'); const sub = state.sub.cad || (curLot() ? 'loteamento' : 'loteamentos');
-  state.sub.cad = sub;
-  const tabs = [['loteamento', '🏘️ Loteamento'], ['loteamentos', '📋 Todos'], ['corretores', Cloud.active ? '👥 Equipe' : '🧑‍💼 Corretores'], ['categorias', '🏷️ Categorias'], ['documentos', '📄 Documentos'], ['indices', '📈 Índices'], ['cobranca', '🔔 Cobrança'], ['vitrine', '🌐 Vitrine'], ['config', '⚙️ Configurações'], ['nuvem', Cloud.active ? '☁️ Conta' : '☁️ Nuvem'], ['backup', '💾 Backup']];
+  const v = $('#av-cadastros');
+  state.sub.cad = state.sub.cad || (curLot() ? 'loteamento' : 'loteamentos');
+  const todasTabs = [['loteamento', '🏘️ Loteamento', null], ['loteamentos', '📋 Todos', null], ['corretores', Cloud.active ? '👥 Equipe' : '🧑‍💼 Corretores', 'equipe.gerenciar'],
+    ['permissoes', '🔐 Permissões', 'equipe.gerenciar'], ['categorias', '🏷️ Categorias', 'custos.editar'], ['documentos', '📄 Documentos', 'documentos.editar'],
+    ['indices', '📈 Índices', 'indices.editar'], ['cobranca', '🔔 Cobrança', 'cobranca.registrar'], ['vitrine', '🌐 Vitrine', 'vitrine.gerenciar'],
+    ['config', '⚙️ Configurações', 'config.editar'], ['nuvem', Cloud.active ? '☁️ Conta' : '☁️ Nuvem', null], ['backup', '💾 Backup', 'backup.usar']];
+  const tabs = todasTabs.filter(t => !t[2] || pode(t[2])).map(t => [t[0], t[1]]);
+  if (!tabs.find(t => t[0] === state.sub.cad)) state.sub.cad = 'loteamento';
+  const sub = state.sub.cad;
   let html = `<div class="subtabs">${tabs.map(([k, l]) => `<div class="chip ${sub === k ? 'active' : ''}" onclick="state.sub.cad='${k}';renderCadastros()">${l}</div>`).join('')}</div>`;
   if (sub === 'loteamento') html += cadLoteamentoHtml();
   else if (sub === 'loteamentos') html += cadLoteamentosHtml();
@@ -695,6 +703,7 @@ function renderCadastros() {
   else if (sub === 'documentos') html += cadDocumentosHtml();
   else if (sub === 'indices') html += cadIndicesHtml();
   else if (sub === 'cobranca') html += cadCobrancaHtml();
+  else if (sub === 'permissoes') html += cadPermissoesHtml();
   else if (sub === 'vitrine') html += cadVitrineHtml();
   else if (sub === 'config') html += cadConfigHtml();
   else if (sub === 'nuvem') html += Cloud.active ? cadContaHtml() : cadNuvemHtml();

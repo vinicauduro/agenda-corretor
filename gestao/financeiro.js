@@ -43,7 +43,7 @@ function recRowHtml(r) {
     <div class="info"><div class="title">${v ? esc(v.cliente.nome) : '—'} <span class="tiny muted">· ${l ? esc(loteShort(l)) : ''}</span></div>
       <div class="meta"><span>${esc(r.descricao)}</span><span>· vence ${fmtDate(r.vencimento)}</span>${recCorrecao(r) > 0.005 && st !== 'pago' ? `<span title="Correção pelo índice do contrato">· base ${fmtMoney(r.valor)} + ${fmtMoney(recCorrecao(r))} de correção</span>` : ''}${st === 'atrasado' ? `<span style="color:var(--danger)">· ${daysBetween(r.vencimento, todayStr())} dias · atualizado ${fmtMoney(recAtualizado(r))}</span>` : ''}${st === 'pago' && r.dataPagamento ? `<span>· pago em ${fmtDate(r.dataPagamento)}${r.forma ? ' (' + esc(r.forma) + ')' : ''}</span>` : ''}${st === 'parcial' ? `<span>· pago ${fmtMoney(r.valorPago)}, resta ${fmtMoney(rest)}</span>` : ''}</div></div>
     <div class="side"><div class="value">${fmtMoney(st === 'pago' ? r.valorPago : rest)}</div><span class="badge ${st}">${statusLabel(st)}</span>
-      <div class="btns" onclick="event.stopPropagation()">${st !== 'pago' && v && v.status !== 'distrato' ? `<button class="btn-icon ok" title="Registrar pagamento" onclick="abrirPagamento('${r.id}')">💵</button>` : ''}<button class="btn-icon" title="Editar" onclick="editarRecebivel('${r.id}')">✏️</button></div></div></div>`;
+      <div class="btns" onclick="event.stopPropagation()">${st !== 'pago' && v && v.status !== 'distrato' && pode('financeiro.baixar') ? `<button class="btn-icon ok" title="Registrar pagamento" onclick="abrirPagamento('${r.id}')">💵</button>` : ''}${pode('financeiro.baixar') ? `<button class="btn-icon" title="Editar" onclick="editarRecebivel('${r.id}')">✏️</button>` : ''}</div></div></div>`;
 }
 function abrirPagamento(id, voltarVendaId) {
   const r = db.recebiveis.find(x => x.id === id); if (!r) return;
@@ -56,6 +56,7 @@ function abrirPagamento(id, voltarVendaId) {
   openModal({ title: '💵 Registrar pagamento', body, footer: `<button class="btn btn-secondary" onclick="${voltarVendaId ? `abrirVendaAdmin('${voltarVendaId}')` : 'closeModal()'}">Cancelar</button><button class="btn btn-success" onclick="salvarPagamento('${r.id}','${voltarVendaId || ''}')">Confirmar</button>` });
 }
 function salvarPagamento(id, voltarVendaId) {
+  if (!pode('financeiro.baixar')) { toast('🔒', 'Sem permissão', 'Seu perfil não registra pagamentos.', true); return; }
   const r = db.recebiveis.find(x => x.id === id); if (!r) return;
   const valor = num(val('pgValor')), data = val('pgData');
   if (!valor || !data) { toast('⚠️', 'Informe valor e data', '', true); return; }
