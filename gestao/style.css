@@ -349,6 +349,25 @@ canvas.chart { width: 100%; display: block; }
 .sim-box { background: #f8fafc; border: 1px solid var(--border); border-radius: 10px; padding: 12px; }
 
 /* ---------- print ---------- */
+
+/* ---------- documentos (proposta / contrato) ---------- */
+.doc-folha { background: white; border: 1px solid var(--border); border-radius: 8px; padding: 26px 30px; font-family: Georgia, 'Times New Roman', serif; font-size: 0.92rem; line-height: 1.6; color: #111; max-height: 58vh; overflow: auto; }
+.doc-folha:focus { outline: 2px solid var(--primary-light); }
+.doc-folha h2 { font-size: 1.05rem; text-align: center; margin: 0 0 14px; text-transform: uppercase; letter-spacing: 0.02em; }
+.doc-folha h3 { font-size: 0.95rem; margin: 16px 0 6px; }
+.doc-folha p { margin: 0 0 10px; text-align: justify; }
+.doc-folha hr { border: none; border-top: 1px solid #ddd; margin: 18px 0; }
+.doc-folha .doc-vazio { color: #b45309; }
+.doc-folha table.doc-tab { width: 100%; border-collapse: collapse; margin: 10px 0 14px; font-family: system-ui, sans-serif; font-size: 0.82rem; }
+.doc-folha table.doc-tab th, .doc-folha table.doc-tab td { border: 1px solid #ccc; padding: 5px 8px; text-align: left; }
+.doc-folha table.doc-tab th { background: #f1f5f9; }
+.doc-editor { width: 100%; min-height: 240px; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.82rem; line-height: 1.5; resize: vertical; }
+.doc-paleta { border: 1px solid var(--border); border-radius: 10px; padding: 10px; background: var(--bg); max-height: 190px; overflow: auto; }
+.doc-grupo { margin-bottom: 8px; font-size: 0.74rem; color: var(--muted); }
+.doc-grupo b { display: block; margin-bottom: 4px; color: var(--text); font-size: 0.76rem; }
+.doc-chip { border: 1px solid var(--border); background: white; color: var(--primary); border-radius: 999px; padding: 3px 9px; font-size: 0.72rem; font-weight: 600; cursor: pointer; margin: 0 4px 4px 0; font-family: inherit; }
+.doc-chip:hover { background: var(--primary-light); }
+
 #printArea { display: none; }
 @media print {
   body > *:not(#printArea) { display: none !important; }
@@ -358,6 +377,13 @@ canvas.chart { width: 100%; display: block; }
   #printArea table { width: 100%; border-collapse: collapse; }
   #printArea th, #printArea td { border: 1px solid #999; padding: 4px 6px; text-align: left; }
   #printArea .num { text-align: right; }
+  #printArea .doc-folha { border: none; padding: 0; font-family: Georgia, 'Times New Roman', serif; font-size: 11.5pt; line-height: 1.55; max-height: none; overflow: visible; }
+  #printArea .doc-folha h2 { text-align: center; font-size: 13pt; text-transform: uppercase; }
+  #printArea .doc-folha h3 { font-size: 11.5pt; margin: 12px 0 5px; }
+  #printArea .doc-folha p { text-align: justify; margin: 0 0 9px; }
+  #printArea .doc-folha .doc-vazio { color: #000; }
+  #printArea .doc-folha table.doc-tab th { background: #eee; }
+  @page { margin: 18mm 16mm; }
 }
 
 /* ---------- autenticação ---------- */
