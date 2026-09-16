@@ -47,6 +47,23 @@ com PIN do administrador e dados só no navegador.
 4. Em **Cadastros › Equipe › ＋ Convite** gere um link e envie aos corretores. Quem abrir o
    link cria a conta (ou entra) e já fica vinculado à sua empresa como corretor.
 
+## Inadimplência e régua de cobrança
+
+Na aba **Recebíveis**, o chip **🔔 Cobrança** abre o painel de inadimplência. Ele agrupa o
+atraso por contrato, não por parcela, e mostra quanto está em atraso, o percentual da carteira,
+o que foi recuperado no mês e quantos clientes ainda não foram cobrados. As faixas de 1-15,
+16-30, 31-60, 61-90 e mais de 90 dias filtram a lista.
+
+Cada contrato traz o valor já atualizado com multa e juros, a parcela mais antiga, a última
+cobrança feita e botões para cobrar, abrir o contrato ou propor um acordo pela tela de
+antecipação.
+
+A **régua** fica em **Cadastros › 🔔 Cobrança**: cada etapa tem os dias de atraso e o texto da
+mensagem, com campos como `{{primeiroNome}}`, `{{lote}}`, `{{valor}}`, `{{dias}}` e `{{pix}}`.
+Na hora de cobrar, o sistema escolhe a etapa pelos dias de atraso, monta a mensagem, abre o
+WhatsApp e registra o contato. Todo contato fica no histórico do contrato, com canal,
+observação e quem cobrou.
+
 ## Antecipação e quitação
 
 Na tela da venda, o botão **💸 Antecipar / quitar** calcula quanto o cliente paga para

@@ -2,7 +2,8 @@
 'use strict';
 
 // ================================================================ RECEBÍVEIS
-function aSetFiltroRec(st) { state.filters.rec = Object.assign(state.filters.rec || {}, { status: st, mes: 'all' }); switchTab('recebiveis'); }
+function aSetFiltroRec(st) { state.filters.rec = Object.assign(state.filters.rec || {}, { status: st, mes: 'all' }); state.sub.rec = 'lista'; switchTab('recebiveis'); }
+function abrirPainelCobranca() { state.sub.rec = 'cobranca'; switchTab('recebiveis'); }
 function renderRecebiveis() {
   const lot = curLot(); const v = $('#av-recebiveis');
   const f = state.filters.rec = state.filters.rec || { status: 'aberto', mes: 'all', busca: '' };
@@ -24,7 +25,8 @@ function renderRecebiveis() {
       <div class="kpi c-red"><div class="lbl">Em atraso</div><div class="val">${fmtMoneyShort(atr)}</div><div class="sub">${all.filter(r => recStatus(r) === 'atrasado').length} parcela(s)</div></div>
       <div class="kpi c-blue"><div class="lbl">Vence este mês</div><div class="val">${fmtMoneyShort(mes)}</div><div class="sub">${monthLabel(mesKey)}</div></div>
     </div>
-    <div class="chips">${[['aberto', 'Em aberto'], ['atrasado', 'Atrasados'], ['pago', 'Pagos'], ['all', 'Todos']].map(([k, l]) => `<div class="chip ${f.status === k ? 'active' : ''}" onclick="state.filters.rec.status='${k}';renderRecebiveis()">${l}<span class="n">${all.filter(grupos[k]).length}</span></div>`).join('')}</div>
+    <div class="chips">${[['aberto', 'Em aberto'], ['atrasado', 'Atrasados'], ['pago', 'Pagos'], ['all', 'Todos']].map(([k, l]) => `<div class="chip ${f.status === k ? 'active' : ''}" onclick="state.filters.rec.status='${k}';renderRecebiveis()">${l}<span class="n">${all.filter(grupos[k]).length}</span></div>`).join('')}
+      <div class="chip" onclick="abrirPainelCobranca()">🔔 Cobrança<span class="n">${inadimplentes(lot.id).length}</span></div></div>
     <div class="filters">
       <select onchange="state.filters.rec.mes=this.value;renderRecebiveis()"><option value="all">Todos os meses</option>${meses.map(m => `<option value="${m}" ${f.mes === m ? 'selected' : ''}>${monthLabel(m)}</option>`).join('')}</select>
       <input type="text" placeholder="🔎 Cliente ou lote" value="${esc(f.busca)}" oninput="aSetFiltro('rec','busca',this.value,renderRecebiveis,this)">
