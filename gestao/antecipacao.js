@@ -6,17 +6,41 @@
 
 function taxaVenda(v) { return (num(v.jurosMes) || 0) / 100; }
 
-/* meses (fracionados) entre duas datas, base 30 dias */
-function mesesEntre(dataA, dataB) { return Math.max(0, daysBetween(dataA, dataB) / 30); }
+/* meses fechados entre duas datas: quem antecipa em qualquer dia do mês paga o mesmo,
+   do mesmo jeito que o juro é cobrado por mês fechado */
+function mesesFechados(dataRef, vencimento) {
+  const [ya, ma] = monthKey(dataRef).split('-').map(Number);
+  const [yb, mb] = monthKey(vencimento).split('-').map(Number);
+  return Math.max(0, (yb - ya) * 12 + (mb - ma));
+}
 
-/* Quanto o cliente paga hoje por uma parcela ainda não vencida. */
+/* Quanto o cliente paga hoje por uma parcela ainda não vencida.
+   Trazer as parcelas futuras pela taxa do contrato devolve exatamente o saldo devedor da
+   tabela de amortização: sai só o juro dos meses que o cliente não vai usar. */
 function vpParcela(r, v, dataRef) {
   const devido = recRestante(r);
   if (devido <= 0) return 0;
   if (r.vencimento <= dataRef) return recAtualizado(r);   // vencida: valor cheio + mora
   const i = taxaVenda(v);
   if (!i) return devido;                                   // sem juros no contrato: nada a descontar
-  return devido / Math.pow(1 + i, mesesEntre(dataRef, r.vencimento));
+  const n = mesesFechados(dataRef, r.vencimento);
+  return n <= 0 ? devido : devido / Math.pow(1 + i, n);    // vence dentro deste mês: sem desconto
+}
+
+/* Tabela de amortização do que falta: parte do saldo devedor da data e mostra, parcela a
+   parcela, quanto é juro do mês e quanto abate o saldo. */
+function tabelaAmortizacao(v, dataRef) {
+  dataRef = dataRef || todayStr();
+  const i = taxaVenda(v);
+  const futuras = recebiveisDe(v.id).filter(r => recStatus(r) !== 'pago' && r.vencimento > dataRef);
+  let saldo = futuras.reduce((a, r) => a + vpParcela(r, v, dataRef), 0);
+  return futuras.map(r => {
+    const parcela = recRestante(r);
+    const juros = Math.round(saldo * i * 100) / 100;
+    const amortizacao = Math.round((parcela - juros) * 100) / 100;
+    saldo = Math.round((saldo - amortizacao) * 100) / 100;
+    return { rec: r, parcela, juros, amortizacao, saldo: Math.abs(saldo) < 0.02 ? 0 : saldo };
+  });
 }
 
 /* Saldo para quitar (ou antecipar) numa data. */
@@ -58,16 +82,20 @@ function abrirAntecipacao(vendaId) {
     <p class="small mb"><b>${esc(v.cliente.nome)}</b> · ${l ? esc(loteLabel(l)) : ''} · ${s.itens.length} parcela(s) em aberto</p>
     <div class="kpi-grid">
       <div class="kpi c-amber"><div class="lbl">Saldo pelos vencimentos</div><div class="val">${fmtMoneyShort(s.nominal)}</div><div class="sub">${s.itens.length} parcela(s)</div></div>
-      <div class="kpi c-green"><div class="lbl">Desconto de juros</div><div class="val">${fmtMoneyShort(s.desconto)}</div><div class="sub">prazo não usado</div></div>
+      <div class="kpi c-green"><div class="lbl">Desconto de juros</div><div class="val">${fmtMoneyShort(s.desconto)}</div><div class="sub">meses não usados</div></div>
       <div class="kpi c-blue"><div class="lbl">Para quitar hoje</div><div class="val">${fmtMoneyShort(s.total)}</div><div class="sub">${fmtDate(todayStr())}</div></div>
     </div>
-    ${s.vencidas ? `<div class="alert warn" style="cursor:default"><span>${s.vencidas} parcela(s) vencida(s) entram pelo valor cheio, com multa e juros de mora. Só o prazo futuro é descontado.</span></div>` : ''}
+    ${s.vencidas ? `<div class="alert warn" style="cursor:default"><span>${s.vencidas} parcela(s) vencida(s) entram pelo valor cheio, com multa e juros de mora. Só os meses futuros são descontados.</span></div>` : ''}
     ${!taxaVenda(v) ? `<div class="alert info" style="cursor:default"><span>Este contrato não tem juros no parcelamento, então antecipar não gera desconto: o cliente paga o valor das parcelas.</span></div>` : ''}
 
-    <h3 class="small" style="margin:12px 0 6px;font-weight:800">📅 Quanto custa quitar em cada mês</h3>
-    <div class="table-wrap"><table class="tbl"><thead><tr><th>Quitando em</th><th class="num">Saldo dos vencimentos</th><th class="num">Desconto</th><th class="num">Valor a pagar</th></tr></thead>
-    <tbody>${proj.map(p => `<tr><td>${fmtDate(p.data)}</td><td class="num">${fmtMoney(p.nominal)}</td><td class="num" style="color:var(--success)">${fmtMoney(p.desconto)}</td><td class="num"><b>${fmtMoney(p.total)}</b></td></tr>`).join('')}</tbody></table></div>
-    <p class="tiny muted">O valor sobe a cada mês porque o desconto diminui conforme o prazo passa. A correção por índice só entra até o mês já divulgado.</p>
+    <h3 class="small" style="margin:12px 0 6px;font-weight:800">📅 Saldo devedor mês a mês</h3>
+    <div class="table-wrap"><table class="tbl"><thead><tr><th>Quitando em</th><th class="num">Parcelas restantes</th><th class="num">Soma dos vencimentos</th><th class="num">Juros não usados</th><th class="num">Saldo devedor</th></tr></thead>
+    <tbody>${proj.map(p => `<tr><td>${monthLabel(monthKey(p.data))}</td><td class="num">${p.abertas}</td><td class="num">${fmtMoney(p.nominal)}</td><td class="num" style="color:var(--success)">${fmtMoney(p.desconto)}</td><td class="num"><b>${fmtMoney(p.total)}</b></td></tr>`).join('')}</tbody></table></div>
+    <p class="tiny muted">O saldo devedor é o principal que ainda falta: o mesmo número da tabela de amortização do contrato. Sobe de um mês para o outro porque entra o juro do mês, e cai quando uma parcela é paga. Dentro do mesmo mês o valor não muda, igual à cobrança de juros.</p>
+    <details style="margin-top:8px"><summary class="small" style="cursor:pointer;font-weight:700">🧮 Ver a tabela de amortização</summary>
+      <div class="table-wrap" style="margin-top:8px"><table class="tbl"><thead><tr><th>Parcela</th><th>Vencimento</th><th class="num">Valor</th><th class="num">Juros do mês</th><th class="num">Amortização</th><th class="num">Saldo depois</th></tr></thead>
+      <tbody>${tabelaAmortizacao(v, todayStr()).map(x => `<tr><td>${esc(x.rec.descricao)}</td><td>${fmtDate(x.rec.vencimento)}</td><td class="num">${fmtMoney(x.parcela)}</td><td class="num">${fmtMoney(x.juros)}</td><td class="num">${fmtMoney(x.amortizacao)}</td><td class="num">${fmtMoney(x.saldo)}</td></tr>`).join('')}</tbody></table></div>
+      <p class="tiny muted">Começa no saldo devedor de hoje. Antecipar uma parcela do fim economiza todos os juros previstos até lá.</p></details>
 
     <div class="fieldset" style="margin-top:14px"><span class="lg">💸 O que o cliente quer fazer</span>
       <div class="fg"><label>Operação</label><select id="anTipo" onchange="anCalc('${v.id}')">
@@ -206,10 +234,13 @@ function imprimirDemonstrativo(vendaId) {
     <table><thead><tr><th>Parcela</th><th>Vencimento</th><th class="num">Valor no vencimento</th><th class="num">Desconto</th><th class="num">Valor antecipado</th></tr></thead>
     <tbody>${s.itens.map(x => `<tr><td>${esc(x.rec.descricao)}</td><td>${fmtDate(x.rec.vencimento)}</td><td class="num">${fmtMoney(x.devido)}</td><td class="num">${x.desconto > 0.005 ? fmtMoney(x.desconto) : (x.vencida ? 'vencida' : '—')}</td><td class="num">${fmtMoney(x.pagar)}</td></tr>`).join('')}</tbody>
     <tfoot><tr><th colspan="2">Total</th><th class="num">${fmtMoney(s.nominal)}</th><th class="num">${fmtMoney(s.desconto)}</th><th class="num">${fmtMoney(s.total)}</th></tr></tfoot></table>
+    <h2>Tabela de amortização do saldo</h2>
+    <table><thead><tr><th>Parcela</th><th>Vencimento</th><th class="num">Valor</th><th class="num">Juros do mês</th><th class="num">Amortização</th><th class="num">Saldo depois</th></tr></thead>
+    <tbody>${tabelaAmortizacao(v, data).map(x => `<tr><td>${esc(x.rec.descricao)}</td><td>${fmtDate(x.rec.vencimento)}</td><td class="num">${fmtMoney(x.parcela)}</td><td class="num">${fmtMoney(x.juros)}</td><td class="num">${fmtMoney(x.amortizacao)}</td><td class="num">${fmtMoney(x.saldo)}</td></tr>`).join('')}</tbody></table>
     <h2>Se quitar mais tarde</h2>
     <table><thead><tr><th>Quitando em</th><th class="num">Valor a pagar</th><th class="num">Desconto</th></tr></thead>
     <tbody>${proj.map(p => `<tr><td>${fmtDate(p.data)}</td><td class="num">${fmtMoney(p.total)}</td><td class="num">${fmtMoney(p.desconto)}</td></tr>`).join('')}</tbody></table>
-    <p style="margin-top:10px">As parcelas futuras são trazidas a valor presente pela taxa do contrato, de modo que o cliente não paga os juros do prazo que não utilizar. Parcelas vencidas entram pelo valor cheio, acrescidas de multa e juros de mora. Valores válidos para pagamento na data de referência.</p>
+    <p style="margin-top:10px">As parcelas futuras são trazidas a valor presente pela mesma taxa de juros do contrato, o que devolve exatamente o saldo devedor da tabela de amortização: o cliente deixa de pagar apenas o juro dos meses que não vai utilizar. O cálculo é por mês fechado, então o valor vale para qualquer dia do mês de referência. Parcelas vencidas entram pelo valor cheio, acrescidas de multa e juros de mora.</p>
     <p style="margin-top:6px">Emitido em ${fmtDate(todayStr())}.</p>`;
   window.print();
 }
