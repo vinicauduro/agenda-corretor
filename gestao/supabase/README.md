@@ -47,6 +47,20 @@ com PIN do administrador e dados só no navegador.
 4. Em **Cadastros › Equipe › ＋ Convite** gere um link e envie aos corretores. Quem abrir o
    link cria a conta (ou entra) e já fica vinculado à sua empresa como corretor.
 
+## Antecipação e quitação
+
+Na tela da venda, o botão **💸 Antecipar / quitar** calcula quanto o cliente paga para
+antecipar parcelas ou quitar o contrato. As parcelas futuras são trazidas a valor presente
+pela mesma taxa de juros do contrato, então o cliente não paga o juro do prazo que não usou.
+Parcelas já vencidas entram pelo valor cheio, com multa e juros de mora.
+
+A tela mostra quanto custa quitar em cada um dos próximos doze meses, e permite três
+operações: quitar o contrato inteiro, antecipar as últimas parcelas (que é onde o desconto é
+maior) ou amortizar um valor livre, reduzindo o prazo ou o valor das parcelas. Há também um
+demonstrativo para imprimir e um resumo pronto para mandar por WhatsApp.
+
+Contrato sem juros não gera desconto: nesse caso o cliente paga o valor das parcelas.
+
 ## Índices de correção
 
 Em **Cadastros › 📈 Índices** ficam o IGP-M, INPC, IPCA, CUB e qualquer outro que você use.
