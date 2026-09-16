@@ -143,6 +143,21 @@ Matrícula, observações internas, reservas, vendas, custos e dados da equipe *
 pela vitrine: o banco devolve só esses campos, por uma função específica.
 Desmarcar **Vitrine no ar** derruba o link na hora.
 
+## Permissões por função
+
+O **papel** define o que o banco libera: dono e administrador veem tudo da empresa, financeiro
+tem acesso administrativo, corretor só enxerga o que é dele. Isso é aplicado pelo próprio
+banco, então vale mesmo para quem tentar acessar por fora do aplicativo.
+
+Dentro do papel, em **Cadastros › 🔐 Permissões**, o dono afina o que cada função vê e pode
+fazer no aplicativo: editar lotes e planta, aprovar reservas, registrar vendas, dar distrato,
+baixar pagamentos, antecipar contratos, lançar custos, cobrar, editar modelos e índices,
+publicar a vitrine, gerenciar a equipe, alterar configurações e usar o backup.
+
+As abas sem permissão somem do topo, as telas bloqueadas mostram um aviso e as ações são
+recusadas mesmo se alguém tentar forçar. O dono sempre pode tudo, e o padrão de cada papel
+volta com um clique.
+
 ## O que cada papel vê
 
 | Papel        | Planta e lotes | Reservas                | Vendas            | Recebíveis e custos | Equipe/config |

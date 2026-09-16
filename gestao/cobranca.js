@@ -55,6 +55,7 @@ const FAIXAS_DIAS = [['1-15', 1, 15], ['16-30', 16, 30], ['31-60', 31, 60], ['61
 // ================================================================ PAINEL
 function renderCobranca() {
   const lot = curLot(); const v = $('#av-recebiveis');
+  if (!pode('cobranca.ver')) { v.innerHTML = semPermissaoHtml('cobrança'); return; }
   const f = state.filters.cob = state.filters.cob || { faixa: 'todas', busca: '' };
   const todos = inadimplentes(lot.id);
   const lista = todos.filter(it => {
@@ -155,6 +156,7 @@ function cbTrocaFaixa(vendaId) {
 }
 
 function registrarCobranca(vendaId, abrirZap) {
+  if (!pode('cobranca.registrar')) { toast('🔒', 'Sem permissão', 'Seu perfil não registra cobranças.', true); return; }
   const it = inadimplentes(curLot().id).find(x => x.venda.id === vendaId); if (!it) return;
   const texto = val('cbTexto');
   const canal = val('cbCanal') || 'whatsapp';

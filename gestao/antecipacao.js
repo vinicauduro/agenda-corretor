@@ -179,6 +179,7 @@ function planoAntecipacao(v, data, tipo, qtd, valor, modo) {
 }
 
 function aplicarAntecipacao(vendaId) {
+  if (!pode('financeiro.antecipar')) { toast('🔒', 'Sem permissão', 'Seu perfil não registra antecipações.', true); return; }
   const v = getVenda(vendaId); if (!v) return;
   const data = val('anData') || todayStr();
   const tipo = val('anTipo');
