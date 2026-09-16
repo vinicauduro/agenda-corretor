@@ -163,10 +163,10 @@ function defaultDB() {
     meta: { version: 1, createdAt: new Date().toISOString() },
     config: defaultConfig(),
     loteamentos: [], lotes: [], reservas: [], vendas: [], recebiveis: [], custos: [],
-    categorias: defaultCategorias(), corretores: [], log: []
+    categorias: defaultCategorias(), corretores: [], leads: [], log: []
   };
 }
-const COLLECTIONS = ['loteamentos', 'lotes', 'reservas', 'vendas', 'recebiveis', 'custos', 'categorias', 'corretores', 'log'];
+const COLLECTIONS = ['loteamentos', 'lotes', 'reservas', 'vendas', 'recebiveis', 'custos', 'categorias', 'corretores', 'leads', 'log'];
 function normalizeDB(data) {
   const d = data && typeof data === 'object' ? data : {};
   d.meta = d.meta || { version: 1 };
@@ -240,6 +240,7 @@ const TABLE_COLS = {
   vendas: ['id', 'loteamentoId', 'loteId', 'reservaId', 'cliente', 'corretor', 'corretorUserId', 'dataVenda', 'valorTotal', 'entrada', 'dataEntrada', 'nParcelas', 'jurosMes', 'valorParcela', 'primeiroVencimento', 'baloes', 'comissaoPct', 'comissaoValor', 'comissaoPaga', 'comissaoData', 'status', 'obs', 'motivo', 'distratoEm', 'criadoEm'],
   recebiveis: ['id', 'loteamentoId', 'vendaId', 'tipo', 'numero', 'descricao', 'vencimento', 'valor', 'valorPago', 'dataPagamento', 'forma', 'obsPagamento'],
   custos: ['id', 'loteamentoId', 'loteId', 'descricao', 'categoriaId', 'fornecedor', 'valor', 'formaPagamento', 'dataCompetencia', 'vencimento', 'status', 'dataPagamento', 'obs', 'criadoEm'],
+  leads: ['id', 'loteamentoId', 'loteId', 'nome', 'telefone', 'email', 'msg', 'origem', 'status', 'obs', 'criadoEm'],
   log: ['id', 'ts', 'who', 'msg']
 };
 const NULLABLE_EMPTY = new Set(['validade', 'aprovadaEm', 'encerradaEm', 'dataEntrada', 'primeiroVencimento', 'comissaoData', 'distratoEm', 'dataPagamento', 'vencimento', 'reservaId', 'vendaId', 'loteId', 'categoriaId', 'forma', 'frente', 'fundos', 'planta', 'pts', 'proposta', 'corretorUserId']);
@@ -267,7 +268,7 @@ function fromRow(col, row) {
 function membroToCorretor(m) { return { id: m.id, userId: m.userId, nome: m.nome, creci: m.creci, telefone: m.telefone, email: m.email, imobiliaria: m.imobiliaria, ativo: m.ativo, papel: m.papel }; }
 
 const Cloud = {
-  enabled: CLOUD_ENABLED, client: null, user: null, org: null, membro: null, papel: null,
+  enabled: CLOUD_ENABLED, client: null, user: null, org: null, membro: null, papel: null, vitrines: [],
   membros: [], convites: [], minhasOrgs: [], active: false, status: 'off', msg: '', channel: null, _renderTimer: null,
   init() {
     if (!this.enabled) return;
@@ -343,6 +344,7 @@ const Cloud = {
     tabs.forEach((t, i) => { if (results[i].error) throw new Error(t + ': ' + results[i].error.message); db[t] = (results[i].data || []).map(r => fromRow(t, r)); });
     if (!db.categorias.length) db.categorias = defaultCategorias();
     await this.loadEquipe();
+    if (this.admin) await this.carregarVitrines();
     saveLocal();
   },
   async loadEquipe() {
@@ -396,7 +398,7 @@ const Cloud = {
   async replaceAll() {
     try {
       await this.rpc('limpar_dados_org', { p_org: this.org.id });
-      for (const t of ['loteamentos', 'categorias', 'lotes', 'reservas', 'vendas', 'recebiveis', 'custos', 'log']) {
+      for (const t of ['loteamentos', 'categorias', 'lotes', 'reservas', 'vendas', 'recebiveis', 'custos', 'leads', 'log']) {
         const rows = db[t].map(r => toRow(t, r));
         for (let i = 0; i < rows.length; i += 400) {
           const { error } = await this.client.from(t).upsert(rows.slice(i, i + 400), { onConflict: 'org_id,id' });
@@ -405,6 +407,23 @@ const Cloud = {
       }
       await this.saveConfig();
     } catch (e) { this.erro(e, 'replaceAll'); }
+  },
+  // --- vitrine pública ---
+  async carregarVitrines() {
+    const { data, error } = await this.client.from('vitrines').select('*').eq('org_id', this.org.id);
+    if (error) { this.vitrines = []; return; }
+    this.vitrines = (data || []).map(v => ({ loteamentoId: v.loteamento_id, slug: v.slug, ativa: v.ativa, mostrarPreco: v.mostrar_preco, titulo: v.titulo || '', chamada: v.chamada || '', whatsapp: v.whatsapp || '' }));
+  },
+  async salvarVitrine(v) {
+    const row = { org_id: this.org.id, loteamento_id: v.loteamentoId, slug: v.slug, ativa: !!v.ativa, mostrar_preco: !!v.mostrarPreco, titulo: v.titulo || '', chamada: v.chamada || '', whatsapp: v.whatsapp || '' };
+    const { error } = await this.client.from('vitrines').upsert(row, { onConflict: 'org_id,loteamento_id' });
+    if (error) throw new Error(/vitrines_slug_idx|duplicate key/i.test(error.message) ? 'Este endereço de link já está em uso. Escolha outro.' : error.message);
+    await this.carregarVitrines();
+  },
+  async apagarVitrine(loteamentoId) {
+    const { error } = await this.client.from('vitrines').delete().eq('org_id', this.org.id).eq('loteamento_id', loteamentoId);
+    if (error) throw new Error(error.message);
+    await this.carregarVitrines();
   },
   async uploadPlanta(loteamentoId, dataUrl) {
     const blob = await (await fetch(dataUrl)).blob();

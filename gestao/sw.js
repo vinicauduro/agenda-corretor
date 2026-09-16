@@ -1,5 +1,5 @@
-const CACHE = 'gestao-loteamento-v4';
-const FILES = ['./', './index.html', './style.css', './config.js', './vendor/supabase.js', './core.js', './planta.js', './planta-pdf.js', './planta-dxf.js', './admin-pdf.js', './corretor.js', './admin.js', './financeiro.js', './auth.js', './manifest.json'];
+const CACHE = 'gestao-loteamento-v5';
+const FILES = ['./', './index.html', './style.css', './config.js', './vendor/supabase.js', './core.js', './planta.js', './planta-pdf.js', './planta-dxf.js', './admin-pdf.js', './corretor.js', './admin.js', './financeiro.js', './auth.js', './vitrine.html', './vitrine.js', './manifest.json'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)));

@@ -5,6 +5,9 @@ function renderAdminTab() {
   updateTopbars();
   const pend = db.reservas.filter(r => r.status === 'pendente').length;
   const b = $('#aBadgeReservas'); b.style.display = pend ? '' : 'none'; b.textContent = pend;
+  const lotAtual = curLot();
+  const novos = lotAtual ? leadsDo(lotAtual.id).filter(l => (l.status || 'novo') === 'novo').length : 0;
+  const bl = $('#aBadgeLeads'); if (bl) { bl.style.display = novos ? '' : 'none'; bl.textContent = novos; }
   const fab = $('#fab'); fab.classList.remove('show');
   const tab = state.tab;
   if (!curLot() && tab !== 'cadastros') {
@@ -15,6 +18,7 @@ function renderAdminTab() {
   else if (tab === 'planta') renderPlantaEditor();
   else if (tab === 'lotes') { renderALotes(); fabShow('abrirLoteForm()'); }
   else if (tab === 'reservas') { renderAReservas(); fabShow('abrirReservaAdminForm()'); }
+  else if (tab === 'leads') renderLeads();
   else if (tab === 'vendas') { renderAVendas(); fabShow('abrirVendaForm()'); }
   else if (tab === 'recebiveis') renderRecebiveis();
   else if (tab === 'custos') { renderCustos(); fabShow('abrirCustoForm()'); }
@@ -679,12 +683,13 @@ function distratoVenda(id) {
 function renderCadastros() {
   const v = $('#av-cadastros'); const sub = state.sub.cad || (curLot() ? 'loteamento' : 'loteamentos');
   state.sub.cad = sub;
-  const tabs = [['loteamento', '🏘️ Loteamento'], ['loteamentos', '📋 Todos'], ['corretores', Cloud.active ? '👥 Equipe' : '🧑‍💼 Corretores'], ['categorias', '🏷️ Categorias'], ['config', '⚙️ Configurações'], ['nuvem', Cloud.active ? '☁️ Conta' : '☁️ Nuvem'], ['backup', '💾 Backup']];
+  const tabs = [['loteamento', '🏘️ Loteamento'], ['loteamentos', '📋 Todos'], ['corretores', Cloud.active ? '👥 Equipe' : '🧑‍💼 Corretores'], ['categorias', '🏷️ Categorias'], ['vitrine', '🌐 Vitrine'], ['config', '⚙️ Configurações'], ['nuvem', Cloud.active ? '☁️ Conta' : '☁️ Nuvem'], ['backup', '💾 Backup']];
   let html = `<div class="subtabs">${tabs.map(([k, l]) => `<div class="chip ${sub === k ? 'active' : ''}" onclick="state.sub.cad='${k}';renderCadastros()">${l}</div>`).join('')}</div>`;
   if (sub === 'loteamento') html += cadLoteamentoHtml();
   else if (sub === 'loteamentos') html += cadLoteamentosHtml();
   else if (sub === 'corretores') html += Cloud.active ? cadEquipeHtml() : cadCorretoresHtml();
   else if (sub === 'categorias') html += cadCategoriasHtml();
+  else if (sub === 'vitrine') html += cadVitrineHtml();
   else if (sub === 'config') html += cadConfigHtml();
   else if (sub === 'nuvem') html += Cloud.active ? cadContaHtml() : cadNuvemHtml();
   else if (sub === 'backup') html += cadBackupHtml();
@@ -829,4 +834,128 @@ function cadBackupHtml() {
     <div class="btn-row"><button class="btn btn-outline" onclick="exportarLotesCSV()">Lotes (CSV)</button><button class="btn btn-outline" onclick="exportarRecebiveisCSV()">Recebíveis (CSV)</button><button class="btn btn-outline" onclick="exportarCustosCSV()">Custos (CSV)</button></div></div>
     <div class="card"><h3>✨ Dados de exemplo</h3><p class="help mb">Carregue um loteamento fictício completo para conhecer o app. Substitui os dados atuais.</p><button class="btn btn-accent" onclick="carregarDemo()">Carregar dados de exemplo</button></div>
     <div class="card"><h3>🗑️ Zona de perigo</h3><p class="help mb">Apaga todos os loteamentos, lotes, reservas, vendas e custos. As configurações são mantidas.</p><button class="btn btn-outline-danger" onclick="apagarTudo()">Apagar todos os dados</button></div>`;
+}
+
+// ================================================================ LEADS (vitrine pública)
+function leadsDo(lotId) { return db.leads.filter(l => l.loteamentoId === lotId || !l.loteamentoId); }
+const LEAD_STATUS = { novo: ['🆕', 'Novo'], contatado: ['📞', 'Contatado'], convertido: ['✅', 'Convertido'], descartado: ['🚫', 'Descartado'] };
+
+function renderLeads() {
+  const lot = curLot(); const v = $('#av-leads');
+  const f = state.filters.leads = state.filters.leads || { status: 'novo' };
+  const all = leadsDo(lot.id);
+  const list = (f.status === 'todos' ? all : all.filter(l => (l.status || 'novo') === f.status))
+    .sort((a, b) => (b.criadoEm || '').localeCompare(a.criadoEm || ''));
+  const vit = Cloud.active ? Cloud.vitrines.find(x => x.loteamentoId === lot.id) : null;
+  const aviso = !Cloud.active
+    ? `<div class="card"><p class="help">Os leads chegam pela <b>vitrine pública</b>, que funciona na versão em nuvem. Ative a nuvem em Cadastros › Nuvem para publicar o link do loteamento.</p></div>`
+    : !vit || !vit.ativa
+      ? `<div class="card"><p class="help">A vitrine pública deste loteamento ainda não está publicada. <button class="btn btn-primary btn-sm" onclick="state.tab='cadastros';state.sub.cad='vitrine';switchTab('cadastros')">🌐 Publicar agora</button></p></div>` : '';
+  v.innerHTML = aviso + `
+    <div class="chips">${[['novo', 'Novos'], ['contatado', 'Contatados'], ['convertido', 'Convertidos'], ['descartado', 'Descartados'], ['todos', 'Todos']].map(([k, l]) =>
+      `<div class="chip ${f.status === k ? 'active' : ''}" onclick="state.filters.leads.status='${k}';renderLeads()">${l}<span class="n">${k === 'todos' ? all.length : all.filter(x => (x.status || 'novo') === k).length}</span></div>`).join('')}</div>
+    ${list.length ? list.map(leadCardHtml).join('') : `<div class="empty"><div class="ic">🎯</div><p>Nenhum interesse nesta lista.</p><p class="small">Quando alguém preencher o formulário da vitrine, aparece aqui na hora.</p></div>`}`;
+}
+
+function leadCardHtml(l) {
+  const lote = l.loteId ? getLote(l.loteId) : null;
+  const st = l.status || 'novo'; const [ic, lbl] = LEAD_STATUS[st] || LEAD_STATUS.novo;
+  const primeiro = (l.nome || '').split(' ')[0];
+  const texto = `Olá ${primeiro}! Aqui é ${db.config.empresa || 'a equipe de vendas'}. Você demonstrou interesse${lote ? ' no lote ' + loteShort(lote) : ''} no nosso site.`;
+  return `<div class="card">
+    <div class="row-between"><div><b>${esc(l.nome)}</b> <span class="badge ${st === 'convertido' ? 'pago' : st === 'descartado' ? 'neutral' : st === 'contatado' ? 'pendente' : 'atrasado'}">${ic} ${lbl}</span></div>
+      <span class="muted small">${esc(fmtDateTime(l.criadoEm))}</span></div>
+    <div class="small mt">📱 ${esc(fmtPhone(l.telefone))}${l.email ? ' · ✉️ ' + esc(l.email) : ''}${lote ? ' · 📦 ' + esc(loteLabel(lote)) + ' (' + statusLabel(lote.status) + ')' : ''}</div>
+    ${l.msg ? `<div class="small mt" style="background:var(--bg);border-radius:8px;padding:8px 10px">“${esc(l.msg)}”</div>` : ''}
+    <div class="btn-row mt">
+      ${l.telefone ? `<a class="btn btn-wa btn-sm" target="_blank" href="${waLink(l.telefone, texto)}" onclick="marcarLead('${l.id}','contatado',1)">💬 WhatsApp</a>` : ''}
+      ${st !== 'contatado' ? `<button class="btn btn-secondary btn-sm" onclick="marcarLead('${l.id}','contatado')">📞 Contatado</button>` : ''}
+      ${lote && lote.status === 'disponivel' ? `<button class="btn btn-primary btn-sm" onclick="reservarDoLead('${l.id}')">📝 Criar reserva</button>` : ''}
+      ${st !== 'descartado' ? `<button class="btn btn-secondary btn-sm" onclick="marcarLead('${l.id}','descartado')">🚫 Descartar</button>` : ''}
+      <button class="btn btn-outline-danger btn-sm" onclick="excluirLead('${l.id}')">🗑️</button>
+    </div></div>`;
+}
+
+function marcarLead(id, status, silencioso) {
+  const l = db.leads.find(x => x.id === id); if (!l || l.status === status) return;
+  upsert('leads', Object.assign({}, l, { status }));
+  if (!silencioso) { renderCurrent(); toast('✅', 'Lead atualizado', (LEAD_STATUS[status] || [])[1] || ''); }
+  else setTimeout(renderCurrent, 400);
+}
+function excluirLead(id) {
+  const l = db.leads.find(x => x.id === id); if (!l) return;
+  if (!confirm(`Excluir o interesse de ${l.nome}?`)) return;
+  removeRec('leads', id); renderCurrent(); toast('🗑️', 'Interesse excluído', '');
+}
+function reservarDoLead(id) {
+  const l = db.leads.find(x => x.id === id); if (!l) return;
+  abrirReservaAdminForm(l.loteId);
+  setTimeout(() => { setVal('rlNome', l.nome); setVal('rlTel', l.telefone); setVal('rlEmail', l.email); setVal('raObs', 'Veio pela vitrine online'); }, 60);
+  marcarLead(id, 'convertido', 1);
+}
+
+// ================================================================ VITRINE PÚBLICA
+function vitrineSlugSugerido(lot) {
+  const base = (lot.nome || 'loteamento').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40);
+  return base || 'loteamento';
+}
+function vitrineUrl(slug) { return location.origin + location.pathname.replace(/[^/]*$/, '') + 'vitrine.html?l=' + encodeURIComponent(slug); }
+
+function cadVitrineHtml() {
+  const lot = curLot();
+  if (!lot) return `<div class="card"><p class="help">Cadastre um loteamento primeiro.</p></div>`;
+  if (!Cloud.active) return `<div class="card"><h3>🌐 Vitrine pública</h3>
+    <p class="help">A vitrine é uma página aberta, sem login, com a planta e os lotes à venda para você mandar por WhatsApp, Instagram ou anúncio. Quem se interessa preenche um formulário e cai na aba <b>Leads</b>.</p>
+    <p class="help mt">Ela funciona na <b>versão em nuvem</b>, porque a página precisa buscar os dados em um servidor. Configure a nuvem em <b>Cadastros › Nuvem</b> para liberar.</p></div>`;
+  const v = Cloud.vitrines.find(x => x.loteamentoId === lot.id) || null;
+  const ls = lotesDo(lot.id); const disp = ls.filter(l => l.status === 'disponivel').length;
+  const semPreco = ls.filter(l => l.status === 'disponivel' && !num(l.preco)).length;
+  const slug = v ? v.slug : vitrineSlugSugerido(lot);
+  const url = vitrineUrl(slug);
+  return `<div class="card"><h3>🌐 Vitrine pública de ${esc(lot.nome)}</h3>
+    <p class="help">Página aberta, sem login, com a planta e os lotes à venda. Mande o link por WhatsApp, coloque no Instagram ou no anúncio. Quem se interessar preenche o formulário e aparece na aba <b>Leads</b>.</p>
+    ${v && v.ativa ? `<div class="mb mt"><div class="k small">Link para divulgar</div>
+      <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px"><input type="text" id="vitLink" readonly value="${esc(url)}" style="flex:1 1 240px;min-width:0;padding:9px 11px;border:1px solid var(--border);border-radius:9px;background:white;color:var(--text);font-size:0.9rem">
+      <button class="btn btn-secondary btn-sm" style="flex:none" onclick="copiarLinkVitrine()">📋 Copiar</button>
+      <a class="btn btn-secondary btn-sm" style="flex:none;text-decoration:none" target="_blank" href="${esc(url)}">↗ Abrir</a></div>
+      <p class="small mt">${disp} lote(s) aparecem como disponíveis${semPreco ? ` · ${semPreco} sem preço aparecem como “valor sob consulta”` : ''}.</p></div>` : ''}
+    <div class="fieldset"><span class="lg">⚙️ Configuração</span>
+      <div class="fg"><label>Endereço do link (só letras, números e hífen)</label><input type="text" id="vitSlug" value="${esc(slug)}" placeholder="residencial-vista-verde"><div class="hint">Fica assim: ${esc(vitrineUrl('seu-endereco'))}</div></div>
+      <div class="fg"><label>Título da página</label><input type="text" id="vitTitulo" value="${esc(v ? v.titulo : '')}" placeholder="${esc(lot.nome)}"></div>
+      <div class="fg"><label>Chamada de vendas</label><textarea id="vitChamada" placeholder="Lotes prontos para construir, com asfalto, água e luz. Entrada facilitada e parcelamento direto.">${esc(v ? v.chamada : '')}</textarea></div>
+      <div class="frow"><div class="fg"><label>WhatsApp de atendimento</label><input type="tel" id="vitZap" value="${esc(v ? v.whatsapp : (db.config.telefone || ''))}" placeholder="(48) 99999-9999"></div>
+        <div class="fg"><label>Mostrar preços</label><select id="vitPreco"><option value="1" ${!v || v.mostrarPreco ? 'selected' : ''}>Sim, mostrar os valores</option><option value="0" ${v && !v.mostrarPreco ? 'selected' : ''}>Não, “valor sob consulta”</option></select></div></div>
+      <label class="check"><input type="checkbox" id="vitAtiva" ${!v || v.ativa ? 'checked' : ''}> Vitrine no ar</label>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="salvarVitrine()">${v ? '💾 Salvar alterações' : '🌐 Publicar vitrine'}</button>
+      ${v ? `<button class="btn btn-outline-danger" onclick="removerVitrine()">Remover do ar</button>` : ''}
+    </div>
+    <p class="help mt">O visitante vê quadra, número, área, situação e o preço (se você quiser). Matrícula, observações internas, reservas, vendas e dados dos corretores <b>nunca</b> aparecem.</p></div>`;
+}
+
+function copiarLinkVitrine() {
+  const el = document.getElementById('vitLink'); if (!el) return;
+  el.select(); el.setSelectionRange(0, 99999);
+  const done = () => toast('📋', 'Link copiado', 'Cole no WhatsApp, no Instagram ou no anúncio.');
+  if (navigator.clipboard) navigator.clipboard.writeText(el.value).then(done, () => { document.execCommand('copy'); done(); });
+  else { document.execCommand('copy'); done(); }
+}
+
+async function salvarVitrine() {
+  const lot = curLot(); if (!lot || !Cloud.active) return;
+  const slug = val('vitSlug').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9-]+/g, '-').replace(/^-|-$/g, '');
+  if (slug.length < 3) { toast('⚠️', 'Endereço muito curto', 'Use ao menos 3 letras.', true); return; }
+  try {
+    await Cloud.salvarVitrine({ loteamentoId: lot.id, slug, ativa: !!$('#vitAtiva').checked, mostrarPreco: val('vitPreco') === '1', titulo: val('vitTitulo'), chamada: val('vitChamada'), whatsapp: val('vitZap') });
+    logAct(`Vitrine pública ${$('#vitAtiva').checked ? 'publicada' : 'despublicada'}: ${lot.nome}`);
+    renderCadastros();
+    toast('✅', 'Vitrine salva', $('#vitAtiva') && $('#vitAtiva').checked ? 'O link já está no ar.' : 'A vitrine ficou fora do ar.');
+  } catch (e) { toast('⚠️', 'Não foi possível salvar', e.message, true); }
+}
+async function removerVitrine() {
+  const lot = curLot(); if (!lot || !Cloud.active) return;
+  if (!confirm('Tirar a vitrine do ar? O link para de funcionar para quem já recebeu.')) return;
+  try { await Cloud.apagarVitrine(lot.id); logAct(`Vitrine pública removida: ${lot.nome}`); renderCadastros(); toast('🌐', 'Vitrine removida', ''); }
+  catch (e) { toast('⚠️', 'Não foi possível remover', e.message, true); }
 }
