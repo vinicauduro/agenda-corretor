@@ -28,7 +28,7 @@ function renderRecebiveis() {
     </div>
     <div class="chips">${[['aberto', 'Em aberto'], ['atrasado', 'Atrasados'], ['pago', 'Pagos'], ['all', 'Todos']].map(([k, l]) => `<div class="chip ${f.status === k ? 'active' : ''}" onclick="state.filters.rec.status='${k}';renderRecebiveis()">${l}<span class="n">${all.filter(grupos[k]).length}</span></div>`).join('')}
       <div class="chip" onclick="abrirPainelCobranca()">🔔 Cobrança<span class="n">${inadimplentes(esc0).length}</span></div>
-      ${db.contasBanco.some(c => layoutCnab(c.banco)) ? `<div class="chip" onclick="abrirGerarCobrancas()">🧾 Gerar cobranças<span class="n">${parcelasDoMes(esc0, mesAtual()).filter(r => !registradaNoBanco(r) && !bloqueioRemessa(r)).length}</span></div>
+      ${contasComLayout().length ? `<div class="chip" onclick="abrirGerarCobrancas()">🧾 Gerar cobranças<span class="n">${parcelasDoMes(esc0, mesAtual()).filter(r => !registradaNoBanco(r) && !bloqueioRemessa(r)).length}</span></div>
       <div class="chip" onclick="abrirRetorno()">📥 Retorno</div>` : ''}</div>
     <div class="filters">
       ${escopoSelectHtml('renderRecebiveis()')}

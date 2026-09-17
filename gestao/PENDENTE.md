@@ -296,9 +296,19 @@ Ao cadastrar, escolhe-se o tipo:
 "Todos os empreendimentos" para restringir quando quiser. A inadimplência, a régua de cobrança
 e os relatórios somam tudo.
 
-**A cobrança bancária continua por empreendimento**, porque a conta de cobrança é de cada um:
-ao clicar em Gerar cobranças ou Ler retorno, o sistema pergunta de qual empreendimento é (ou
-usa o do filtro, se já houver um escolhido).
+**A cobrança bancária é por conta bancária, não por empreendimento.** O que o banco exige é
+um arquivo de remessa por convênio — isso nunca teve a ver com empreendimento.
+
+- **Uma conta só:** a tela mostra tudo junto, todos os empreendimentos, sem filtro nenhum.
+  A coluna "Empreendimento" aparece na lista quando há mais de um.
+- **Mais de uma conta:** aparece um seletor de **conta de cobrança** no topo da tela. Cada
+  conta gera o seu arquivo, com o seu convênio e a sua numeração de nosso número.
+- **O retorno descobre a conta sozinho**, pela agência, conta e convênio do cabeçalho do
+  arquivo. Você não escolhe nada.
+
+Em **Cadastros › 🏦 Banco** agora existe uma lista de contas. Cada conta diz o que cobra:
+*todos os empreendimentos* (o normal) ou *só o empreendimento X*. Uma venda é cobrada pela
+conta do empreendimento dela; se o empreendimento não tiver conta própria, cai na conta geral.
 
 O corretor não muda: continua vendo planta e reservando lote, e carteiras não aparecem para ele.
 
