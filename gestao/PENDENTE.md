@@ -145,6 +145,18 @@ trabalha. Bancos usados: BB, Caixa, Bradesco, Sicoob e C6.
 barras e linha digitável do Banco do Brasil, calculados no padrão Febraban. Falta conferir o
 campo livre do BB contra o manual, e fazer remessa e retorno.
 
+**Amanhã você me manda:** o arquivo CNAB do Banco do Brasil. Quanto mais material, melhor:
+
+- [ ] Um **arquivo de retorno** de verdade, mesmo antigo.
+- [ ] Um **arquivo de remessa** gerado pelo outro sistema, se conseguir. Esse é o mais valioso,
+      porque mostra exatamente como o BB espera receber, já com o convênio da empresa.
+- [ ] Um **boleto** do BB em PDF ou foto, para eu conferir meu cálculo de código de barras e
+      nosso número contra um caso real.
+
+Sobre o nosso número: cada boleto tem o seu, é um sequencial que o sistema controla, não o
+banco. Não existe faixa a pedir. Só preciso saber em que número começar, para não repetir
+nenhum já usado no outro sistema.
+
 Para cada banco que formos implementar, preciso de:
 
 - [ ] **Manual do layout** de remessa e retorno em PDF, o que o banco chama de "layout de
@@ -179,6 +191,21 @@ Em ordem de prioridade acordada:
 Descartado por decisão sua: assinatura digital, que é serviço contratado à parte. Sem
 necessidade: anexar documentos do cliente no sistema e comissão fixa por corretor, já que a
 comissão é definida em cada venda.
+
+---
+
+## 8b. Site próprio e SaaS
+
+Decidido em conversa: sair do endereço do GitHub e ir para domínio próprio, com página de
+vendas e área de login.
+
+- [ ] Escolher o **nome do produto** e o domínio.
+- [ ] Registrar o domínio (registro.br para .com.br).
+- [ ] Definir se o e-mail profissional será Zoho gratuito ou Google Workspace.
+
+Depois disso eu faço a página de vendas e movo o aplicativo para o domínio novo. O Supabase
+continua o mesmo, só mudam os endereços autorizados no painel dele e os links de vitrine já
+divulgados, que dá para manter funcionando em paralelo.
 
 ---
 
