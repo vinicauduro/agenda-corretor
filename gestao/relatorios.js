@@ -35,8 +35,7 @@ function renderRelatorios() {
   const v = $('#av-relatorios');
   if (!pode('relatorios.ver')) { v.innerHTML = semPermissaoHtml('relatórios'); return; }
   const f = relState();
-  const lot = curLot();
-  const rel = montarRelatorio(f.tipo, lot);
+  const rel = montarRelatorio(f.tipo, escopoAtual());
   v.innerHTML = `
     <div class="chips">${RELATORIOS.map(([k, l]) => `<div class="chip ${f.tipo === k ? 'active' : ''}" onclick="relSet('tipo','${k}')">${l}</div>`).join('')}</div>
     <div class="card">
@@ -70,27 +69,30 @@ function optHtml(lista, sel, vazio) {
 }
 
 // ---------------------------------------------------------------- relatórios
-function montarRelatorio(tipo, lot) {
-  if (!lot) return { titulo: 'Relatório', html: '<div class="card"><p class="help">Cadastre um loteamento primeiro.</p></div>', cols: [], csv: [] };
-  if (tipo === 'resumo') return relResumo(lot);
-  if (tipo === 'espelho') return relEspelho(lot);
-  if (tipo === 'vendas') return relVendas(lot);
-  if (tipo === 'receber') return relReceber(lot);
-  if (tipo === 'inadimplencia') return relInadimplencia(lot);
-  if (tipo === 'comissoes') return relComissoes(lot);
-  return relDespesas(lot);
+/* Os relatórios são da empresa inteira; escopo vazio traz tudo, escopo com id restringe a
+   um empreendimento. Quem precisa de dado do empreendimento (orçamento, espelho) usa empsDo. */
+function empsDo(escopo) { return escopo ? db.loteamentos.filter(l => l.id === escopo) : db.loteamentos; }
+function montarRelatorio(tipo, escopo) {
+  if (!db.loteamentos.length) return { titulo: 'Relatório', html: '<div class="card"><p class="help">Cadastre um empreendimento primeiro.</p></div>', cols: [], csv: [] };
+  if (tipo === 'resumo') return relResumo(escopo);
+  if (tipo === 'espelho') return relEspelho(escopo);
+  if (tipo === 'vendas') return relVendas(escopo);
+  if (tipo === 'receber') return relReceber(escopo);
+  if (tipo === 'inadimplencia') return relInadimplencia(escopo);
+  if (tipo === 'comissoes') return relComissoes(escopo);
+  return relDespesas(escopo);
 }
 
-function relResumo(lot) {
+function relResumo(escopo) {
   const f = relState();
-  const ls = lotesDo(lot.id);
-  const vendas = db.vendas.filter(v => v.loteamentoId === lot.id && v.status !== 'distrato' && noPeriodo(v.dataVenda));
-  const distratos = db.vendas.filter(v => v.loteamentoId === lot.id && v.status === 'distrato' && noPeriodo(v.distratoEm || v.dataVenda));
-  const recs = recebiveisDo(lot.id);
+  const ls = db.lotes.filter(l => noEscopo(l, escopo));
+  const vendas = db.vendas.filter(v => noEscopo(v, escopo) && v.status !== 'distrato' && noPeriodo(v.dataVenda));
+  const distratos = db.vendas.filter(v => noEscopo(v, escopo) && v.status === 'distrato' && noPeriodo(v.distratoEm || v.dataVenda));
+  const recs = recebiveisDo(escopo);
   const recebido = recs.filter(r => noPeriodo(r.dataPagamento)).reduce((s, r) => s + num(r.valorPago), 0);
   const aReceber = recs.reduce((s, r) => s + recRestante(r), 0);
   const atraso = recs.filter(r => recStatus(r) === 'atrasado').reduce((s, r) => s + recRestante(r), 0);
-  const cs = custosDo(lot.id);
+  const cs = custosDo(escopo);
   const custoPeriodo = cs.filter(c => noPeriodo(f.base === 'pagamento' ? c.dataPagamento : c.dataCompetencia)).reduce((s, c) => s + num(c.valor), 0);
   const custoPago = cs.filter(c => c.status === 'pago' && noPeriodo(c.dataPagamento)).reduce((s, c) => s + num(c.valor), 0);
   const vgv = ls.reduce((s, l) => s + num(l.preco), 0);
@@ -126,9 +128,9 @@ function relResumo(lot) {
   };
 }
 
-function relEspelho(lot) {
+function relEspelho(escopo) {
   const f = relState();
-  const ls = lotesDo(lot.id).slice().sort(cmpLote);
+  const ls = db.lotes.filter(l => noEscopo(l, escopo)).slice().sort(cmpLote);
   const quadras = [...new Set(ls.map(l => l.quadra))].sort(naturalCmp);
   const lista = ls.filter(l => !f.quadra || l.quadra === f.quadra).filter(l => f.status === 'todos' || l.status === f.status);
   const linhas = []; const csv = [];
@@ -161,9 +163,9 @@ function relEspelho(lot) {
   };
 }
 
-function relVendas(lot) {
+function relVendas(escopo) {
   const f = relState();
-  const todas = db.vendas.filter(v => v.loteamentoId === lot.id && noPeriodo(v.dataVenda));
+  const todas = db.vendas.filter(v => noEscopo(v, escopo) && noPeriodo(v.dataVenda));
   const corretores = [...new Set(todas.map(v => v.corretor.nome).filter(Boolean))].sort();
   const lista = todas.filter(v => !f.corretor || v.corretor.nome === f.corretor)
     .filter(v => f.status === 'todos' || (f.status === 'distrato' ? v.status === 'distrato' : v.status !== 'distrato'))
@@ -192,9 +194,9 @@ function relVendas(lot) {
   };
 }
 
-function relReceber(lot) {
+function relReceber(escopo) {
   const f = relState();
-  const todas = recebiveisDo(lot.id).filter(r => noPeriodo(r.vencimento));
+  const todas = recebiveisDo(escopo).filter(r => noPeriodo(r.vencimento));
   const grupos = { todos: () => true, aberto: r => recStatus(r) !== 'pago', pago: r => recStatus(r) === 'pago', atrasado: r => recStatus(r) === 'atrasado' };
   const lista = todas.filter(grupos[f.status] || grupos.todos).sort((a, b) => a.vencimento.localeCompare(b.vencimento));
   const linhas = [], csv = [];
@@ -229,8 +231,8 @@ function relReceber(lot) {
   };
 }
 
-function relInadimplencia(lot) {
-  const lista = inadimplentes(lot.id);
+function relInadimplencia(escopo) {
+  const lista = inadimplentes(escopo);
   const linhas = [], csv = [];
   FAIXAS_DIAS.forEach(([nome, min, max]) => {
     const daFaixa = lista.filter(it => it.dias >= min && it.dias <= max);
@@ -243,7 +245,7 @@ function relInadimplencia(lot) {
   });
   const cols = [{ t: 'Cliente' }, { t: 'Lote' }, { t: 'Parcelas', num: true }, { t: 'Venceu em' }, { t: 'Dias', num: true }, { t: 'Principal', num: true }, { t: 'Atualizado', num: true }, { t: 'Última cobrança' }];
   const total = lista.reduce((s, x) => s + x.valor, 0);
-  const carteira = recebiveisDo(lot.id).reduce((s, r) => s + recRestante(r), 0);
+  const carteira = recebiveisDo(escopo).reduce((s, r) => s + recRestante(r), 0);
   return {
     titulo: 'Inadimplência',
     filtros: '<p class="tiny muted" style="margin-top:8px">Mostra a situação atual dos contratos em atraso, sem depender do período.</p>',
@@ -258,9 +260,9 @@ function relInadimplencia(lot) {
   };
 }
 
-function relComissoes(lot) {
+function relComissoes(escopo) {
   const f = relState();
-  const todas = db.vendas.filter(v => v.loteamentoId === lot.id && v.status !== 'distrato' && noPeriodo(v.dataVenda) && num(v.comissaoValor) > 0);
+  const todas = db.vendas.filter(v => noEscopo(v, escopo) && v.status !== 'distrato' && noPeriodo(v.dataVenda) && num(v.comissaoValor) > 0);
   const corretores = [...new Set(todas.map(v => v.corretor.nome).filter(Boolean))].sort();
   const lista = todas.filter(v => !f.corretor || v.corretor.nome === f.corretor)
     .filter(v => f.status === 'todos' || (f.status === 'pagas' ? v.comissaoPaga : !v.comissaoPaga))
@@ -294,9 +296,9 @@ function relComissoes(lot) {
   };
 }
 
-function relDespesas(lot) {
+function relDespesas(escopo) {
   const f = relState();
-  const todos = custosDo(lot.id);
+  const todos = custosDo(escopo);
   const fornecedores = [...new Set(todos.map(c => c.fornecedor).filter(Boolean))].sort();
   const dataBase = c => (f.base === 'pagamento' ? c.dataPagamento : f.base === 'vencimento' ? (c.vencimento || c.dataCompetencia) : c.dataCompetencia);
   const lista = todos
@@ -328,7 +330,8 @@ function relDespesas(lot) {
   const total = lista.reduce((s, c) => s + num(c.valor), 0);
   const pago = lista.filter(c => c.status === 'pago').reduce((s, c) => s + num(c.valor), 0);
   const atrasado = lista.filter(c => custoStatus(c) === 'atrasado').reduce((s, c) => s + num(c.valor), 0);
-  const orc = lot.orcamento || {};
+  const orc = {};
+  empsDo(escopo).forEach(e => Object.entries(e.orcamento || {}).forEach(([k, v]) => { orc[k] = num(orc[k]) + num(v); }));
   const orcTotal = Object.values(orc).reduce((s, x) => s + num(x), 0);
   return {
     titulo: 'Despesas',
@@ -343,18 +346,19 @@ function relDespesas(lot) {
       { lbl: 'Despesas', val: fmtMoneyShort(total), sub: `${lista.length} lançamento(s)`, cor: 'c-amber' },
       { lbl: 'Pagas', val: fmtMoneyShort(pago), sub: '', cor: 'c-green' },
       { lbl: 'Em atraso', val: fmtMoneyShort(atrasado), sub: '', cor: 'c-red' },
-      { lbl: 'Orçado no projeto', val: fmtMoneyShort(orcTotal), sub: orcTotal ? `realizado ${fmtNum(custosDo(lot.id).reduce((s, c) => s + num(c.valor), 0) / orcTotal * 100, 0)}%` : 'sem orçamento', cor: 'c-blue' }
+      { lbl: 'Orçado no projeto', val: fmtMoneyShort(orcTotal), sub: orcTotal ? `realizado ${fmtNum(custosDo(escopo).reduce((s, c) => s + num(c.valor), 0) / orcTotal * 100, 0)}%` : 'sem orçamento', cor: 'c-blue' }
     ]),
-    html: relTabela(cols, linhas, ['Total', '', '', '', '', fmtMoney(total), '']) + orcamentoHtml(lot, lista),
+    html: relTabela(cols, linhas, ['Total', '', '', '', '', fmtMoney(total), '']) + orcamentoHtml(escopo, lista),
     cols, csv, csvHead: ['Competência', 'Vencimento', 'Pagamento', 'Descrição', 'Categoria', 'Fornecedor', 'Lote', 'Valor', 'Situação', 'Forma', 'Observação']
   };
 }
 
-function orcamentoHtml(lot, lista) {
-  const orc = lot.orcamento || {};
+function orcamentoHtml(escopo, lista) {
+  const orc = {};
+  empsDo(escopo).forEach(e => Object.entries(e.orcamento || {}).forEach(([k, v]) => { orc[k] = num(orc[k]) + num(v); }));
   const cats = db.categorias.filter(c => num(orc[c.id]) > 0 || lista.some(x => x.categoriaId === c.id));
   if (!cats.length) return '';
-  const todos = custosDo(lot.id);
+  const todos = custosDo(escopo);
   return `<div class="card"><h3>📋 Orçado × realizado por categoria</h3>
     <div class="table-wrap"><table class="tbl"><thead><tr><th>Categoria</th><th class="num">Orçado</th><th class="num">Realizado (total)</th><th class="num">No período</th><th class="num">Saldo</th></tr></thead>
     <tbody>${cats.map(c => {
@@ -368,10 +372,10 @@ function orcamentoHtml(lot, lista) {
 
 // ---------------------------------------------------------------- saída
 function relCabecalhoImpressao(rel) {
-  const lot = curLot(); const f = relState();
+  const lot = escopoAtual() ? getLoteamento(escopoAtual()) : null; const f = relState();
   const periodo = (f.de === '2000-01-01' && f.ate === '2099-12-31') ? 'todo o período' : `${fmtDate(f.de)} a ${fmtDate(f.ate)}`;
   return `<h1>${esc(db.config.empresa || (lot ? lot.nome : ''))}</h1>
-    <div>${lot ? esc(lot.nome) : ''}${lot && lot.cidade ? ' · ' + esc(lot.cidade) : ''}</div>
+    <div>${lot ? esc(lot.nome) + (lot.cidade ? ' · ' + esc(lot.cidade) : '') : 'Todos os empreendimentos'}</div>
     <h2>${esc(rel.titulo)} — ${esc(periodo)}</h2>`;
 }
 function imprimirRelatorio() {

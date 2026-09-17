@@ -58,21 +58,18 @@
 <section class="screen" id="screen-admin">
   <div class="topbar">
     <div class="brand"><span>🔐</span><div><h1 class="lot-name">Loteamento</h1><div class="role">Administração</div></div></div>
-    <div class="right"><select class="lot-select" onchange="setCurLot(this.value)"></select><span class="user-name small" style="display:none;opacity:.85"></span><button class="top-link btn-ver-corretor" onclick="startRole('corretor')" title="Ver como o corretor vê">👁️</button><button class="top-link" onclick="sair()">Sair</button></div>
+    <div class="right"><span class="user-name small" style="display:none;opacity:.85"></span><button class="top-link btn-ver-corretor" onclick="startRole('corretor')" title="Ver como o corretor vê">👁️</button><button class="top-link" onclick="sair()">Sair</button></div>
   </div>
   <div class="tabs">
     <div class="tab active" data-tab="painel" onclick="switchTab('painel')">📊 Painel</div>
-    <div class="tab" data-tab="planta" onclick="switchTab('planta')">🗺️ Planta</div>
-    <div class="tab" data-tab="lotes" onclick="switchTab('lotes')">📦 Lotes</div>
-    <div class="tab" data-tab="reservas" onclick="switchTab('reservas')">📝 Reservas <span class="tab-badge" id="aBadgeReservas" style="display:none">0</span></div>
-    <div class="tab" data-tab="leads" onclick="switchTab('leads')">🎯 Leads <span class="tab-badge" id="aBadgeLeads" style="display:none">0</span></div>
+    <div class="tab" data-tab="emp" onclick="switchTab('emp')">🏗️ Empreendimentos <span class="tab-badge" id="aBadgeReservas" style="display:none">0</span></div>
     <div class="tab" data-tab="vendas" onclick="switchTab('vendas')">💰 Vendas</div>
     <div class="tab" data-tab="recebiveis" onclick="switchTab('recebiveis')">📆 Recebíveis</div>
-    <div class="tab" data-tab="custos" onclick="switchTab('custos')">🧾 Custos</div>
     <div class="tab" data-tab="relatorios" onclick="switchTab('relatorios')">📊 Relatórios</div>
     <div class="tab" data-tab="cadastros" onclick="switchTab('cadastros')">⚙️ Cadastros</div>
   </div>
   <div class="view active" id="av-painel"></div>
+  <div class="view" id="av-emp"></div>
   <div class="view" id="av-planta"></div>
   <div class="view" id="av-lotes"></div>
   <div class="view" id="av-reservas"></div>

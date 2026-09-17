@@ -72,12 +72,12 @@ function remessaPendente(rec) {
   if (rec.bancoValor != null && Math.abs(recValor(rec) - num(rec.bancoValor)) > 0.005) return 'alterar';
   return null;
 }
-function pendentesDeRemessa(lotId) {
-  return db.recebiveis.filter(r => r.loteamentoId === lotId && remessaPendente(r)).map(r => ({ r, acao: remessaPendente(r) }));
+function pendentesDeRemessa(escopo) {
+  return db.recebiveis.filter(r => noEscopo(r, escopo) && remessaPendente(r)).map(r => ({ r, acao: remessaPendente(r) }));
 }
 /* Parcelas do mês que ainda não viraram título. */
-function parcelasDoMes(lotId, mes) {
-  return db.recebiveis.filter(r => r.loteamentoId === lotId && monthKey(r.vencimento) === mes && r.tipo !== 'entrada' && recStatus(r) !== 'pago')
+function parcelasDoMes(escopo, mes) {
+  return db.recebiveis.filter(r => noEscopo(r, escopo) && monthKey(r.vencimento) === mes && r.tipo !== 'entrada' && recStatus(r) !== 'pago')
     .sort((a, b) => naturalCmp(clienteDe(a), clienteDe(b)) || a.vencimento.localeCompare(b.vencimento));
 }
 
@@ -311,8 +311,12 @@ function contaPronta(lot) {
 
 // ================================================================ TELA: GERAR COBRANÇAS DO MÊS
 function abrirGerarCobrancas(mes) {
-  const lot = curLot(); if (!lot) return;
   if (!pode('financeiro.baixar')) { toast('🔒', 'Sem permissão', 'Seu perfil não gera cobranças.', true); return; }
+  /* A conta de cobrança é de cada empreendimento, então a remessa também é. */
+  comEmpreendimento('🧾 Gerar cobranças', 'A conta de cobrança é de cada empreendimento, então a remessa sai de um por vez.',
+    lot => gerarCobrancasTela(lot, mes), l => !!contaCobranca(l.id) && !!layoutCnab(contaCobranca(l.id).banco));
+}
+function gerarCobrancasTela(lot, mes) {
   const conta = contaPronta(lot); if (!conta) return;
   const m = mes || state.sub.cobMes || mesAtual();
   state.sub.cobMes = m;
@@ -327,7 +331,7 @@ function abrirGerarCobrancas(mes) {
   const total = prontas.reduce((s, r) => s + recValor(r), 0);
   openModal({
     title: '🧾 Gerar cobranças', wide: true,
-    body: `<div class="subtabs" style="justify-content:center"><div class="chip" onclick="abrirGerarCobrancas('${mesAnterior(m)}')">‹ ${monthLabel(mesAnterior(m))}</div><div class="chip active">${monthLabel(m)}</div><div class="chip" onclick="abrirGerarCobrancas('${mesSeguinte(m)}')">${monthLabel(mesSeguinte(m))} ›</div></div>
+    body: `<div class="subtabs" style="justify-content:center"><div class="chip" onclick="gerarCobrancasTela(getLoteamento('${lot.id}'),'${mesAnterior(m)}')">‹ ${monthLabel(mesAnterior(m))}</div><div class="chip active">${esc(lot.nome)} · ${monthLabel(m)}</div><div class="chip" onclick="gerarCobrancasTela(getLoteamento('${lot.id}'),'${mesSeguinte(m)}')">${monthLabel(mesSeguinte(m))} ›</div></div>
       <div class="kpi-grid">
         <div class="kpi ${Object.keys(semIndice).length ? 'c-red' : 'c-green'}"><div class="lbl">Contratos sem índice do mês</div><div class="val">${Object.keys(semIndice).length}</div><div class="sub">${Object.keys(semIndice).length ? 'lance o índice antes de gerar' : 'todos os índices lançados'}</div></div>
         <div class="kpi c-blue"><div class="lbl">Já geradas em ${monthLabel(m)}</div><div class="val">${geradas.length}</div><div class="sub">registradas no banco</div></div>
@@ -344,13 +348,13 @@ function abrirGerarCobrancas(mes) {
         </tbody><tfoot><tr><td colspan="4">Total</td><td class="num">${esc(fmtMoney(total))}</td></tr></tfoot></table></div></div>`
         : `<div class="empty"><div class="ic">📭</div><p><b>Nada a gerar em ${monthLabel(m)}</b></p><p class="small">${geradas.length ? 'As cobranças deste mês já foram geradas.' : 'Nenhuma parcela em aberto neste mês.'}</p></div>`}`,
     footer: `<button class="btn btn-secondary" onclick="closeModal()">Fechar</button>
-      ${prontas.length ? `<button class="btn btn-outline" onclick="simularCobrancas('${m}')">🖨️ Simular</button><button class="btn btn-primary" onclick="gerarCobrancas('${m}')">Gerar agora</button>` : pend.length ? `<button class="btn btn-primary" onclick="gerarRemessaPendente()">Gerar remessa das alterações</button>` : ''}`
+      ${prontas.length ? `<button class="btn btn-outline" onclick="simularCobrancas('${lot.id}','${m}')">🖨️ Simular</button><button class="btn btn-primary" onclick="gerarCobrancas('${lot.id}','${m}')">Gerar agora</button>` : pend.length ? `<button class="btn btn-primary" onclick="gerarRemessaPendente('${lot.id}')">Gerar remessa das alterações</button>` : ''}`
   });
 }
 /* Simulação em PDF: o que sairia se você gerasse agora, agrupado por cliente, como o
    financeiro está acostumado a conferir antes de mandar ao banco. */
-function simularCobrancas(mes) {
-  const lot = curLot(); const conta = contaCobranca(lot.id);
+function simularCobrancas(lotId, mes) {
+  const lot = getLoteamento(lotId); const conta = contaCobranca(lot.id);
   const prontas = parcelasDoMes(lot.id, mes).filter(r => !registradaNoBanco(r) && !bloqueioRemessa(r));
   const porVenda = {};
   prontas.forEach(r => { (porVenda[r.vendaId] = porVenda[r.vendaId] || []).push(r); });
@@ -367,8 +371,8 @@ function simularCobrancas(mes) {
     <p style="margin-top:14px">Simulação emitida em ${fmtDate(todayStr())}. Nada foi gerado nem enviado ao banco.</p>`;
   window.print();
 }
-function gerarCobrancas(mes) {
-  const lot = curLot(); const conta = contaPronta(lot); if (!conta) return;
+function gerarCobrancas(lotId, mes) {
+  const lot = getLoteamento(lotId); const conta = contaPronta(lot); if (!conta) return;
   const prontas = parcelasDoMes(lot.id, mes).filter(r => !registradaNoBanco(r) && !bloqueioRemessa(r));
   const pend = pendentesDeRemessa(lot.id);
   let texto;
@@ -379,9 +383,10 @@ function gerarCobrancas(mes) {
   toast('✅', 'Cobranças geradas', `${prontas.length} título(s) em ${monthLabel(mes)}${pend.length ? ' + ' + pend.length + ' alteração(ões)' : ''}. Envie o arquivo ao banco.`);
 }
 /* Só as alterações e baixas pendentes, sem gerar cobrança nova. É o botão do aviso. */
-function gerarRemessaPendente() {
-  const lot = curLot(); const conta = contaPronta(lot); if (!conta) return;
+function gerarRemessaPendente(lotId) {
   if (!pode('financeiro.baixar')) { toast('🔒', 'Sem permissão', '', true); return; }
+  if (!lotId) { comEmpreendimento('📤 Remessa de alterações', 'De qual empreendimento?', l => gerarRemessaPendente(l.id), l => pendentesDeRemessa(l.id).length); return; }
+  const lot = getLoteamento(lotId); const conta = contaPronta(lot); if (!conta) return;
   const pend = pendentesDeRemessa(lot.id);
   if (!pend.length) { toast('ℹ️', 'Nada pendente', '', true); return; }
   let texto;
@@ -391,18 +396,18 @@ function gerarRemessaPendente() {
   toast('✅', 'Remessa de alterações gerada', `${pend.length} título(s). Envie o arquivo ao banco.`);
 }
 /* Aviso no topo da lista de recebíveis, igual ao ERP: enquanto houver alteração não enviada. */
-function avisoRemessaHtml(lotId) {
-  const conta = contaCobranca(lotId);
-  if (!conta || !layoutCnab(conta.banco)) return '';
-  const pend = pendentesDeRemessa(lotId);
+function avisoRemessaHtml(escopo) {
+  const pend = pendentesDeRemessa(escopo).filter(x => { const c = contaCobranca(x.r.loteamentoId); return c && layoutCnab(c.banco); });
   if (!pend.length) return '';
   const alt = pend.filter(x => x.acao === 'alterar').length, bx = pend.length - alt;
-  return `<div class="alert warn" onclick="gerarRemessaPendente()"><span><b>${pend.length} cobrança(s) marcada(s) para remessa</b> — ${alt ? alt + ' alterada(s) depois de registrada(s)' : ''}${alt && bx ? ' e ' : ''}${bx ? bx + ' para baixar no banco' : ''}. O banco ainda tem o boleto antigo. <u>Gerar remessa</u></span></div>`;
+  const emps = [...new Set(pend.map(x => x.r.loteamentoId))];
+  return `<div class="alert warn" onclick="gerarRemessaPendente(${emps.length === 1 ? `'${emps[0]}'` : ''})"><span><b>${pend.length} cobrança(s) marcada(s) para remessa</b> — ${alt ? alt + ' alterada(s) depois de registrada(s)' : ''}${alt && bx ? ' e ' : ''}${bx ? bx + ' para baixar no banco' : ''}${emps.length > 1 ? ` em ${emps.length} empreendimentos` : ''}. O banco ainda tem o boleto antigo. <u>Gerar remessa</u></span></div>`;
 }
 
 // ================================================================ TELA: LER RETORNO
 function abrirRetorno() {
   if (!pode('financeiro.baixar')) { toast('🔒', 'Sem permissão', 'Seu perfil não dá baixa.', true); return; }
+  if (!curLot() || !contaCobranca(curLot().id)) { comEmpreendimento('📥 Ler retorno', 'De qual conta de cobrança é este arquivo?', () => abrirRetorno(), l => !!contaCobranca(l.id)); return; }
   openModal({ title: '📥 Ler retorno do banco',
     body: `<p class="help mb">Escolha o arquivo de retorno que você baixou do internet banking. O sistema lê, mostra o que entendeu e só dá baixa depois que você confirmar.</p>
       <div class="fg"><input type="file" id="retArq" accept=".ret,.txt,.RET,.TXT" onchange="lerArquivoRetorno(this)"></div>`,
