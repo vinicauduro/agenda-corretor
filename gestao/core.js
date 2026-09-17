@@ -271,6 +271,9 @@ const TABLE_COLS = {
 const NULLABLE_EMPTY = new Set(['validade', 'aprovadaEm', 'encerradaEm', 'dataEntrada', 'primeiroVencimento', 'comissaoData', 'distratoEm', 'dataPagamento', 'vencimento', 'reservaId', 'vendaId', 'loteId', 'categoriaId', 'forma', 'frente', 'fundos', 'planta', 'pts', 'proposta', 'corretorUserId']);
 const INT_FIELDS = new Set(['nParcelas', 'numero']);
 function snakeKey(k) { return k.replace(/[A-Z]/g, m => '_' + m.toLowerCase()); }
+/* No aplicativo a coleção é camelCase (contasBanco); no Postgres a tabela é snake_case
+   (contas_banco). Todas as outras são uma palavra só, então a conversão não muda nada. */
+function tabelaDe(col) { return snakeKey(col); }
 function camelKey(k) { return k.replace(/_([a-z])/g, (m, c) => c.toUpperCase()); }
 function toRow(col, rec) {
   const row = { org_id: Cloud.org.id };
@@ -365,7 +368,7 @@ const Cloud = {
   async loadAll() {
     const org = this.org.id;
     const tabs = Object.keys(TABLE_COLS);
-    const results = await Promise.all(tabs.map(t => this.client.from(t).select('*').eq('org_id', org).limit(t === 'log' ? 400 : 20000).order(t === 'log' ? 'ts' : 'id', { ascending: true })));
+    const results = await Promise.all(tabs.map(t => this.client.from(tabelaDe(t)).select('*').eq('org_id', org).limit(t === 'log' ? 400 : 20000).order(t === 'log' ? 'ts' : 'id', { ascending: true })));
     tabs.forEach((t, i) => { if (results[i].error) throw new Error(t + ': ' + results[i].error.message); db[t] = (results[i].data || []).map(r => fromRow(t, r)); });
     if (!db.categorias.length) db.categorias = defaultCategorias();
     await this.loadEquipe();
@@ -385,7 +388,7 @@ const Cloud = {
     const org = this.org.id;
     let ch = this.client.channel('org-' + org);
     Object.keys(TABLE_COLS).forEach(t => {
-      ch = ch.on('postgres_changes', { event: '*', schema: 'public', table: t, filter: 'org_id=eq.' + org }, payload => this.onChange(t, payload));
+      ch = ch.on('postgres_changes', { event: '*', schema: 'public', table: tabelaDe(t), filter: 'org_id=eq.' + org }, payload => this.onChange(t, payload));
     });
     ch = ch.on('postgres_changes', { event: '*', schema: 'public', table: 'organizacoes', filter: 'id=eq.' + org }, payload => { if (payload.new && payload.new.config) { db.config = Object.assign(defaultConfig(), payload.new.config); saveLocal(); this.agendarRender(); } });
     ch = ch.on('postgres_changes', { event: '*', schema: 'public', table: 'membros', filter: 'org_id=eq.' + org }, () => { this.loadEquipe().then(() => this.agendarRender()); });
@@ -407,12 +410,12 @@ const Cloud = {
   // --- escrita ---
   async upsert(col, rec) {
     if (!TABLE_COLS[col]) return;
-    const { error } = await this.client.from(col).upsert(toRow(col, rec), { onConflict: 'org_id,id' });
+    const { error } = await this.client.from(tabelaDe(col)).upsert(toRow(col, rec), { onConflict: 'org_id,id' });
     if (error) this.erro(error, col);
   },
   async remove(col, id) {
     if (!TABLE_COLS[col]) return;
-    const { error } = await this.client.from(col).delete().eq('org_id', this.org.id).eq('id', id);
+    const { error } = await this.client.from(tabelaDe(col)).delete().eq('org_id', this.org.id).eq('id', id);
     if (error) this.erro(error, col);
   },
   async saveConfig() {
@@ -426,7 +429,7 @@ const Cloud = {
       for (const t of ['loteamentos', 'categorias', 'lotes', 'reservas', 'vendas', 'recebiveis', 'custos', 'leads', 'modelos', 'indices', 'cobrancas', 'contasBanco', 'log']) {
         const rows = db[t].map(r => toRow(t, r));
         for (let i = 0; i < rows.length; i += 400) {
-          const { error } = await this.client.from(t).upsert(rows.slice(i, i + 400), { onConflict: 'org_id,id' });
+          const { error } = await this.client.from(tabelaDe(t)).upsert(rows.slice(i, i + 400), { onConflict: 'org_id,id' });
           if (error) throw new Error(t + ': ' + error.message);
         }
       }

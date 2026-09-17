@@ -7,6 +7,10 @@ sua conferência. Atualizada em 17/09/2026, depois da revisão de segurança e d
 
 ## 0. Antes de tudo
 
+- [ ] **Rodar o `schema.sql` mais uma vez** (17/09, fim do dia): entrou só uma correção na
+      limpeza de dados, que antes deixava categorias de despesa e modelos de documento para
+      trás ao importar um backup. Não é urgente, mas rode quando puder.
+- [x] ~~Rodar o `schema.sql` de novo~~ — feito por você em 17/09.
 - [ ] **Rodar o `schema.sql` de novo** no SQL Editor do Supabase. Cole o arquivo inteiro de
       `gestao/supabase/schema.sql` e clique em Run. Ele é idempotente e não apaga nada.
       Desde a última vez entraram: vitrine, leads, modelos de documento, índices, cobranças,
