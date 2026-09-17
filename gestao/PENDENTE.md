@@ -231,8 +231,21 @@ escrito de memória com erro de uma posição em alguns campos.
       tem a relação de títulos em ser, mas ela não mostra os já baixados, então não serve como
       garantia — a faixa separada serve.
 - [ ] Gerar uma remessa de teste com poucos títulos e mandar pelo Gerenciador Financeiro.
-- [ ] **Me mandar um retorno com movimento.** O que veio não tinha ocorrência. A leitura está
-      no layout confirmado, mas ainda não foi testada com pagamento real.
+- [x] ~~Me mandar um retorno com movimento~~ — **feito em 17/09**, três arquivos (08, 09 e
+      10/09) com 14 liquidações e uma entrada confirmada. A leitura foi conferida campo a campo
+      contra eles: ocorrência, datas, vencimento, valor do título, valor recebido, juros, multa,
+      tarifa e data do crédito. Um teste roda em cima dos arquivos de verdade a cada mudança.
+
+      O que os arquivos ensinaram, além de confirmar o layout:
+
+      - O banco cobra **R$ 2,18 de tarifa por título liquidado**. Sai do seu bolso, não da
+        parcela. A tela do retorno mostra o total por arquivo, para você lançar como despesa
+        bancária se quiser acompanhar.
+      - O rodapé traz a **posição da carteira** (títulos em ser e valor). Em 16/09 eram 15
+        títulos somando R$ 64.828,35. A tela mostra isso como conferência.
+      - O crédito cai **no dia seguinte** ao pagamento.
+      - Um título pode ser **registrado e pago no mesmo arquivo** (aconteceu com o 2640 em
+        09/09). O sistema trata e não baixa duas vezes.
 
 ### Outros bancos
 
