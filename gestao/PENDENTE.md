@@ -1,7 +1,7 @@
 # Pendências para testar no computador
 
 Lista do que foi construído e ainda não foi testado por você, mais as decisões que dependem da
-sua conferência. Atualizada em 16/09/2026, depois da entrega das permissões por função.
+sua conferência. Atualizada em 17/09/2026, depois da revisão de segurança.
 
 ---
 
@@ -206,6 +206,62 @@ vendas e área de login.
 Depois disso eu faço a página de vendas e movo o aplicativo para o domínio novo. O Supabase
 continua o mesmo, só mudam os endereços autorizados no painel dele e os links de vitrine já
 divulgados, que dá para manter funcionando em paralelo.
+
+---
+
+## 8c. Segurança: revisão feita e o que falta fechar
+
+Revisei o código e o banco em 17/09. Resumo honesto.
+
+**O que está certo (conferido agora):**
+
+- Todas as 17 tabelas do banco estão com RLS ligado, inclusive as novas (índices, cobranças,
+  contas_banco, modelos, vitrines e leads). A proteção está no banco, não na tela: mesmo que
+  alguém chame o Supabase por fora do app, só enxerga a própria empresa.
+- O visitante sem login não tem acesso a tabela nenhuma, só a duas funções: a da vitrine e a
+  de registrar interesse. A da vitrine devolve quadra, número, área, medidas, situação e preço
+  (se você mandar mostrar). Nunca CPF, matrícula, observação interna, reserva, venda ou
+  recebível.
+- O envio de interesse tem freio: no máximo 120 por hora por empresa e bloqueio de telefone
+  repetido em 2 minutos.
+- Não existe `eval` nem execução de texto no código, e tudo que vai para a tela passa pelo
+  escape. Um nome de cliente ou um lead não consegue injetar script.
+- Nenhuma senha ou chave secreta no repositório. A chave que está no `config.js` é a pública,
+  feita para ficar exposta.
+
+**Três coisas que eu quero arrumar antes de cliente pagante:**
+
+- [ ] **Código de convite.** Hoje são 6 caracteres sorteados de um jeito previsível, sem prazo
+      de validade e com até 100 usos. Um link que vazou num grupo de WhatsApp continua valendo
+      para sempre. Quero trocar por código longo de sorteio criptográfico, validade padrão de
+      7 dias e opção de uso único.
+- [ ] **O financeiro tem poder de administrador dentro do banco.** Na tela ele é limitado pelas
+      permissões, mas no banco ele consegue editar lotes, vendas, configurações e até criar um
+      convite de administrador. Um financeiro mal-intencionado cria esse convite, abre outra
+      conta com outro e-mail e entra como administrador. **Preciso da sua decisão:** o
+      financeiro deve poder mexer em lote e venda, ou só no dinheiro? Conforme a resposta eu
+      separo isso no banco.
+- [ ] **Bucket das plantas é de leitura pública.** É de propósito, a vitrine precisa. O endereço
+      tem o identificador da empresa e é impossível de adivinhar, mas quem tiver o link abre o
+      arquivo. Regra: ali só planta. Quando formos anexar documento de cliente, vai em pasta
+      privada com link que expira.
+
+**Riscos que não são de código e dependem de nós:**
+
+- [ ] Ligar **verificação em dois passos** para o dono e os administradores.
+- [ ] Assinar o **Supabase Pro** antes do primeiro cliente pagante: o plano gratuito não tem
+      backup diário. Perder dado é o risco mais real, bem mais que roubo.
+- [ ] Exportar o **backup em JSON** de vez em quando por Cadastros, enquanto estivermos no free.
+- [ ] Senha forte e não repetida de outro site, para você e para cada pessoa da equipe. A porta
+      mais fácil de arrombar é sempre a senha de alguém, não o sistema.
+- [ ] Quando sairmos do GitHub: travar no painel do Supabase os endereços autorizados só para o
+      nosso domínio.
+- [ ] **Termos de uso e política de privacidade** (LGPD). Guardamos CPF e telefone de comprador,
+      que é dado pessoal, e como SaaS você passa a ser operador dos dados dos seus clientes.
+
+Sobre "sequestro de informação": não existe servidor nosso para alguém criptografar. O
+aplicativo é arquivo estático e o banco é gerenciado pelo Supabase, com backup deles. O cenário
+realista não é ransomware, é alguém entrar com a senha de um usuário seu.
 
 ---
 
