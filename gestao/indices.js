@@ -84,6 +84,78 @@ function recValor(r) {
 }
 function recCorrecao(r) { return Math.round((recValor(r) - num(r.valor)) * 100) / 100; }
 
+/* ---------------------------------------------------------------- impacto de um lançamento
+
+   Lançar ou corrigir o índice de um mês que já passou muda o valor de parcelas que já estão
+   na rua. Antes de salvar, o sistema mostra o que muda, de quanto para quanto.
+
+   Duas listas saem daqui:
+   - "mudam": parcelas em aberto que passam a valer outro valor.
+   - "congeladas": parcelas já pagas que teriam mudado. Elas ficam como estão — o cliente pagou
+     o que o sistema mandou pagar —, mas você precisa saber que existem. */
+function _valorSemCongelar(r) {
+  const v = getVenda(r.vendaId);
+  if (!v || !v.indiceId || !getIndice(v.indiceId) || r.tipo === 'entrada') return num(r.valor);
+  const f = fatorIndice(v.indiceId, v.indiceBase || monthKey(v.dataVenda), monthKey(r.vencimento));
+  return Math.round(num(r.valor) * f * 100) / 100;
+}
+function simularIndice(ind, valoresNovos) {
+  const alvo = db.recebiveis.filter(r => {
+    const v = getVenda(r.vendaId);
+    return v && v.indiceId === ind.id && v.status !== 'distrato' && r.tipo !== 'entrada';
+  });
+  const de = {}, deBruto = {};
+  alvo.forEach(r => { de[r.id] = recValor(r); deBruto[r.id] = _valorSemCongelar(r); });
+  const original = ind.valores;
+  ind.valores = valoresNovos;                     // troca só para medir, e devolve logo abaixo
+  const mudam = [], congeladas = [];
+  alvo.forEach(r => {
+    const para = recValor(r), paraBruto = _valorSemCongelar(r);
+    if (Math.abs(para - de[r.id]) >= 0.005) mudam.push({ r, de: de[r.id], para });
+    else if (Math.abs(paraBruto - deBruto[r.id]) >= 0.005) congeladas.push({ r, de: deBruto[r.id], para: paraBruto });
+  });
+  ind.valores = original;
+  return { mudam, congeladas };
+}
+
+let _indicePendente = null;
+/* Pede confirmação quando o lançamento mexe em parcela que já existe. Se nada muda, salva
+   direto — não faz sentido incomodar quem está só lançando o mês corrente. */
+function confirmarIndice(ind, valores, acao) {
+  const imp = simularIndice(ind, valores);
+  if (!imp.mudam.length && !imp.congeladas.length) { _indicePendente = { ind, valores, acao }; aplicarIndicePendente(); return; }
+  _indicePendente = { ind, valores, acao };
+  const porContrato = {};
+  imp.mudam.forEach(x => { (porContrato[x.r.vendaId] = porContrato[x.r.vendaId] || []).push(x); });
+  const difTotal = imp.mudam.reduce((s, x) => s + (x.para - x.de), 0);
+  const cabecalho = v => {
+    const l = v && getLote(v.loteId);
+    return `${l ? loteLabel(l) : 'Contrato'}${v && v.cliente && v.cliente.nome ? ' · ' + esc(v.cliente.nome) : ''}`;
+  };
+  openModal({
+    title: '⚠️ Isto muda parcelas que já existem',
+    wide: true,
+    body: `<p class="help mb">${esc(acao)}. Confira a diferença antes de salvar. ${imp.mudam.length ? 'As parcelas abaixo passam a valer outro valor; se alguma já foi enviada ao cliente, o boleto precisa ser refeito.' : ''}</p>
+      ${imp.mudam.length ? `<div class="card"><h3>Parcelas em aberto que mudam <span class="badge ${difTotal >= 0 ? 'convertida' : 'atrasado'}">${difTotal >= 0 ? '+' : ''}${esc(fmtMoney(difTotal))}</span></h3>
+        ${Object.keys(porContrato).map(vid => { const v = getVenda(vid); const itens = porContrato[vid];
+          return `<div class="fieldset"><span class="lg">${cabecalho(v)}</span>
+            <table class="tbl"><thead><tr><th>Parcela</th><th>Vencimento</th><th class="num">Cobrado</th><th class="num">Ajustado</th><th class="num">Diferença</th></tr></thead><tbody>
+            ${itens.map(x => `<tr><td>${esc(x.r.descricao || ('Parcela ' + x.r.numero))}</td><td>${fmtDate(x.r.vencimento)}</td><td class="num">${esc(fmtMoney(x.de))}</td><td class="num"><b>${esc(fmtMoney(x.para))}</b></td><td class="num" style="color:${x.para >= x.de ? 'var(--success)' : 'var(--danger)'};font-weight:700">${x.para >= x.de ? '+' : ''}${esc(fmtMoney(x.para - x.de))}</td></tr>`).join('')}
+            </tbody></table></div>`; }).join('')}</div>` : ''}
+      ${imp.congeladas.length ? `<div class="card"><h3>Parcelas já pagas que não mudam</h3>
+        <p class="help">Estas ${imp.congeladas.length} parcela(s) teriam mudado, mas já estão quitadas e ficam como estão — o cliente pagou o que o sistema mandou pagar. A soma que deixou de ser cobrada é de <b>${esc(fmtMoney(imp.congeladas.reduce((s, x) => s + (x.para - x.de), 0)))}</b>. O saldo em aberto segue corrigido normalmente.</p></div>` : ''}`,
+    footer: `<button class="btn btn-secondary" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" onclick="aplicarIndicePendente()">Confirmar e salvar</button>`
+  });
+}
+function aplicarIndicePendente() {
+  const p = _indicePendente; _indicePendente = null;
+  if (!p) return;
+  upsert('indices', Object.assign({}, p.ind, { valores: p.valores }));
+  logAct(p.acao);
+  closeModal(); renderCadastros(); renderCurrent();
+  toast('✅', 'Índice atualizado', p.ind.codigo);
+}
+
 // ================================================================ CADASTRO
 function cadIndicesHtml() {
   const list = db.indices.slice().sort((a, b) => a.nome.localeCompare(b.nome));
@@ -166,15 +238,13 @@ function salvarValorIndice(id) {
   const mes = val('lxMes'), v = val('lxValor');
   if (!mes || v === '') { toast('⚠️', 'Informe mês e valor', '', true); return; }
   const valores = Object.assign({}, indiceValores(ind)); valores[mes] = num(v);
-  upsert('indices', Object.assign({}, ind, { valores }));
-  logAct(`Índice ${ind.codigo} ${monthLabel(mes)}: ${fmtNum(num(v), 2)}${ind.tipo === 'pontos' ? '' : '%'}`);
-  closeModal(); renderCadastros(); toast('✅', 'Índice atualizado', `${ind.codigo} · ${monthLabel(mes)}`);
+  confirmarIndice(ind, valores, `Índice ${ind.codigo} ${monthLabel(mes)}: ${fmtNum(num(v), 2)}${ind.tipo === 'pontos' ? '' : '%'}`);
 }
 function apagarValorIndice(id, mes) {
   const ind = getIndice(id); if (!ind) return;
+  if (!pode('indices.editar')) { toast('🔒', 'Sem permissão', 'Seu perfil não lança índices.', true); return; }
   const valores = Object.assign({}, indiceValores(ind)); delete valores[mes];
-  upsert('indices', Object.assign({}, ind, { valores }));
-  closeModal(); renderCadastros(); toast('🗑️', 'Lançamento apagado', monthLabel(mes));
+  confirmarIndice(ind, valores, `Índice ${ind.codigo}: lançamento de ${monthLabel(mes)} apagado`);
 }
 
 function abrirIndiceValores(id) {
@@ -198,9 +268,8 @@ function salvarIndiceLista(id) {
     if (!m) { erros++; return; }
     valores[`${m[1]}-${pad2(Number(m[2]))}`] = num(m[3]);
   });
-  upsert('indices', Object.assign({}, ind, { valores }));
-  closeModal(); renderCadastros();
-  toast(erros ? '⚠️' : '✅', 'Lista salva', `${Object.keys(valores).length} mês(es)${erros ? ` · ${erros} linha(s) ignorada(s)` : ''}`, !!erros);
+  if (erros) toast('⚠️', 'Linhas ignoradas', `${erros} linha(s) fora do formato AAAA-MM valor`, true);
+  confirmarIndice(ind, valores, `Índice ${ind.codigo}: lista de ${Object.keys(valores).length} mês(es) salva`);
 }
 
 // ================================================================ NA VENDA
