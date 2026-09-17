@@ -546,6 +546,9 @@ create policy contas_banco_write on public.contas_banco for all to authenticated
 
 alter table public.recebiveis add column if not exists nosso_numero text;
 alter table public.recebiveis add column if not exists remessa_em date;
+-- o que foi registrado no banco; se a parcela mudar depois, a remessa precisa avisar o banco
+alter table public.recebiveis add column if not exists banco_valor double precision;
+alter table public.recebiveis add column if not exists banco_venc date;
 
 -- ---------------------------------------------------------------------
 -- 4c. Cobranças registradas (régua de inadimplência)
@@ -584,6 +587,7 @@ create table if not exists public.remessas (
   data          date not null default current_date,
   arquivo       text not null default '',
   qtd           integer not null default 0,
+  baixas        integer not null default 0,
   valor         double precision not null default 0,
   rec_ids       jsonb not null default '[]'::jsonb,
   primeiro_nn   text not null default '',

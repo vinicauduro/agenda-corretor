@@ -19,6 +19,7 @@ function renderRecebiveis() {
   const recMes = all.filter(r => r.dataPagamento && monthKey(r.dataPagamento) === mesKey).reduce((s, r) => s + num(r.valorPago), 0);
   const somaLista = list.reduce((s, r) => s + (f.status === 'pago' ? num(r.valorPago) : recRestante(r)), 0);
   v.innerHTML = `
+    ${avisoRemessaHtml(lot.id)}
     <div class="kpi-grid">
       <div class="kpi c-amber"><div class="lbl">A receber</div><div class="val">${fmtMoneyShort(tot - pago)}</div><div class="sub">de ${fmtMoneyShort(tot)} contratado</div></div>
       <div class="kpi c-green"><div class="lbl">Recebido</div><div class="val">${fmtMoneyShort(pago)}</div><div class="sub">${fmtMoneyShort(recMes)} neste mês</div></div>
@@ -27,7 +28,7 @@ function renderRecebiveis() {
     </div>
     <div class="chips">${[['aberto', 'Em aberto'], ['atrasado', 'Atrasados'], ['pago', 'Pagos'], ['all', 'Todos']].map(([k, l]) => `<div class="chip ${f.status === k ? 'active' : ''}" onclick="state.filters.rec.status='${k}';renderRecebiveis()">${l}<span class="n">${all.filter(grupos[k]).length}</span></div>`).join('')}
       <div class="chip" onclick="abrirPainelCobranca()">🔔 Cobrança<span class="n">${inadimplentes(lot.id).length}</span></div>
-      ${contaCobranca(lot.id) && layoutCnab(contaCobranca(lot.id).banco) ? `<div class="chip" onclick="abrirGerarRemessa()">📤 Remessa<span class="n">${remessaElegiveis(lot.id).filter(r => !bloqueioRemessa(r)).length}</span></div>
+      ${contaCobranca(lot.id) && layoutCnab(contaCobranca(lot.id).banco) ? `<div class="chip" onclick="abrirGerarCobrancas()">🧾 Gerar cobranças<span class="n">${parcelasDoMes(lot.id, mesAtual()).filter(r => !registradaNoBanco(r) && !bloqueioRemessa(r)).length}</span></div>
       <div class="chip" onclick="abrirRetorno()">📥 Retorno</div>` : ''}</div>
     <div class="filters">
       <select onchange="state.filters.rec.mes=this.value;renderRecebiveis()"><option value="all">Todos os meses</option>${meses.map(m => `<option value="${m}" ${f.mes === m ? 'selected' : ''}>${monthLabel(m)}</option>`).join('')}</select>
@@ -101,6 +102,7 @@ function salvarRecebivel(id, voltarVendaId) {
 }
 function excluirRecebivel(id, voltarVendaId) {
   const r = db.recebiveis.find(x => x.id === id); if (!r) return;
+  if (registradaNoBanco(r) && recStatus(r) !== 'pago') { toast('🏦', 'Esta parcela está registrada no banco', 'Zere o valor ou marque como paga para gerar a baixa na remessa; depois exclua.', true); return; }
   if (!confirm('Excluir esta parcela do cronograma?')) return;
   removeRec('recebiveis', id); atualizarStatusVenda(r.vendaId);
   if (voltarVendaId) abrirVendaAdmin(voltarVendaId); else closeModal();
