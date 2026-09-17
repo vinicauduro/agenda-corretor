@@ -7,19 +7,16 @@ sua conferência. Atualizada em 17/09/2026, depois da revisão de segurança e d
 
 ## 0. Antes de tudo
 
-- [ ] **Rodar o `schema.sql` mais uma vez** (17/09, fim do dia): entrou só uma correção na
-      limpeza de dados, que antes deixava categorias de despesa e modelos de documento para
-      trás ao importar um backup. Não é urgente, mas rode quando puder.
-- [x] ~~Rodar o `schema.sql` de novo~~ — feito por você em 17/09.
-- [ ] **Rodar o `schema.sql` de novo** no SQL Editor do Supabase. Cole o arquivo inteiro de
-      `gestao/supabase/schema.sql` e clique em Run. Ele é idempotente e não apaga nada.
-      Desde a última vez entraram: vitrine, leads, modelos de documento, índices, cobranças,
-      conta bancária e a separação do perfil financeiro. **Este passo é obrigatório agora**,
-      porque as regras de permissão do banco mudaram.
+- [x] ~~Rodar o `schema.sql`~~ — feito por você em 17/09, já com a separação do perfil
+      financeiro e os convites novos.
+- [ ] **Rodar o `schema.sql` uma última vez.** Depois daquela execução entraram duas coisas
+      pequenas: a limpeza de dados passou a apagar também categorias e modelos (antes sobrava
+      resto ao importar backup) e a semente de categorias de novas empresas já vem dividida.
+      Nenhuma das duas é urgente — só afeta importar backup e empresa criada daqui pra frente.
 - [ ] Abrir o app e forçar a atualização (Ctrl+Shift+R no computador) para pegar a versão nova.
       Endereço: https://vinicauduro.github.io/agenda-corretor/gestao/
 - [ ] Conferir se aparecem as abas novas: **Leads** no topo, e em Cadastros as abas
-      **Documentos**, **Índices**, **Cobrança** e **Vitrine**.
+      **Documentos**, **Índices**, **Cobrança**, **Banco**, **Vitrine** e **Permissões**.
 
 ---
 
