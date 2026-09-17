@@ -220,10 +220,10 @@ function defaultDB() {
     meta: { version: 1, createdAt: new Date().toISOString() },
     config: defaultConfig(),
     loteamentos: [], lotes: [], reservas: [], vendas: [], recebiveis: [], custos: [],
-    categorias: defaultCategorias(), corretores: [], leads: [], modelos: [], indices: [], cobrancas: [], contasBanco: [], log: []
+    categorias: defaultCategorias(), corretores: [], leads: [], modelos: [], indices: [], cobrancas: [], contasBanco: [], remessas: [], log: []
   };
 }
-const COLLECTIONS = ['loteamentos', 'lotes', 'reservas', 'vendas', 'recebiveis', 'custos', 'categorias', 'corretores', 'leads', 'modelos', 'indices', 'cobrancas', 'contasBanco', 'log'];
+const COLLECTIONS = ['loteamentos', 'lotes', 'reservas', 'vendas', 'recebiveis', 'custos', 'categorias', 'corretores', 'leads', 'modelos', 'indices', 'cobrancas', 'contasBanco', 'remessas', 'log'];
 function normalizeDB(data) {
   const d = data && typeof data === 'object' ? data : {};
   d.meta = d.meta || { version: 1 };
@@ -314,6 +314,7 @@ const TABLE_COLS = {
   indices: ['id', 'codigo', 'nome', 'tipo', 'valores', 'criadoEm'],
   contasBanco: ['id', 'loteamentoId', 'banco', 'carteira', 'variacao', 'agencia', 'agenciaDv', 'conta', 'contaDv', 'convenio', 'nossoNumeroAtual', 'remessaSeq', 'multaPct', 'jurosDia', 'descontoPct', 'protestoDias', 'baixaDias', 'especie', 'aceite', 'mensagem1', 'mensagem2', 'criadoEm'],
   cobrancas: ['id', 'vendaId', 'loteamentoId', 'data', 'canal', 'faixa', 'dias', 'valor', 'obs', 'quem', 'criadoEm'],
+  remessas: ['id', 'loteamentoId', 'contaId', 'sequencial', 'data', 'arquivo', 'qtd', 'valor', 'recIds', 'primeiroNn', 'ultimoNn', 'criadoEm'],
   leads: ['id', 'loteamentoId', 'loteId', 'nome', 'telefone', 'email', 'msg', 'origem', 'status', 'obs', 'criadoEm'],
   log: ['id', 'ts', 'who', 'msg']
 };
@@ -476,7 +477,7 @@ const Cloud = {
   async replaceAll() {
     try {
       await this.rpc('limpar_dados_org', { p_org: this.org.id });
-      for (const t of ['loteamentos', 'categorias', 'lotes', 'reservas', 'vendas', 'recebiveis', 'custos', 'leads', 'modelos', 'indices', 'cobrancas', 'contasBanco', 'log']) {
+      for (const t of ['loteamentos', 'categorias', 'lotes', 'reservas', 'vendas', 'recebiveis', 'custos', 'leads', 'modelos', 'indices', 'cobrancas', 'contasBanco', 'remessas', 'log']) {
         const rows = db[t].map(r => toRow(t, r));
         for (let i = 0; i < rows.length; i += 400) {
           const { error } = await this.client.from(tabelaDe(t)).upsert(rows.slice(i, i + 400), { onConflict: 'org_id,id' });

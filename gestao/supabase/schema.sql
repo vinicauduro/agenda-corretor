@@ -477,6 +477,7 @@ begin
   delete from public.leads where org_id = p_org;
   delete from public.indices where org_id = p_org;
   delete from public.cobrancas where org_id = p_org;
+  delete from public.remessas where org_id = p_org;
   delete from public.contas_banco where org_id = p_org;
   delete from public.modelos where org_id = p_org;
   delete from public.categorias where org_id = p_org;
@@ -570,6 +571,31 @@ drop policy if exists cobrancas_select on public.cobrancas;
 drop policy if exists cobrancas_write on public.cobrancas;
 create policy cobrancas_select on public.cobrancas for select to authenticated using (public.eh_financeiro(org_id));
 create policy cobrancas_write on public.cobrancas for all to authenticated using (public.eh_financeiro(org_id)) with check (public.eh_financeiro(org_id));
+
+-- ---------------------------------------------------------------------
+-- 4d. Remessas geradas para o banco (histórico e sequencial do arquivo)
+-- ---------------------------------------------------------------------
+create table if not exists public.remessas (
+  org_id        uuid not null references public.organizacoes(id) on delete cascade,
+  id            text not null,
+  loteamento_id text not null,
+  conta_id      text not null default '',
+  sequencial    integer not null default 1,
+  data          date not null default current_date,
+  arquivo       text not null default '',
+  qtd           integer not null default 0,
+  valor         double precision not null default 0,
+  rec_ids       jsonb not null default '[]'::jsonb,
+  primeiro_nn   text not null default '',
+  ultimo_nn     text not null default '',
+  criado_em     timestamptz not null default now(),
+  primary key (org_id, id)
+);
+alter table public.remessas enable row level security;
+drop policy if exists remessas_select on public.remessas;
+drop policy if exists remessas_write on public.remessas;
+create policy remessas_select on public.remessas for select to authenticated using (public.eh_financeiro(org_id));
+create policy remessas_write on public.remessas for all to authenticated using (public.eh_financeiro(org_id)) with check (public.eh_financeiro(org_id));
 
 -- ---------------------------------------------------------------------
 -- 5a. Modelos de documento (proposta e contrato da própria empresa)
@@ -713,7 +739,7 @@ do $$
 declare t text;
 begin
   if exists (select 1 from pg_publication where pubname = 'supabase_realtime') then
-    foreach t in array array['organizacoes','membros','loteamentos','categorias','lotes','reservas','vendas','recebiveis','custos','log','vitrines','leads','modelos','indices','cobrancas','contas_banco'] loop
+    foreach t in array array['organizacoes','membros','loteamentos','categorias','lotes','reservas','vendas','recebiveis','custos','log','vitrines','leads','modelos','indices','cobrancas','contas_banco','remessas'] loop
       if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = t) then
         execute format('alter publication supabase_realtime add table public.%I', t);
       end if;
