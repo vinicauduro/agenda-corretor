@@ -312,7 +312,7 @@ const TABLE_COLS = {
   custos: ['id', 'loteamentoId', 'loteId', 'descricao', 'categoriaId', 'fornecedor', 'valor', 'formaPagamento', 'dataCompetencia', 'vencimento', 'status', 'dataPagamento', 'obs', 'criadoEm'],
   modelos: ['id', 'nome', 'tipo', 'corpo', 'criadoEm'],
   indices: ['id', 'codigo', 'nome', 'tipo', 'valores', 'criadoEm'],
-  contasBanco: ['id', 'loteamentoId', 'banco', 'carteira', 'variacao', 'agencia', 'agenciaDv', 'conta', 'contaDv', 'convenio', 'nossoNumeroAtual', 'remessaSeq', 'multaPct', 'jurosDia', 'descontoPct', 'protestoDias', 'baixaDias', 'especie', 'aceite', 'mensagem1', 'mensagem2', 'criadoEm'],
+  contasBanco: ['id', 'loteamentoId', 'banco', 'carteira', 'variacao', 'agencia', 'agenciaDv', 'conta', 'contaDv', 'convenio', 'nossoNumeroAtual', 'nnMax', 'remessaSeq', 'multaPct', 'jurosDia', 'descontoPct', 'protestoDias', 'baixaDias', 'especie', 'aceite', 'mensagem1', 'mensagem2', 'criadoEm'],
   cobrancas: ['id', 'vendaId', 'loteamentoId', 'data', 'canal', 'faixa', 'dias', 'valor', 'obs', 'quem', 'criadoEm'],
   remessas: ['id', 'loteamentoId', 'contaId', 'sequencial', 'data', 'arquivo', 'qtd', 'baixas', 'valor', 'recIds', 'primeiroNn', 'ultimoNn', 'criadoEm'],
   leads: ['id', 'loteamentoId', 'loteId', 'nome', 'telefone', 'email', 'msg', 'origem', 'status', 'obs', 'criadoEm'],

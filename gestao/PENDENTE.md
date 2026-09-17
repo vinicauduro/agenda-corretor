@@ -217,7 +217,19 @@ escrito de memória com erro de uma posição em alguns campos.
 
 - [ ] Rodar o `schema.sql` (entraram `remessas` e as colunas `banco_valor`/`banco_venc`).
 - [ ] Ajustar a **multa** em Cadastros › Banco (o arquivo atual é de aluguel, 10%).
-- [ ] **Próximo nosso número: 2637** (o último usado foi 2636).
+- [ ] **Escolher a faixa do nosso número — corrigido em 17/09.** Eu tinha dito "comece em
+      2637". **Estava errado**: 2636 era só o maior número da única remessa que você mandou, de
+      02/09. O boleto que você enviou tem nosso número **1819** e foi processado em 17/09, ou
+      seja, *depois* — a numeração do seu ERP não segue ordem de emissão. E a remessa de 02/09
+      tem 23 títulos espalhados de 2450 a 2636, com 164 buracos: o Superlógica reserva o número
+      quando a cobrança é criada (é o "id interno" que aparece na tela), não quando vai ao banco.
+
+      Conclusão: **não dá para saber onde o sistema antigo está**, e ele continua consumindo
+      números enquanto os dois rodarem. Em vez de continuar a contagem, **comece numa faixa
+      separada e bem alta — 1000000**. São 10 dígitos disponíveis, quase 10 bilhões: os dois
+      nunca se encontram. Se quiser conferir o que já existe no banco, o Gerenciador Financeiro
+      tem a relação de títulos em ser, mas ela não mostra os já baixados, então não serve como
+      garantia — a faixa separada serve.
 - [ ] Gerar uma remessa de teste com poucos títulos e mandar pelo Gerenciador Financeiro.
 - [ ] **Me mandar um retorno com movimento.** O que veio não tinha ocorrência. A leitura está
       no layout confirmado, mas ainda não foi testada com pagamento real.

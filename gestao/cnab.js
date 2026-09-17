@@ -212,6 +212,32 @@ function retornoBB(texto) {
   return { cabecalho: cab, itens, avisos };
 }
 
+// ================================================================ NOSSO NÚMERO
+/* O banco recusa título cujo nosso número já foi usado no mesmo convênio, e a recusa só
+   aparece no retorno, dias depois. Por isso o número nunca volta atrás e nunca se repete:
+   o contador do cadastro é só o ponto de partida; quem manda é o maior já gravado aqui.
+
+   Atenção na migração: o sistema antigo continua consumindo números enquanto os dois rodam,
+   e não dá para descobrir onde ele está olhando arquivos soltos. A saída é começar numa faixa
+   separada, bem acima da dele — há 10 dígitos disponíveis, quase 10 bilhões de números. */
+const NOSSO_NUMERO_MAX = 9999999999;
+/* Marca d'água: o maior número que já saiu daqui para o banco. Fica gravado na conta porque
+   a parcela pode trocar de número (alteração) ou sumir, mas o banco não esquece o antigo. */
+function maiorNossoNumeroUsado(conta) {
+  let maior = Math.max(0, Math.round(num(conta.nnMax)));
+  db.recebiveis.forEach(r => { if (r.nossoNumero) maior = Math.max(maior, num(soDigitos(r.nossoNumero).slice(-10))); });
+  db.remessas.forEach(r => { if (r.contaId === conta.id && r.ultimoNn) maior = Math.max(maior, num(soDigitos(r.ultimoNn).slice(-10))); });
+  return maior;
+}
+function proximoNossoNumero(conta) {
+  return Math.max(1, Math.round(num(conta.nossoNumeroAtual) || 1), maiorNossoNumeroUsado(conta) + 1);
+}
+function nossoNumeroEmUso(conta, n) {
+  if (n <= maiorNossoNumeroUsado(conta)) return true;
+  const alvo = pad(n, 10);
+  return db.recebiveis.some(r => r.nossoNumero && pad(r.nossoNumero, 10) === alvo);
+}
+
 // ================================================================ MOTOR DA REMESSA
 function sacadoDaVenda(v) {
   const c = (v && v.cliente) || {};
@@ -224,12 +250,14 @@ function mensagemDoTitulo(conta, r) {
 /* Monta e grava uma remessa. novas: parcelas a registrar; pendentes: [{r, acao}] de
    alteração ou baixa. Devolve o texto do arquivo ou null se não havia nada. */
 function emitirRemessa(lot, conta, novas, pendentes) {
-  let nn = Math.max(1, Math.round(num(conta.nossoNumeroAtual) || 1));
+  let nn = proximoNossoNumero(conta);
+  const proximoLivre = () => { while (nossoNumeroEmUso(conta, nn)) nn++; if (nn > NOSSO_NUMERO_MAX) throw new Error('O nosso número passou de 10 dígitos. Fale comigo antes de continuar.'); return nn; };
   const itens = [], atualizar = [];
   (pendentes || []).forEach(({ r, acao }) => {
     const v = getVenda(r.vendaId);
     itens.push({ comando: '02', nossoNumero: r.nossoNumero, vencimento: r.bancoVenc || r.vencimento, valor: r.bancoValor != null ? r.bancoValor : recValor(r), sacado: sacadoDaVenda(v), mensagem: mensagemDoTitulo(conta, r) });
     if (acao === 'alterar') {
+      proximoLivre();
       itens.push({ comando: '01', nossoNumero: nn, vencimento: r.vencimento, valor: recValor(r), sacado: sacadoDaVenda(v), mensagem: mensagemDoTitulo(conta, r) });
       atualizar.push(Object.assign({}, r, { nossoNumero: String(nn), remessaEm: todayStr(), bancoValor: recValor(r), bancoVenc: r.vencimento }));
       nn++;
@@ -240,6 +268,7 @@ function emitirRemessa(lot, conta, novas, pendentes) {
   (novas || []).forEach(r => {
     if (bloqueioRemessa(r) || registradaNoBanco(r)) return;
     const v = getVenda(r.vendaId);
+    proximoLivre();
     itens.push({ comando: '01', nossoNumero: nn, vencimento: r.vencimento, valor: recValor(r), sacado: sacadoDaVenda(v), mensagem: mensagemDoTitulo(conta, r) });
     atualizar.push(Object.assign({}, r, { nossoNumero: String(nn), remessaEm: todayStr(), bancoValor: recValor(r), bancoVenc: r.vencimento }));
     nn++;
@@ -248,7 +277,7 @@ function emitirRemessa(lot, conta, novas, pendentes) {
   const seq = Math.max(1, Math.round(num(conta.remessaSeq) || 1));
   const texto = layoutCnab(conta.banco).remessa(conta, itens, { sequencial: seq });
   atualizar.forEach(r => upsert('recebiveis', r));
-  upsert('contasBanco', Object.assign({}, conta, { nossoNumeroAtual: nn, remessaSeq: seq + 1 }));
+  upsert('contasBanco', Object.assign({}, conta, { nossoNumeroAtual: nn, nnMax: Math.max(num(conta.nnMax), nn - 1), remessaSeq: seq + 1 }));
   const registrados = itens.filter(i => i.comando === '01');
   const total = registrados.reduce((s, x) => s + x.valor, 0);
   const nome = 'CB' + pad(seq, 6) + '.REM';
@@ -385,6 +414,7 @@ async function lerArquivoRetorno(input) {
 function mostrarRetorno() {
   const r = _retornoLido; if (!r) return;
   const baixar = r.itens.filter(x => x.efeito === 'liquidada' && x.rec && recStatus(x.rec) !== 'pago');
+  const recusados = r.itens.filter(x => x.efeito === 'recusada' && x.rec);
   const total = baixar.reduce((s, x) => s + (x.valorPago || 0), 0);
   const linha = x => {
     const v = x.rec && getVenda(x.rec.vendaId), l = v && getLote(v.loteId);
@@ -400,13 +430,26 @@ function mostrarRetorno() {
       ${r.itens.length && !baixar.length ? '<div class="alert info" style="cursor:default"><span>Nenhuma liquidação nova para dar baixa. As demais ocorrências são informativas.</span></div>' : ''}
       ${r.itens.filter(x => x.efeito !== 'liquidada').length ? `<div class="card"><h3>Outras ocorrências</h3>
         <div class="table-wrap"><table class="tbl"><thead><tr><th>Parcela</th><th>Nosso número</th><th>Ocorrência</th><th>Data</th><th class="num">Valor</th></tr></thead><tbody>${r.itens.filter(x => x.efeito !== 'liquidada').map(linha).join('')}</tbody></table></div></div>` : ''}
+      ${recusados.length ? `<div class="card"><h3>🚫 ${recusados.length} título(s) recusado(s) pelo banco</h3>
+        <p class="help">Estes títulos não foram registrados — motivo mais comum é nosso número já usado no convênio. Ao confirmar, eles voltam a ficar sem registro e saem na próxima remessa com um número novo.</p>
+        <div class="table-wrap"><table class="tbl"><thead><tr><th>Parcela</th><th>Nosso número</th><th>Motivo</th></tr></thead><tbody>
+        ${recusados.map(x => { const v = getVenda(x.rec.vendaId), l = v && getLote(v.loteId); return `<tr><td>${esc(l ? loteLabel(l) : '')} · ${esc(x.rec.descricao || '')}</td><td>${esc(x.nossoNumero)}</td><td>${esc(x.motivo || '—')}</td></tr>`; }).join('')}
+        </tbody></table></div></div>` : ''}
       ${r.avisos.length ? `<div class="card"><h3>⚠️ Confira antes</h3>${r.avisos.slice(0, 20).map(a => `<p class="help">${esc(a)}</p>`).join('')}</div>` : ''}`,
-    footer: baixar.length ? `<button class="btn btn-secondary" onclick="closeModal()">Cancelar</button><button class="btn btn-success" onclick="aplicarRetorno()">Dar baixa em ${baixar.length} parcela(s)</button>`
+    footer: baixar.length || recusados.length ? `<button class="btn btn-secondary" onclick="closeModal()">Cancelar</button><button class="btn btn-success" onclick="aplicarRetorno()">${baixar.length ? 'Dar baixa em ' + baixar.length + ' parcela(s)' : ''}${baixar.length && recusados.length ? ' e liberar ' : ''}${!baixar.length && recusados.length ? 'Liberar ' + recusados.length + ' recusado(s)' : recusados.length ? recusados.length + ' recusado(s)' : ''}</button>`
       : `<button class="btn btn-secondary" onclick="closeModal()">Fechar</button>` });
 }
 function aplicarRetorno() {
   const r = _retornoLido; if (!r) return;
-  let n = 0, soma = 0;
+  let n = 0, soma = 0, recusados = 0;
+  /* Título recusado pelo banco (nosso número repetido, dado inválido) volta a não registrado,
+     para a próxima remessa mandá-lo de novo com um número novo. */
+  r.itens.filter(x => x.efeito === 'recusada' && x.rec).forEach(x => {
+    const rec = db.recebiveis.find(y => y.id === x.rec.id); if (!rec) return;
+    upsert('recebiveis', Object.assign({}, rec, { nossoNumero: null, remessaEm: null, bancoValor: null, bancoVenc: null,
+      obsPagamento: `Recusado pelo banco em ${fmtDate(x.data || todayStr())}${x.motivo ? ' (motivo ' + x.motivo + ')' : ''}` }));
+    recusados++;
+  });
   r.itens.filter(x => x.efeito === 'liquidada' && x.rec && recStatus(x.rec) !== 'pago').forEach(x => {
     const rec = db.recebiveis.find(y => y.id === x.rec.id); if (!rec) return;
     const pago = x.valorPago || recValor(rec);
@@ -419,10 +462,10 @@ function aplicarRetorno() {
     atualizarStatusVenda(rec.vendaId);
     n++; soma += pago;
   });
-  logAct(`Retorno ${r.nomeArquivo || ''}: ${n} baixa(s), ${fmtMoney(soma)}`);
+  logAct(`Retorno ${r.nomeArquivo || ''}: ${n} baixa(s), ${fmtMoney(soma)}${recusados ? `, ${recusados} recusado(s) pelo banco` : ''}`);
   _retornoLido = null;
   closeModal(); renderCurrent();
-  toast('✅', 'Baixas registradas', `${n} parcela(s) · ${fmtMoney(soma)}`);
+  toast('✅', 'Retorno aplicado', `${n} baixa(s) · ${fmtMoney(soma)}${recusados ? ` · ${recusados} recusado(s), volta(m) na próxima remessa` : ''}`);
 }
 
 // ================================================================ HISTÓRICO DE REMESSAS
