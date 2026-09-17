@@ -361,9 +361,13 @@ comissão é definida em cada venda.
 Decidido em conversa: sair do endereço do GitHub e ir para domínio próprio, com página de
 vendas e área de login.
 
-- [ ] Confirmar o nome: **Lotifly**. Conferir se `lotifly.com.br` e `lotifly.com` estão livres
-      (registro.br e qualquer registrador internacional) e se não há marca registrada no INPI
-      em classe parecida. Se estiver livre, registrar antes de falar do nome por aí.
+- [ ] Confirmar o nome: **Lotifly**. Primeira consulta daqui (só DNS, o acesso à web está
+      bloqueado neste ambiente): `lotifly.com` **já tem dono** — o domínio resolve e aponta
+      para hospedagem de alguém. `lotifly.com.br` e `lotifly.net` não resolvem, o que quase
+      sempre quer dizer livres, mas isso precisa ser confirmado no registro.br e num
+      registrador internacional antes de contar como certo. Falta também a busca de marca no
+      INPI em classe parecida (software e serviços imobiliários). Se estiver livre, registrar
+      antes de falar do nome por aí.
 - [ ] Registrar o domínio (registro.br para .com.br).
 - [ ] Definir se o e-mail profissional será Zoho gratuito ou Google Workspace.
 
