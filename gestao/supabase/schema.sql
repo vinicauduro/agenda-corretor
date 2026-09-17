@@ -414,6 +414,7 @@ begin
   delete from public.leads where org_id = p_org;
   delete from public.indices where org_id = p_org;
   delete from public.cobrancas where org_id = p_org;
+  delete from public.contas_banco where org_id = p_org;
   delete from public.vitrines where org_id = p_org;
   delete from public.loteamentos where org_id = p_org;
   delete from public.log where org_id = p_org;
@@ -441,6 +442,44 @@ create policy indices_write on public.indices for all to authenticated using (pu
 alter table public.vendas add column if not exists indice_id text;
 alter table public.vendas add column if not exists indice_base text;
 alter table public.recebiveis add column if not exists valor_corrigido double precision;
+
+-- ---------------------------------------------------------------------
+-- 4d. Conta de cobrança (convênio bancário da empresa)
+-- ---------------------------------------------------------------------
+create table if not exists public.contas_banco (
+  org_id            uuid not null references public.organizacoes(id) on delete cascade,
+  id                text not null,
+  loteamento_id     text not null default '',
+  banco             text not null default '001',
+  carteira          text not null default '',
+  variacao          text not null default '',
+  agencia           text not null default '',
+  agencia_dv        text not null default '',
+  conta             text not null default '',
+  conta_dv          text not null default '',
+  convenio          text not null default '',
+  nosso_numero_atual bigint not null default 1,
+  remessa_seq       integer not null default 1,
+  multa_pct         double precision not null default 0,
+  juros_dia         double precision not null default 0,
+  desconto_pct      double precision not null default 0,
+  protesto_dias     integer not null default 0,
+  baixa_dias        integer not null default 0,
+  especie           text not null default 'DM',
+  aceite            text not null default 'N',
+  mensagem1         text not null default '',
+  mensagem2         text not null default '',
+  criado_em         timestamptz not null default now(),
+  primary key (org_id, id)
+);
+alter table public.contas_banco enable row level security;
+drop policy if exists contas_banco_select on public.contas_banco;
+drop policy if exists contas_banco_write on public.contas_banco;
+create policy contas_banco_select on public.contas_banco for select to authenticated using (public.eh_admin(org_id));
+create policy contas_banco_write on public.contas_banco for all to authenticated using (public.eh_admin(org_id)) with check (public.eh_admin(org_id));
+
+alter table public.recebiveis add column if not exists nosso_numero text;
+alter table public.recebiveis add column if not exists remessa_em date;
 
 -- ---------------------------------------------------------------------
 -- 4c. Cobranças registradas (régua de inadimplência)
@@ -609,7 +648,7 @@ do $$
 declare t text;
 begin
   if exists (select 1 from pg_publication where pubname = 'supabase_realtime') then
-    foreach t in array array['organizacoes','membros','loteamentos','categorias','lotes','reservas','vendas','recebiveis','custos','log','vitrines','leads','modelos','indices','cobrancas'] loop
+    foreach t in array array['organizacoes','membros','loteamentos','categorias','lotes','reservas','vendas','recebiveis','custos','log','vitrines','leads','modelos','indices','cobrancas','contas_banco'] loop
       if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = t) then
         execute format('alter publication supabase_realtime add table public.%I', t);
       end if;

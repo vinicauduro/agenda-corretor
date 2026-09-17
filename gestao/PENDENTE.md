@@ -141,6 +141,10 @@ antecipação ou limitar o desconto, é só dizer.
 Decidido: vamos de **arquivo CNAB**, com remessa e retorno, do jeito que o financeiro já
 trabalha. Bancos usados: BB, Caixa, Bradesco, Sicoob e C6.
 
+**Já pronto:** cadastro da conta de cobrança em Cadastros › Banco, e o boleto com código de
+barras e linha digitável do Banco do Brasil, calculados no padrão Febraban. Falta conferir o
+campo livre do BB contra o manual, e fazer remessa e retorno.
+
 Para cada banco que formos implementar, preciso de:
 
 - [ ] **Manual do layout** de remessa e retorno em PDF, o que o banco chama de "layout de

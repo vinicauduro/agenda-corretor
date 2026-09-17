@@ -66,6 +66,21 @@ ano, impressão em PDF e exportação em CSV:
 
 O acesso é controlado pela permissão "Ver os relatórios".
 
+## Conta de cobrança e boleto
+
+Em **Cadastros › 🏦 Banco** ficam os dados do convênio de cobrança registrada da empresa:
+banco, carteira, variação, agência, conta, convênio, numeração do nosso número, instruções de
+multa, juros, desconto e protesto, e as mensagens que saem no boleto.
+
+Com a conta cadastrada, cada parcela ganha o botão de boleto na tela da venda, com código de
+barras e linha digitável calculados no padrão Febraban, prontos para imprimir ou mandar a
+linha por WhatsApp.
+
+Hoje só o layout do **Banco do Brasil** está montado, e o campo livre do código de barras
+ainda precisa ser conferido contra o manual de cobrança do banco antes do uso em produção. Os
+demais bancos avisam que o layout não está implementado em vez de gerar um boleto errado.
+A geração da remessa e a leitura do retorno entram na etapa seguinte.
+
 ## Inadimplência e régua de cobrança
 
 Na aba **Recebíveis**, o chip **🔔 Cobrança** abre o painel de inadimplência. Ele agrupa o

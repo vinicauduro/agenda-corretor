@@ -368,6 +368,18 @@ canvas.chart { width: 100%; display: block; }
 .doc-chip { border: 1px solid var(--border); background: white; color: var(--primary); border-radius: 999px; padding: 3px 9px; font-size: 0.72rem; font-weight: 600; cursor: pointer; margin: 0 4px 4px 0; font-family: inherit; }
 .doc-chip:hover { background: var(--primary-light); }
 
+
+/* ---------- boleto ---------- */
+.boleto { background: white; border: 1px solid #333; font-family: Arial, Helvetica, sans-serif; font-size: 0.78rem; color: #000; }
+.boleto-topo { display: flex; align-items: center; gap: 12px; border-bottom: 2px solid #000; padding: 6px 10px; }
+.boleto-topo .banco { font-size: 1.15rem; font-weight: 800; border-right: 2px solid #000; padding-right: 12px; }
+.boleto-topo .linha { font-size: 0.95rem; font-weight: 700; letter-spacing: 0.02em; }
+.boleto-tab { width: 100%; border-collapse: collapse; }
+.boleto-tab td { border: 1px solid #333; padding: 4px 8px; vertical-align: top; }
+.boleto-tab small { display: block; font-size: 0.62rem; color: #555; text-transform: uppercase; letter-spacing: 0.03em; }
+.boleto-barras-box { padding: 12px 10px; }
+.boleto-barras { display: block; }
+
 #printArea { display: none; }
 @media print {
   body > *:not(#printArea) { display: none !important; }
@@ -384,6 +396,8 @@ canvas.chart { width: 100%; display: block; }
   #printArea .doc-folha .doc-vazio { color: #000; }
   #printArea .doc-folha table.doc-tab th { background: #eee; }
   @page { margin: 18mm 16mm; }
+  #printArea .boleto { border: 1px solid #000; }
+  #printArea .boleto-barras { height: 16mm; }
 }
 
 /* ---------- autenticação ---------- */
