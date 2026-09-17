@@ -181,62 +181,54 @@ as antigas recebe a divisão sozinho, e fica registrado no histórico.
 
 ---
 
-## 7d. Cobrança bancária: remessa e retorno do Banco do Brasil
+## 7d. Cobrança bancária: fluxo mensal, remessa e retorno do Banco do Brasil
 
-**Pronto e conferido contra os seus arquivos** (17/09). Você mandou a remessa real, o retorno,
-o boleto e o `.bbt` de configuração do BB. Com isso deu para fazer o layout inteiro sem chutar.
+**Pronto e conferido contra os seus arquivos** (17/09). Layout CNAB 400, carteira 17, variação
+035, convênio de 7 dígitos, conferido posição a posição contra a remessa real; código de barras
+e linha digitável idênticos ao boleto impresso.
 
-O que foi conferido campo a campo contra o arquivo do banco:
+### Como funciona, no formato do seu ERP
 
-- Cabeçalho, registro de título, registro de multa e rodapé do CNAB 400, carteira 17,
-  variação 035, convênio de 7 dígitos.
-- Nosso número = convênio + sequencial de 10 dígitos, impresso com 20 posições mais o dígito.
-- Código de barras e linha digitável: saem idênticos ao boleto que você mandou
-  (`00190.00009 03026.448005 00001.819176 5 15950000140549`).
-- Juros ao dia em reais e multa em percentual, do jeito que o seu arquivo manda hoje.
+- **Recebíveis › 🧾 Gerar cobranças** — escolhe o mês. Três cartões: **contratos sem índice do
+  mês** (o nosso substituto do "contratos a reajustar": lista quem está esperando índice e
+  fica de fora até você lançar), **já geradas no mês** e **prontas para gerar**. Botão
+  **Simular** imprime o resumo agrupado por cliente sem gerar nada; **Gerar agora** registra as
+  parcelas, numera o nosso número e baixa o arquivo de remessa.
+- **Aviso no topo da lista** — qualquer cobrança alterada depois de registrada no banco
+  (vencimento, valor, índice lançado depois, paga por fora, distrato) aparece como "marcada
+  para remessa" até você gerar. A remessa de alteração baixa o título antigo e registra um
+  novo; a de pagamento por fora só baixa.
+- **📥 Retorno** — lê o arquivo, mostra o que entendeu e só dá baixa depois da confirmação.
+- **Cadastros › 🏦 Banco** — convênio, carteira, instruções padrão (multa, juros ao dia,
+  desconto, protesto, baixa, mensagens) e histórico de remessas. Multa é por conta e pode ser
+  zero: com zero, o registro de multa nem sai no arquivo.
 
-### Como usar
+### As posições 23-25 do registro de multa — resolvido
 
-1. **Cadastros › 🏦 Banco** — convênio, carteira, variação, agência, conta, próximo nosso
-   número, próxima remessa e as instruções padrão (multa, juros ao dia, desconto, protesto,
-   baixa, mensagens). É aqui que cada empresa cliente cadastra o banco dela.
-2. **Recebíveis › 📤 Remessa** — marca as parcelas e gera o arquivo. O sistema numera sozinho,
-   marca o que já foi enviado e guarda o histórico das remessas.
-3. **Recebíveis › 📥 Retorno** — escolhe o arquivo, o sistema mostra o que entendeu e só dá
-   baixa depois que você confirmar.
+Você tinha razão em não aceitar cópia sem entender. Investiguei em fonte independente: o
+gerador de remessa BB de uma biblioteca de código aberto usada em produção (laravel-boleto)
+monta o registro de multa como `5` + `99` + código + data + percentual em 011-022, e **brancos
+de 023 a 394**. O `090` do seu arquivo é preenchimento do ERP antigo, não campo do banco.
+O sistema agora manda brancos, como o layout define.
 
-### A regra do carnê
+Pela mesma fonte confirmei as posições do **retorno** (valor recebido 254-266, crédito
+176-181, tarifa 182-188, mora 267-279, multa 280-292, motivo da recusa 383-392), que eu tinha
+escrito de memória com erro de uma posição em alguns campos.
 
-Contrato **com** correção por índice não gera carnê. A parcela de outubro só tem valor
-definitivo quando o índice de setembro é lançado, então a tela mostra só as parcelas cujo
-índice já entrou, e explica por quê. Contrato **sem** índice tem valor fixo e sai inteiro de
-uma vez. Isso é automático, não depende de você lembrar.
-
-- [ ] Gerar uma remessa de teste e mandar pelo Gerenciador Financeiro do BB, com poucos
-      títulos, para o banco validar antes de valer para tudo.
-- [ ] Conferir se a **multa** que sai bate com a que você quer. O seu arquivo de hoje carrega
-      **10%** — isso é multa de aluguel. Para venda de lote o limite do Código de Defesa do
-      Consumidor é **2%**. Ajuste em Cadastros › Banco antes de usar no loteamento.
-- [ ] Conferir o **próximo nosso número**: seu último usado foi 2636. Comece de 2637 para
-      frente, senão o banco recusa por número repetido.
-- [ ] **Me mandar um retorno com movimento.** O que você enviou não tinha nenhuma ocorrência,
-      só cabeçalho e rodapé (15 títulos, R$ 648.283,50 de saldo). A leitura do retorno foi
-      escrita pelo layout padrão do BB e ainda não foi conferida contra dado de verdade.
-      Um retorno de um dia com pagamento resolve.
-
-**A única coisa que copiei sem entender:** as posições 23 a 25 do registro de multa saem como
-`090`, igual às do seu arquivo. Sem o manual eu não sei o que significa. Como é igual em todos
-os títulos do seu arquivo, é constante da sua configuração e reproduzir é seguro.
+- [ ] Rodar o `schema.sql` (entraram `remessas` e as colunas `banco_valor`/`banco_venc`).
+- [ ] Ajustar a **multa** em Cadastros › Banco (o arquivo atual é de aluguel, 10%).
+- [ ] **Próximo nosso número: 2637** (o último usado foi 2636).
+- [ ] Gerar uma remessa de teste com poucos títulos e mandar pelo Gerenciador Financeiro.
+- [ ] **Me mandar um retorno com movimento.** O que veio não tinha ocorrência. A leitura está
+      no layout confirmado, mas ainda não foi testada com pagamento real.
 
 ### Outros bancos
 
 Caixa, Bradesco, Sicoob e C6 seguem sem layout: o sistema recusa gerar em vez de gerar errado.
-Para cada um preciso do mesmo que você mandou do BB: uma remessa gerada pelo sistema atual, um
-retorno real e um boleto. Com esses três eu faço o layout; o manual é bom, mas os arquivos
-valem mais.
+Para cada um preciso de remessa gerada pelo sistema atual, retorno real e um boleto.
 
-Para mandar boleto por e-mail preciso ligar um serviço de envio. Por WhatsApp, o PDF vai para
-o Storage e o link segue na mensagem.
+Para mandar boleto por e-mail preciso ligar um serviço de envio; por WhatsApp o PDF vai para o
+Storage e o link segue na mensagem.
 
 ---
 

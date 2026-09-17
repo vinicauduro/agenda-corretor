@@ -1,17 +1,25 @@
 /* ===== Gestão de Loteamento — cobrança bancária em arquivo (CNAB) =====
 
-   Remessa: o arquivo que a empresa manda ao banco pedindo para registrar os boletos.
-   Retorno: o arquivo que o banco devolve dizendo o que aconteceu com cada título.
+   Remessa: o arquivo que a empresa manda ao banco pedindo para registrar, alterar ou baixar
+   boletos. Retorno: o arquivo que o banco devolve dizendo o que aconteceu com cada título.
 
-   O layout do Banco do Brasil aqui foi conferido contra uma remessa real gerada pelo
-   sistema que a empresa usa hoje (CNAB 400, carteira 17, convênio de 7 dígitos), e o
-   código de barras contra um boleto impresso do banco. O que não deu para conferir está
-   marcado com "a conferir" no comentário — nada disso é chute silencioso.
+   O layout do Banco do Brasil foi conferido contra uma remessa real gerada pelo sistema que
+   a empresa usa hoje (CNAB 400, carteira 17, convênio de 7 dígitos), contra um boleto
+   impresso do banco e contra o gerador e o leitor de uma biblioteca de código aberto usada em
+   produção com o BB (eduardokum/laravel-boleto). O que ainda não foi conferido contra um
+   arquivo de verdade está dito no comentário — nada aqui é chute silencioso.
 
-   Regra de negócio importante: contrato com correção por índice não pode virar carnê.
-   A parcela de outubro só tem valor final quando o índice de setembro é lançado, então
-   o sistema libera a remessa mês a mês, conforme o índice entra. Contrato sem índice
-   tem valor fixo do começo ao fim e pode sair de uma vez só. */
+   Fluxo, do jeito que o financeiro trabalha:
+   1. Gerar cobranças do mês: mostra o que falta (índice não lançado), o que já foi gerado,
+      simula em PDF e gera de uma vez: parcelas viram títulos e sai o arquivo de remessa.
+   2. Parcela alterada depois de registrada no banco fica "marcada para remessa": o aviso
+      aparece no topo da lista até sair a remessa de alteração (baixa do título antigo e
+      registro de um novo) ou de baixa (paga por fora do banco).
+   3. Retorno: o sistema lê, mostra o que entendeu e só dá baixa depois da confirmação.
+
+   Regra de negócio: contrato com correção por índice não vira carnê. A parcela de outubro
+   só tem valor final quando o índice de setembro é lançado, então a geração é mês a mês,
+   conforme o índice entra. Contrato sem índice tem valor fixo e pode sair de uma vez. */
 'use strict';
 
 const CNAB = {
@@ -20,7 +28,6 @@ const CNAB = {
 function layoutCnab(banco) { return CNAB[pad(banco, 3)] || null; }
 
 // ---------------------------------------------------------------- utilitários de coluna fixa
-function nCampo(v, n) { return pad(Math.round(num(v)), n); }
 function dinheiro(v, n) { return pad(Math.round(num(v) * 100), n); }
 function dataDDMMAA(iso) { if (!iso) return '000000'; const [y, m, d] = String(iso).slice(0, 10).split('-'); return d + m + y.slice(2); }
 function isoDeDDMMAA(s) {
@@ -33,11 +40,10 @@ function linha400(partes) {
   if (s.length !== 400) throw new Error('Registro com ' + s.length + ' posições, deveria ter 400');
   return s;
 }
-
 /* Espécie do título no padrão do BB. O boleto real trazia "DM". */
 const ESPECIE_BB = { DM: '01', DS: '02', NP: '12', OU: '99' };
 
-// ---------------------------------------------------------------- quem pode virar boleto
+// ---------------------------------------------------------------- estado da parcela no banco
 /* Uma parcela só pode ir para o banco quando o valor dela é definitivo. Com correção por
    índice, isso depende do índice do mês anterior ao vencimento já estar lançado. */
 function bloqueioRemessa(rec) {
@@ -48,18 +54,40 @@ function bloqueioRemessa(rec) {
   if (v.status === 'distrato') return 'Contrato distratado';
   if (!v.indiceId || !getIndice(v.indiceId)) return null;
   const faltando = mesesFaltando(v.indiceId, v.indiceBase || monthKey(v.dataVenda), monthKey(rec.vencimento));
-  if (faltando.length) {
-    const ind = getIndice(v.indiceId);
-    return `Falta lançar ${ind.codigo} de ${faltando.map(monthLabel).join(', ')}`;
-  }
+  if (faltando.length) return `Falta lançar ${getIndice(v.indiceId).codigo} de ${faltando.map(monthLabel).join(', ')}`;
   return null;
 }
-function jaNaRemessa(rec) { return !!rec.remessaEm; }
+function registradaNoBanco(rec) { return !!(rec.nossoNumero && rec.remessaEm); }
+
+/* O que a próxima remessa precisa dizer ao banco sobre esta parcela, se algo mudou depois
+   que ela foi registrada. 'alterar' = baixa o título antigo e registra um novo com o valor ou
+   vencimento atual; 'baixar' = foi paga por fora do banco ou cancelada, o banco precisa saber. */
+function remessaPendente(rec) {
+  if (!registradaNoBanco(rec)) return null;
+  const st = recStatus(rec);
+  if (st === 'pago') return rec.forma === 'Boleto' ? null : 'baixar';
+  const v = getVenda(rec.vendaId);
+  if (!v || v.status === 'distrato') return 'baixar';
+  if (rec.bancoVenc && rec.bancoVenc !== rec.vencimento) return 'alterar';
+  if (rec.bancoValor != null && Math.abs(recValor(rec) - num(rec.bancoValor)) > 0.005) return 'alterar';
+  return null;
+}
+function pendentesDeRemessa(lotId) {
+  return db.recebiveis.filter(r => r.loteamentoId === lotId && remessaPendente(r)).map(r => ({ r, acao: remessaPendente(r) }));
+}
+/* Parcelas do mês que ainda não viraram título. */
+function parcelasDoMes(lotId, mes) {
+  return db.recebiveis.filter(r => r.loteamentoId === lotId && monthKey(r.vencimento) === mes && r.tipo !== 'entrada' && recStatus(r) !== 'pago')
+    .sort((a, b) => naturalCmp(clienteDe(a), clienteDe(b)) || a.vencimento.localeCompare(b.vencimento));
+}
 
 // ---------------------------------------------------------------- REMESSA — Banco do Brasil
-/* Conferido contra a remessa real: header, detalhe tipo 7, registro de multa tipo 5 e trailer.
-   Posições 23-25 do registro de multa saem como "090", igual ao arquivo do banco; é a única
-   coisa que copiei sem ter o manual para explicar. */
+/* Cada item: { comando: '01' registrar | '02' baixar, nossoNumero, vencimento, valor, sacado, mensagem }.
+   Conferido contra a remessa real: header, detalhe tipo 7, registro de multa tipo 5 e trailer.
+   O registro de multa só acompanha o comando 01, como no arquivo do banco. Da posição 23 em
+   diante ele leva brancos: é o que o layout do BB define, confirmado pela biblioteca de
+   referência; o "090" que aparecia no arquivo do sistema antigo é preenchimento do ERP, não
+   campo do banco. */
 function remessaBB(conta, itens, opc) {
   const o = opc || {};
   const emp = db.config || {};
@@ -81,6 +109,7 @@ function remessaBB(conta, itens, opc) {
     const sacado = it.sacado || {};
     const doc = soDigitos(sacado.cpf);
     const nn = pad(it.nossoNumero, 10);
+    const comando = it.comando || '01';
     n++;
     linhas.push(linha400(['7', tpInsc, pad(cnpj, 14), ag, agDv, cc, ccDv, conv,
       pad(nn, 25),                                  // 039-063 controle do participante
@@ -88,7 +117,7 @@ function remessaBB(conta, itens, opc) {
       '00', '00', ' '.repeat(7),                    // 081-084 prestação e grupo, 085-091 brancos
       pad(conta.variacao || '0', 3),                // 092-094 variação da carteira
       '0000000', ' '.repeat(5),                     // 095-101, 102-106
-      pad(conta.carteira, 2), '01',                 // 107-108 carteira, 109-110 comando (01 = entrada)
+      pad(conta.carteira, 2), comando,              // 107-108 carteira, 109-110 comando
       nn,                                           // 111-120 seu número
       dataDDMMAA(it.vencimento), dinheiro(it.valor, 13),
       '001', '0000', ' ',                           // 140-146 banco e agência cobradora
@@ -96,7 +125,7 @@ function remessaBB(conta, itens, opc) {
       dataDDMMAA(it.emissao || hoje),
       pad(o.instrucao1 || (num(conta.protestoDias) > 0 ? '06' : '00'), 2),   // 157-158 protestar
       pad(o.instrucao2 || (num(conta.baixaDias) > 0 ? '09' : '00'), 2),      // 159-160 baixar/devolver
-      dinheiro(num(it.valor) * num(conta.jurosDia) / 100, 13),        // 161-173 juros por dia, em reais
+      dinheiro(num(it.valor) * num(conta.jurosDia) / 100, 13),              // 161-173 juros por dia, em reais
       num(conta.descontoPct) > 0 ? dataDDMMAA(it.vencimento) : '000000',
       dinheiro(num(it.valor) * num(conta.descontoPct) / 100, 13),
       dinheiro(0, 13), dinheiro(0, 13),             // IOF e abatimento
@@ -105,10 +134,10 @@ function remessaBB(conta, itens, opc) {
       padTxt(sacado.cidade, 15), padTxt(sacado.uf, 2),
       padTxt(it.mensagem, 40), ' '.repeat(3), pad(n, 6)]));
 
-    if (num(conta.multaPct) > 0) {
+    if (comando === '01' && num(conta.multaPct) > 0) {
       n++;
       linhas.push(linha400(['5', '99', '2', dataDDMMAA(it.vencimento),
-        dinheiro(conta.multaPct, 12), '090', ' '.repeat(369), pad(n, 6)]));
+        dinheiro(conta.multaPct, 12), ' '.repeat(372), pad(n, 6)]));
     }
   });
 
@@ -117,27 +146,34 @@ function remessaBB(conta, itens, opc) {
 }
 
 // ---------------------------------------------------------------- RETORNO — Banco do Brasil
-/* Ocorrências que interessam. A lista do BB é longa; aqui ficam as que mexem no sistema. */
 const OCORRENCIAS_BB = {
   '02': ['confirmada', 'Entrada confirmada no banco'],
-  '03': ['recusada', 'Entrada rejeitada pelo banco'],
-  '05': ['info', 'Liquidação sem registro'],
+  '03': ['recusada', 'Comando recusado pelo banco'],
+  '05': ['liquidada', 'Liquidação sem registro'],
   '06': ['liquidada', 'Liquidação (pagamento)'],
   '07': ['liquidada', 'Liquidação por conta'],
   '08': ['liquidada', 'Liquidação por saldo'],
-  '09': ['baixada', 'Baixa automática'],
-  '10': ['baixada', 'Baixa por devolução'],
+  '09': ['baixada', 'Baixa de título'],
+  '10': ['baixada', 'Baixa solicitada'],
+  '11': ['info', 'Títulos em ser'],
+  '12': ['info', 'Abatimento concedido'],
+  '14': ['info', 'Alteração de vencimento confirmada'],
   '15': ['liquidada', 'Liquidação em cartório'],
-  '16': ['liquidada', 'Título pago em cheque'],
-  '17': ['liquidada', 'Liquidação após baixa'],
-  '19': ['info', 'Confirmação de instrução de protesto'],
-  '21': ['info', 'Confirmação de prorrogação'],
-  '24': ['info', 'Entrada rejeitada por CEP irregular'],
-  '46': ['info', 'Instrução para cancelar protesto confirmada']
+  '16': ['info', 'Alteração de juros confirmada'],
+  '19': ['info', 'Instrução de protesto confirmada'],
+  '20': ['liquidada', 'Débito em conta'],
+  '21': ['info', 'Alteração de nome/endereço confirmada'],
+  '96': ['info', 'Tarifa sobre instruções'],
+  '97': ['info', 'Tarifa sobre instruções de protesto'],
+  '98': ['info', 'Tarifa sobre instruções de sustação']
 };
 
-/* Lê o arquivo e devolve o que ele diz, sem mexer em nada. Quem decide baixar é você,
-   na tela de conferência. Linha que não bate com o layout vem marcada, não some. */
+/* Posições conferidas com o leitor de referência (laravel-boleto, BB CNAB 400):
+   nosso número 064-080, ocorrência 109-110, data 111-116, seu número 117-126, vencimento
+   147-152, valor 153-165, crédito 176-181, tarifa 182-188, outras despesas 189-201, IOF
+   215-227, abatimento 228-240, desconto 241-253, valor recebido 254-266, mora 267-279,
+   multa 280-292, motivo da rejeição 383-392. Ainda a conferir contra um retorno real com
+   movimento — o único recebido não tinha ocorrência. */
 function retornoBB(texto) {
   const linhas = String(texto).split(/\r?\n/).filter(l => l.length > 50);
   if (!linhas.length) throw new Error('Arquivo vazio');
@@ -149,118 +185,180 @@ function retornoBB(texto) {
   };
   const itens = [], avisos = [];
   linhas.slice(1).forEach((l, i) => {
-    if (l[0] === '9') return;
     if (l[0] !== '7') return;
     const cod = l.slice(108, 110);
     const oc = OCORRENCIAS_BB[cod] || ['info', 'Ocorrência ' + cod];
     const nossoNumero = l.slice(63, 80).trim();
     const item = {
       linha: i + 2, ocorrencia: cod, efeito: oc[0], descricao: oc[1], nossoNumero,
-      seuNumero: l.slice(110, 116).trim(),
+      seuNumero: l.slice(116, 126).trim(),
       data: isoDeDDMMAA(l.slice(110, 116)),
       vencimento: isoDeDDMMAA(l.slice(146, 152)),
       valorTitulo: num(l.slice(152, 165)) / 100,
-      despesas: num(l.slice(175, 188)) / 100,
-      valorPago: num(l.slice(252, 265)) / 100,
-      juros: num(l.slice(265, 278)) / 100,
-      creditoEm: isoDeDDMMAA(l.slice(295, 301))
+      creditoEm: isoDeDDMMAA(l.slice(175, 181)),
+      tarifa: num(l.slice(181, 188)) / 100,
+      valorPago: num(l.slice(253, 266)) / 100,
+      juros: num(l.slice(266, 279)) / 100,
+      multa: num(l.slice(279, 292)) / 100,
+      motivo: l.slice(382, 392).trim()
     };
     const seq10 = pad(nossoNumero, 10);   // o banco devolve convênio + sequencial; comparamos o sequencial
     item.rec = db.recebiveis.find(r => r.nossoNumero && pad(r.nossoNumero, 10) === seq10) || null;
     if (!item.rec) avisos.push(`Linha ${item.linha}: nosso número ${nossoNumero} não é de nenhuma parcela deste sistema`);
     if (item.efeito === 'liquidada' && !(item.valorPago > 0)) avisos.push(`Linha ${item.linha}: liquidação sem valor pago legível — confira antes de baixar`);
+    if (item.efeito === 'recusada') avisos.push(`Linha ${item.linha}: o banco recusou o título ${nossoNumero}${item.motivo ? ' (motivo ' + item.motivo + ')' : ''}`);
     itens.push(item);
   });
   return { cabecalho: cab, itens, avisos };
 }
 
-// ================================================================ TELA: GERAR REMESSA
+// ================================================================ MOTOR DA REMESSA
 function sacadoDaVenda(v) {
   const c = (v && v.cliente) || {};
   return { nome: c.nome || '', cpf: c.cpf || '', endereco: c.endereco || '', bairro: c.bairro || '', cep: c.cep || '', cidade: c.cidade || db.config.cidade || '', uf: c.uf || '' };
 }
-function remessaElegiveis(lotId) {
-  return db.recebiveis.filter(r => r.loteamentoId === lotId && !jaNaRemessa(r) && recStatus(r) !== 'pago' && r.tipo !== 'entrada')
-    .sort((a, b) => String(a.vencimento).localeCompare(String(b.vencimento)) || naturalCmp(a.descricao, b.descricao));
+function mensagemDoTitulo(conta, r) {
+  const v = getVenda(r.vendaId), l = v && getLote(v.loteId), lot = getLoteamento(r.loteamentoId);
+  return (conta.mensagem1 || '').replace('{{lote}}', l ? loteLabel(l) : '').replace('{{loteamento}}', lot ? lot.nome : '');
 }
-function abrirGerarRemessa() {
-  const lot = curLot(); if (!lot) return;
-  if (!pode('financeiro.baixar')) { toast('🔒', 'Sem permissão', 'Seu perfil não gera remessa.', true); return; }
-  const conta = contaCobranca(lot.id);
-  if (!conta) { toast('⚠️', 'Cadastre a conta de cobrança', 'Cadastros › 🏦 Banco', true); openModal({ title: '🏦 Falta a conta de cobrança', body: '<p class="help">Antes de gerar remessa, cadastre o convênio da empresa em <b>Cadastros › 🏦 Banco</b>: agência, conta, convênio, carteira e as instruções padrão do boleto.</p>', footer: '<button class="btn btn-primary" onclick="closeModal();switchTab(\'cadastros\');state.sub.cad=\'banco\';renderCadastros()">Ir para o cadastro</button>' }); return; }
-  if (!layoutCnab(conta.banco)) { toast('⚠️', 'Banco sem layout', 'Hoje só o Banco do Brasil gera remessa.', true); return; }
-
-  const todos = remessaElegiveis(lot.id);
-  const livres = [], presos = [];
-  todos.forEach(r => { const b = bloqueioRemessa(r); (b ? presos : livres).push({ r, motivo: b }); });
-  const porVenda = {};
-  livres.forEach(x => { (porVenda[x.r.vendaId] = porVenda[x.r.vendaId] || []).push(x.r); });
-  const mesAtualKey = mesAtual();
-
-  const grupo = (vid, recs) => {
-    const v = getVenda(vid), l = v && getLote(v.loteId);
-    const comIndice = v && v.indiceId && getIndice(v.indiceId);
-    return `<div class="fieldset"><span class="lg">${l ? esc(loteLabel(l)) : 'Contrato'} · ${esc((v && v.cliente && v.cliente.nome) || '')}
-        ${comIndice ? `<span class="badge pendente">corrigido por ${esc(getIndice(v.indiceId).codigo)}</span>` : '<span class="badge neutral">valor fixo</span>'}</span>
-      ${comIndice ? '<p class="help">Este contrato sofre correção mensal. Só aparecem aqui as parcelas cujo índice já foi lançado — as seguintes entram mês a mês, quando o índice sair.</p>'
-        : '<p class="help">Sem correção: dá para mandar o carnê inteiro de uma vez.</p>'}
-      <label class="check" style="margin-bottom:6px"><input type="checkbox" onchange="marcarGrupoRemessa(this,'${vid}')" checked> <b>Marcar todas deste contrato</b></label>
-      ${recs.map(r => `<label class="check" style="margin-bottom:4px"><input type="checkbox" class="rmChk" data-venda="${vid}" value="${r.id}" ${monthKey(r.vencimento) <= mesAtualKey || !comIndice ? 'checked' : ''}>
-        ${esc(r.descricao || 'Parcela ' + r.numero)} · vence ${fmtDate(r.vencimento)} · <b>${esc(fmtMoney(recValor(r)))}</b></label>`).join('')}
-    </div>`;
-  };
-
-  openModal({
-    title: '📤 Gerar remessa para o banco', wide: true,
-    body: !livres.length
-      ? `<div class="empty"><div class="ic">📭</div><p><b>Nenhuma parcela pronta para remessa</b></p>
-          <p class="small">${presos.length ? 'Há ' + presos.length + ' parcela(s) esperando lançamento de índice ou já enviadas.' : 'Todas as parcelas já foram enviadas ou estão pagas.'}</p></div>
-          ${presos.length ? `<div class="card"><h3>Esperando</h3>${presos.slice(0, 40).map(x => `<div class="item"><div class="info"><div class="title">${esc(x.r.descricao || '')} · ${fmtDate(x.r.vencimento)}</div><div class="meta"><span>${esc(x.motivo)}</span></div></div></div>`).join('')}</div>` : ''}`
-      : `<p class="help mb">Marque o que vai no arquivo. O sistema numera o nosso número sozinho e marca as parcelas como enviadas, para não mandar duas vezes.</p>
-        ${Object.keys(porVenda).map(vid => grupo(vid, porVenda[vid])).join('')}
-        ${presos.length ? `<div class="card"><h3>⏳ ${presos.length} parcela(s) ainda não podem ir</h3>
-          <p class="help">Contrato com correção por índice não vira carnê: a parcela só tem valor definitivo depois que o índice do mês anterior é lançado. Lance o índice em <b>Cadastros › Índices</b> e elas aparecem aqui.</p>
-          ${presos.slice(0, 25).map(x => { const v = getVenda(x.r.vendaId), l = v && getLote(v.loteId); return `<div class="item"><div class="info"><div class="title">${l ? esc(loteLabel(l)) : ''} · ${esc(x.r.descricao || '')} · ${fmtDate(x.r.vencimento)}</div><div class="meta"><span>${esc(x.motivo)}</span></div></div></div>`; }).join('')}
-          ${presos.length > 25 ? `<p class="help">…e mais ${presos.length - 25}.</p>` : ''}</div>` : ''}`,
-    footer: livres.length ? `<button class="btn btn-secondary" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" onclick="gerarRemessa()">Gerar arquivo</button>`
-      : `<button class="btn btn-secondary" onclick="closeModal()">Fechar</button>`
-  });
-}
-function marcarGrupoRemessa(el, vendaId) { $$(`.rmChk[data-venda="${vendaId}"]`).forEach(c => { c.checked = el.checked; }); }
-
-function gerarRemessa() {
-  const lot = curLot(); const conta = contaCobranca(lot.id);
-  const ids = $$('.rmChk').filter(c => c.checked).map(c => c.value);
-  if (!ids.length) { toast('⚠️', 'Marque ao menos uma parcela', '', true); return; }
+/* Monta e grava uma remessa. novas: parcelas a registrar; pendentes: [{r, acao}] de
+   alteração ou baixa. Devolve o texto do arquivo ou null se não havia nada. */
+function emitirRemessa(lot, conta, novas, pendentes) {
   let nn = Math.max(1, Math.round(num(conta.nossoNumeroAtual) || 1));
   const itens = [], atualizar = [];
-  ids.forEach(id => {
-    const r = db.recebiveis.find(x => x.id === id); if (!r) return;
-    if (bloqueioRemessa(r)) return;
-    const v = getVenda(r.vendaId), l = v && getLote(v.loteId);
-    itens.push({ nossoNumero: nn, vencimento: r.vencimento, valor: recValor(r), sacado: sacadoDaVenda(v),
-      mensagem: (conta.mensagem1 || '').replace('{{lote}}', l ? loteLabel(l) : '').replace('{{loteamento}}', lot.nome) });
-    atualizar.push(Object.assign({}, r, { nossoNumero: String(nn), remessaEm: todayStr() }));
+  (pendentes || []).forEach(({ r, acao }) => {
+    const v = getVenda(r.vendaId);
+    itens.push({ comando: '02', nossoNumero: r.nossoNumero, vencimento: r.bancoVenc || r.vencimento, valor: r.bancoValor != null ? r.bancoValor : recValor(r), sacado: sacadoDaVenda(v), mensagem: mensagemDoTitulo(conta, r) });
+    if (acao === 'alterar') {
+      itens.push({ comando: '01', nossoNumero: nn, vencimento: r.vencimento, valor: recValor(r), sacado: sacadoDaVenda(v), mensagem: mensagemDoTitulo(conta, r) });
+      atualizar.push(Object.assign({}, r, { nossoNumero: String(nn), remessaEm: todayStr(), bancoValor: recValor(r), bancoVenc: r.vencimento }));
+      nn++;
+    } else {
+      atualizar.push(Object.assign({}, r, { forma: r.forma || 'Boleto', bancoValor: null, bancoVenc: null, remessaEm: null }));
+    }
+  });
+  (novas || []).forEach(r => {
+    if (bloqueioRemessa(r) || registradaNoBanco(r)) return;
+    const v = getVenda(r.vendaId);
+    itens.push({ comando: '01', nossoNumero: nn, vencimento: r.vencimento, valor: recValor(r), sacado: sacadoDaVenda(v), mensagem: mensagemDoTitulo(conta, r) });
+    atualizar.push(Object.assign({}, r, { nossoNumero: String(nn), remessaEm: todayStr(), bancoValor: recValor(r), bancoVenc: r.vencimento }));
     nn++;
   });
-  if (!itens.length) { toast('⚠️', 'Nada elegível', '', true); return; }
+  if (!itens.length) return null;
   const seq = Math.max(1, Math.round(num(conta.remessaSeq) || 1));
-  let texto;
-  try { texto = layoutCnab(conta.banco).remessa(conta, itens, { sequencial: seq }); }
-  catch (e) { toast('⚠️', 'Falha ao montar o arquivo', e.message, true); return; }
-
+  const texto = layoutCnab(conta.banco).remessa(conta, itens, { sequencial: seq });
   atualizar.forEach(r => upsert('recebiveis', r));
   upsert('contasBanco', Object.assign({}, conta, { nossoNumeroAtual: nn, remessaSeq: seq + 1 }));
-  const total = itens.reduce((s, x) => s + x.valor, 0);
+  const registrados = itens.filter(i => i.comando === '01');
+  const total = registrados.reduce((s, x) => s + x.valor, 0);
   const nome = 'CB' + pad(seq, 6) + '.REM';
-  upsert('remessas', { id: genId(), loteamentoId: lot.id, contaId: conta.id, sequencial: seq, data: todayStr(),
-    arquivo: nome, qtd: itens.length, valor: Math.round(total * 100) / 100,
-    recIds: atualizar.map(r => r.id), primeiroNn: String(itens[0].nossoNumero), ultimoNn: String(itens[itens.length - 1].nossoNumero),
+  upsert('remessas', { id: genId(), loteamentoId: lot.id, contaId: conta.id, sequencial: seq, data: todayStr(), arquivo: nome,
+    qtd: registrados.length, baixas: itens.length - registrados.length, valor: Math.round(total * 100) / 100,
+    recIds: atualizar.map(r => r.id), primeiroNn: registrados.length ? String(registrados[0].nossoNumero) : '', ultimoNn: registrados.length ? String(registrados[registrados.length - 1].nossoNumero) : '',
     criadoEm: new Date().toISOString() });
   download(nome, texto, 'text/plain');
-  logAct(`Remessa ${seq} gerada: ${itens.length} título(s), ${fmtMoney(total)}`);
+  logAct(`Remessa ${seq}: ${registrados.length} título(s) registrado(s), ${itens.length - registrados.length} baixa(s), ${fmtMoney(total)}`);
+  return texto;
+}
+function contaPronta(lot) {
+  const conta = contaCobranca(lot.id);
+  if (!conta) {
+    openModal({ title: '🏦 Falta a conta de cobrança', body: '<p class="help">Antes de gerar cobranças, cadastre o convênio da empresa em <b>Cadastros › 🏦 Banco</b>: agência, conta, convênio, carteira e as instruções padrão do boleto (multa, juros, protesto, baixa).</p>', footer: '<button class="btn btn-primary" onclick="closeModal();switchTab(\'cadastros\');state.sub.cad=\'banco\';renderCadastros()">Ir para o cadastro</button>' });
+    return null;
+  }
+  if (!layoutCnab(conta.banco)) { toast('⚠️', 'Banco sem layout', 'Hoje só o Banco do Brasil gera remessa.', true); return null; }
+  return conta;
+}
+
+// ================================================================ TELA: GERAR COBRANÇAS DO MÊS
+function abrirGerarCobrancas(mes) {
+  const lot = curLot(); if (!lot) return;
+  if (!pode('financeiro.baixar')) { toast('🔒', 'Sem permissão', 'Seu perfil não gera cobranças.', true); return; }
+  const conta = contaPronta(lot); if (!conta) return;
+  const m = mes || state.sub.cobMes || mesAtual();
+  state.sub.cobMes = m;
+  const parcelas = parcelasDoMes(lot.id, m);
+  const geradas = parcelas.filter(registradaNoBanco);
+  const abertas = parcelas.filter(r => !registradaNoBanco(r));
+  const travadas = abertas.map(r => ({ r, motivo: bloqueioRemessa(r) })).filter(x => x.motivo);
+  const prontas = abertas.filter(r => !bloqueioRemessa(r));
+  const pend = pendentesDeRemessa(lot.id);
+  const semIndice = {};
+  travadas.forEach(x => { const v = getVenda(x.r.vendaId); if (v) semIndice[v.id] = x.motivo; });
+  const total = prontas.reduce((s, r) => s + recValor(r), 0);
+  openModal({
+    title: '🧾 Gerar cobranças', wide: true,
+    body: `<div class="subtabs" style="justify-content:center"><div class="chip" onclick="abrirGerarCobrancas('${mesAnterior(m)}')">‹ ${monthLabel(mesAnterior(m))}</div><div class="chip active">${monthLabel(m)}</div><div class="chip" onclick="abrirGerarCobrancas('${mesSeguinte(m)}')">${monthLabel(mesSeguinte(m))} ›</div></div>
+      <div class="kpi-grid">
+        <div class="kpi ${Object.keys(semIndice).length ? 'c-red' : 'c-green'}"><div class="lbl">Contratos sem índice do mês</div><div class="val">${Object.keys(semIndice).length}</div><div class="sub">${Object.keys(semIndice).length ? 'lance o índice antes de gerar' : 'todos os índices lançados'}</div></div>
+        <div class="kpi c-blue"><div class="lbl">Já geradas em ${monthLabel(m)}</div><div class="val">${geradas.length}</div><div class="sub">registradas no banco</div></div>
+        <div class="kpi c-amber"><div class="lbl">Prontas para gerar</div><div class="val">${prontas.length}</div><div class="sub">${fmtMoney(total)}</div></div>
+      </div>
+      ${Object.keys(semIndice).length ? `<div class="card"><h3>⏳ Contratos esperando índice</h3>
+        <p class="help">Estes contratos sofrem correção mensal e o índice que corrige a parcela de ${monthLabel(m)} ainda não foi lançado. Gerar agora mandaria boleto com valor errado, então eles ficam de fora até você lançar em <b>Cadastros › Índices</b>.</p>
+        ${Object.keys(semIndice).map(vid => { const v = getVenda(vid), l = getLote(v.loteId); return `<div class="item"><div class="info"><div class="title">${l ? esc(loteLabel(l)) : ''} · ${esc(v.cliente.nome || '')}</div><div class="meta"><span>${esc(semIndice[vid])}</span></div></div></div>`; }).join('')}</div>` : ''}
+      ${pend.length ? `<div class="alert warn" style="cursor:default"><span><b>${pend.length} cobrança(s) alterada(s) depois de registrada(s)</b> vão junto nesta remessa, para o banco atualizar: ${pend.filter(x => x.acao === 'alterar').length} alteração(ões) e ${pend.filter(x => x.acao === 'baixar').length} baixa(s).</span></div>` : ''}
+      ${prontas.length ? `<div class="card"><h3>O que vai ser gerado</h3>
+        <p class="help">Uma cobrança por parcela. O sistema numera o nosso número, marca como registrada e gera o arquivo de remessa para você enviar ao banco.</p>
+        <div class="table-wrap"><table class="tbl"><thead><tr><th>Cliente</th><th>Lote</th><th>Parcela</th><th>Vencimento</th><th class="num">Valor</th></tr></thead><tbody>
+        ${prontas.map(r => { const v = getVenda(r.vendaId), l = v && getLote(v.loteId); return `<tr><td>${esc(v.cliente.nome || '')}</td><td>${l ? esc(loteShort(l)) : ''}</td><td>${esc(r.descricao || '')}</td><td>${fmtDate(r.vencimento)}</td><td class="num">${esc(fmtMoney(recValor(r)))}</td></tr>`; }).join('')}
+        </tbody><tfoot><tr><td colspan="4">Total</td><td class="num">${esc(fmtMoney(total))}</td></tr></tfoot></table></div></div>`
+        : `<div class="empty"><div class="ic">📭</div><p><b>Nada a gerar em ${monthLabel(m)}</b></p><p class="small">${geradas.length ? 'As cobranças deste mês já foram geradas.' : 'Nenhuma parcela em aberto neste mês.'}</p></div>`}`,
+    footer: `<button class="btn btn-secondary" onclick="closeModal()">Fechar</button>
+      ${prontas.length ? `<button class="btn btn-outline" onclick="simularCobrancas('${m}')">🖨️ Simular</button><button class="btn btn-primary" onclick="gerarCobrancas('${m}')">Gerar agora</button>` : pend.length ? `<button class="btn btn-primary" onclick="gerarRemessaPendente()">Gerar remessa das alterações</button>` : ''}`
+  });
+}
+/* Simulação em PDF: o que sairia se você gerasse agora, agrupado por cliente, como o
+   financeiro está acostumado a conferir antes de mandar ao banco. */
+function simularCobrancas(mes) {
+  const lot = curLot(); const conta = contaCobranca(lot.id);
+  const prontas = parcelasDoMes(lot.id, mes).filter(r => !registradaNoBanco(r) && !bloqueioRemessa(r));
+  const porVenda = {};
+  prontas.forEach(r => { (porVenda[r.vendaId] = porVenda[r.vendaId] || []).push(r); });
+  const total = prontas.reduce((s, r) => s + recValor(r), 0);
+  $('#printArea').innerHTML = `
+    <h1>${esc(db.config.empresa || lot.nome)}</h1>
+    <h2>Simulação da geração de cobranças — ${monthLabel(mes)}</h2>
+    <p>${esc(lot.nome)} · ${prontas.length} cobrança(s) · ${esc(fmtMoney(total))} · ${conta ? 'Banco ' + esc(BANCOS[pad(conta.banco, 3)].nome) + ', convênio ' + esc(conta.convenio) : ''}</p>
+    ${Object.keys(porVenda).map(vid => { const v = getVenda(vid), l = getLote(v.loteId); const recs = porVenda[vid];
+      return `<h3 style="margin:14px 0 4px">${esc(v.cliente.nome || '')} — ${l ? esc(loteLabel(l)) : ''}</h3>
+        <table class="tbl"><thead><tr><th>Parcela</th><th>Vencimento</th><th>Valor base</th><th>Correção</th><th>Total</th></tr></thead><tbody>
+        ${recs.map(r => `<tr><td>${esc(r.descricao || '')}</td><td>${fmtDate(r.vencimento)}</td><td>${esc(fmtMoney(r.valor))}</td><td>${esc(fmtMoney(recCorrecao(r)))}</td><td><b>${esc(fmtMoney(recValor(r)))}</b></td></tr>`).join('')}
+        </tbody></table><p style="text-align:right"><b>Total do cliente: ${esc(fmtMoney(recs.reduce((s, r) => s + recValor(r), 0)))}</b></p>`; }).join('')}
+    <p style="margin-top:14px">Simulação emitida em ${fmtDate(todayStr())}. Nada foi gerado nem enviado ao banco.</p>`;
+  window.print();
+}
+function gerarCobrancas(mes) {
+  const lot = curLot(); const conta = contaPronta(lot); if (!conta) return;
+  const prontas = parcelasDoMes(lot.id, mes).filter(r => !registradaNoBanco(r) && !bloqueioRemessa(r));
+  const pend = pendentesDeRemessa(lot.id);
+  let texto;
+  try { texto = emitirRemessa(lot, conta, prontas, pend); }
+  catch (e) { toast('⚠️', 'Falha ao montar o arquivo', e.message, true); return; }
+  if (!texto) { toast('⚠️', 'Nada a gerar', '', true); return; }
   closeModal(); renderCurrent();
-  toast('✅', 'Remessa gerada', `${itens.length} título(s) · ${fmtMoney(total)}`);
+  toast('✅', 'Cobranças geradas', `${prontas.length} título(s) em ${monthLabel(mes)}${pend.length ? ' + ' + pend.length + ' alteração(ões)' : ''}. Envie o arquivo ao banco.`);
+}
+/* Só as alterações e baixas pendentes, sem gerar cobrança nova. É o botão do aviso. */
+function gerarRemessaPendente() {
+  const lot = curLot(); const conta = contaPronta(lot); if (!conta) return;
+  if (!pode('financeiro.baixar')) { toast('🔒', 'Sem permissão', '', true); return; }
+  const pend = pendentesDeRemessa(lot.id);
+  if (!pend.length) { toast('ℹ️', 'Nada pendente', '', true); return; }
+  let texto;
+  try { texto = emitirRemessa(lot, conta, [], pend); }
+  catch (e) { toast('⚠️', 'Falha ao montar o arquivo', e.message, true); return; }
+  closeModal(); renderCurrent();
+  toast('✅', 'Remessa de alterações gerada', `${pend.length} título(s). Envie o arquivo ao banco.`);
+}
+/* Aviso no topo da lista de recebíveis, igual ao ERP: enquanto houver alteração não enviada. */
+function avisoRemessaHtml(lotId) {
+  const conta = contaCobranca(lotId);
+  if (!conta || !layoutCnab(conta.banco)) return '';
+  const pend = pendentesDeRemessa(lotId);
+  if (!pend.length) return '';
+  const alt = pend.filter(x => x.acao === 'alterar').length, bx = pend.length - alt;
+  return `<div class="alert warn" onclick="gerarRemessaPendente()"><span><b>${pend.length} cobrança(s) marcada(s) para remessa</b> — ${alt ? alt + ' alterada(s) depois de registrada(s)' : ''}${alt && bx ? ' e ' : ''}${bx ? bx + ' para baixar no banco' : ''}. O banco ainda tem o boleto antigo. <u>Gerar remessa</u></span></div>`;
 }
 
 // ================================================================ TELA: LER RETORNO
@@ -291,7 +389,7 @@ function mostrarRetorno() {
   const linha = x => {
     const v = x.rec && getVenda(x.rec.vendaId), l = v && getLote(v.loteId);
     return `<tr><td>${x.rec ? esc(l ? loteLabel(l) : '') + ' · ' + esc(x.rec.descricao || '') : '<span class="muted">não localizada</span>'}</td>
-      <td>${esc(x.nossoNumero)}</td><td>${esc(x.descricao)}</td><td>${x.data ? fmtDate(x.data) : '—'}</td>
+      <td>${esc(x.nossoNumero)}</td><td>${esc(x.descricao)}${x.motivo ? ' <span class="muted">(' + esc(x.motivo) + ')</span>' : ''}</td><td>${x.data ? fmtDate(x.data) : '—'}</td>
       <td class="num">${esc(fmtMoney(x.valorPago))}</td></tr>`;
   };
   openModal({ title: '📥 Retorno · ' + esc(r.nomeArquivo || ''), wide: true,
@@ -315,7 +413,7 @@ function aplicarRetorno() {
     const devido = recValor(rec);
     upsert('recebiveis', Object.assign({}, rec, {
       valorPago: pago, dataPagamento: x.data || todayStr(), forma: 'Boleto',
-      obsPagamento: `Baixa automática pelo retorno ${r.nomeArquivo || ''}`.trim(),
+      obsPagamento: `Baixa pelo retorno ${r.nomeArquivo || ''}`.trim(),
       valorCorrigido: Math.round(Math.max(devido, pago) * 100) / 100
     }));
     atualizarStatusVenda(rec.vendaId);
@@ -332,7 +430,7 @@ function cadRemessasHtml() {
   const lot = curLot(); if (!lot) return '';
   const lista = db.remessas.filter(r => r.loteamentoId === lot.id).sort((a, b) => String(b.data).localeCompare(String(a.data)));
   if (!lista.length) return '<p class="help">Nenhuma remessa gerada ainda.</p>';
-  return `<div class="table-wrap"><table class="tbl"><thead><tr><th>Arquivo</th><th>Data</th><th>Títulos</th><th class="num">Valor</th><th>Nosso número</th></tr></thead><tbody>
-    ${lista.map(r => `<tr><td>${esc(r.arquivo)}</td><td>${fmtDate(r.data)}</td><td>${r.qtd}</td><td class="num">${esc(fmtMoney(r.valor))}</td><td>${esc(r.primeiroNn)} a ${esc(r.ultimoNn)}</td></tr>`).join('')}
+  return `<div class="table-wrap"><table class="tbl"><thead><tr><th>Arquivo</th><th>Data</th><th>Registrados</th><th>Baixas</th><th class="num">Valor</th><th>Nosso número</th></tr></thead><tbody>
+    ${lista.map(r => `<tr><td>${esc(r.arquivo)}</td><td>${fmtDate(r.data)}</td><td>${r.qtd}</td><td>${r.baixas || 0}</td><td class="num">${esc(fmtMoney(r.valor))}</td><td>${r.primeiroNn ? esc(r.primeiroNn) + ' a ' + esc(r.ultimoNn) : '—'}</td></tr>`).join('')}
   </tbody></table></div>`;
 }
