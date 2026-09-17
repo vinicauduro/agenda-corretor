@@ -136,6 +136,36 @@ antecipação ou limitar o desconto, é só dizer.
 
 ---
 
+## 7d. Cobrança bancária: o que preciso de você
+
+Decidido: vamos de **arquivo CNAB**, com remessa e retorno, do jeito que o financeiro já
+trabalha. Bancos usados: BB, Caixa, Bradesco, Sicoob e C6.
+
+**Já pronto:** cadastro da conta de cobrança em Cadastros › Banco, e o boleto com código de
+barras e linha digitável do Banco do Brasil, calculados no padrão Febraban. Falta conferir o
+campo livre do BB contra o manual, e fazer remessa e retorno.
+
+Para cada banco que formos implementar, preciso de:
+
+- [ ] **Manual do layout** de remessa e retorno em PDF, o que o banco chama de "layout de
+      cobrança CNAB 240" ou "CNAB 400". Tem no internet banking de cada um.
+- [ ] **Dados do convênio** da empresa: agência, conta, código do cedente ou convênio,
+      carteira, variação da carteira, posto (no caso do Sicoob) e a faixa de nosso número
+      liberada.
+- [ ] Um **arquivo de retorno real**, mesmo antigo, para eu conferir a leitura contra dado de
+      verdade.
+- [ ] Definir as instruções padrão do boleto: dias para protesto ou baixa, multa, juros ao dia,
+      desconto e as mensagens que saem no corpo.
+
+Combinado: começamos por um banco só, validamos com um arquivo de verdade, e depois eu
+replico para os outros. Cada empresa cliente do sistema preenche o próprio convênio; o layout
+é meu, feito uma vez por banco.
+
+Para enviar por e-mail preciso ligar um serviço de envio, e o boleto em PDF vai para o Storage
+para poder ser mandado por WhatsApp.
+
+---
+
 ## 8. O que ainda não foi construído
 
 Em ordem de prioridade acordada:

@@ -570,7 +570,7 @@ function abrirVendaAdmin(id) {
     ${correcaoResumoVenda(x)}
     <h3 class="small" style="margin:8px 0 6px;font-weight:800">📆 Parcelas</h3>
     <div class="table-wrap"><table class="tbl"><thead><tr><th>Parcela</th><th>Venc.</th><th class="num">Valor</th><th class="num">Pago</th><th>Status</th><th></th></tr></thead>
-    <tbody>${recs.map(rc => { const st = recStatus(rc); return `<tr><td>${esc(rc.descricao)}</td><td>${fmtDate(rc.vencimento)}</td><td class="num">${fmtMoney(recValor(rc))}${recCorrecao(rc) > 0.005 ? `<br><span class="tiny muted">base ${fmtMoney(rc.valor)}</span>` : ''}</td><td class="num">${rc.valorPago ? fmtMoney(rc.valorPago) + (rc.dataPagamento ? `<br><span class="tiny muted">${fmtDate(rc.dataPagamento)}</span>` : '') : '—'}</td><td><span class="badge ${st}">${statusLabel(st)}</span>${st === 'atrasado' ? `<br><span class="tiny" style="color:var(--danger)">atual. ${fmtMoney(recAtualizado(rc))}</span>` : ''}</td><td>${x.status !== 'distrato' ? (!pode('financeiro.baixar') ? '' : st === 'pago' ? `<button class="btn-icon" title="Estornar" onclick="estornarPagamento('${rc.id}','${x.id}')">↩</button>` : `<button class="btn-icon ok" title="Registrar pagamento" onclick="abrirPagamento('${rc.id}','${x.id}')">💵</button>`) : ''} <button class="btn-icon" title="Editar parcela" onclick="editarRecebivel('${rc.id}','${x.id}')">✏️</button></td></tr>`; }).join('')}</tbody>
+    <tbody>${recs.map(rc => { const st = recStatus(rc); return `<tr><td>${esc(rc.descricao)}</td><td>${fmtDate(rc.vencimento)}</td><td class="num">${fmtMoney(recValor(rc))}${recCorrecao(rc) > 0.005 ? `<br><span class="tiny muted">base ${fmtMoney(rc.valor)}</span>` : ''}</td><td class="num">${rc.valorPago ? fmtMoney(rc.valorPago) + (rc.dataPagamento ? `<br><span class="tiny muted">${fmtDate(rc.dataPagamento)}</span>` : '') : '—'}</td><td><span class="badge ${st}">${statusLabel(st)}</span>${st === 'atrasado' ? `<br><span class="tiny" style="color:var(--danger)">atual. ${fmtMoney(recAtualizado(rc))}</span>` : ''}</td><td>${x.status !== 'distrato' ? (!pode('financeiro.baixar') ? '' : st === 'pago' ? `<button class="btn-icon" title="Estornar" onclick="estornarPagamento('${rc.id}','${x.id}')">↩</button>` : `<button class="btn-icon ok" title="Registrar pagamento" onclick="abrirPagamento('${rc.id}','${x.id}')">💵</button>`) : ''} <button class="btn-icon" title="Boleto" onclick="abrirBoleto('${rc.id}')">🏦</button> <button class="btn-icon" title="Editar parcela" onclick="editarRecebivel('${rc.id}','${x.id}')">✏️</button></td></tr>`; }).join('')}</tbody>
     <tfoot><tr><td colspan="2">Total</td><td class="num">${fmtMoney(r.total)}</td><td class="num">${fmtMoney(r.pago)}</td><td colspan="2"></td></tr></tfoot></table></div>`;
   let footer = `${pode('vendas.editar') ? `<button class="btn btn-secondary" onclick="abrirVendaForm('${x.id}')">✏️ Editar</button>` : ''}<button class="btn btn-outline" onclick="imprimirExtrato('${x.id}')">🖨️ Extrato</button><button class="btn btn-outline" onclick="gerarContratoVenda('${x.id}')">📄 Contrato</button>${x.status !== 'distrato' && vendaResumo(x).restante > 0.005 && pode('financeiro.antecipar') ? `<button class="btn btn-success" onclick="abrirAntecipacao('${x.id}')">💸 Antecipar / quitar</button>` : ''}`;
   if (c.telefone) footer += `<a class="btn btn-wa" target="_blank" href="${waLink(c.telefone, extratoTexto(x))}">💬 Enviar resumo</a>`;
@@ -691,7 +691,7 @@ function renderCadastros() {
   state.sub.cad = state.sub.cad || (curLot() ? 'loteamento' : 'loteamentos');
   const todasTabs = [['loteamento', '🏘️ Loteamento', null], ['loteamentos', '📋 Todos', null], ['corretores', Cloud.active ? '👥 Equipe' : '🧑‍💼 Corretores', 'equipe.gerenciar'],
     ['permissoes', '🔐 Permissões', 'equipe.gerenciar'], ['categorias', '🏷️ Categorias', 'custos.editar'], ['documentos', '📄 Documentos', 'documentos.editar'],
-    ['indices', '📈 Índices', 'indices.editar'], ['cobranca', '🔔 Cobrança', 'cobranca.registrar'], ['vitrine', '🌐 Vitrine', 'vitrine.gerenciar'],
+    ['indices', '📈 Índices', 'indices.editar'], ['cobranca', '🔔 Cobrança', 'cobranca.registrar'], ['banco', '🏦 Banco', 'config.editar'], ['vitrine', '🌐 Vitrine', 'vitrine.gerenciar'],
     ['config', '⚙️ Configurações', 'config.editar'], ['nuvem', Cloud.active ? '☁️ Conta' : '☁️ Nuvem', null], ['backup', '💾 Backup', 'backup.usar']];
   const tabs = todasTabs.filter(t => !t[2] || pode(t[2])).map(t => [t[0], t[1]]);
   if (!tabs.find(t => t[0] === state.sub.cad)) state.sub.cad = 'loteamento';
@@ -704,6 +704,7 @@ function renderCadastros() {
   else if (sub === 'documentos') html += cadDocumentosHtml();
   else if (sub === 'indices') html += cadIndicesHtml();
   else if (sub === 'cobranca') html += cadCobrancaHtml();
+  else if (sub === 'banco') html += cadBancoHtml();
   else if (sub === 'permissoes') html += cadPermissoesHtml();
   else if (sub === 'vitrine') html += cadVitrineHtml();
   else if (sub === 'config') html += cadConfigHtml();

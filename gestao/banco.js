@@ -1,0 +1,234 @@
+/* ===== Gestão de Loteamento — conta de cobrança e boleto =====
+   Base da cobrança bancária: cadastro do convênio da empresa, numeração do nosso número,
+   código de barras e linha digitável no padrão Febraban, e o boleto para imprimir.
+   O que é específico de cada banco fica isolado em BANCOS, para conferir com o manual. */
+'use strict';
+
+const BANCOS = {
+  '001': {
+    nome: 'Banco do Brasil', carteiras: ['11', '17', '18', '31'], nossoNumeroDigitos: 17,
+    /* Campo livre do BB (25 posições). Duas montagens clássicas, conforme o tamanho do
+       convênio. A conferir com o manual de cobrança do banco antes de usar em produção. */
+    campoLivre(c, nossoNumero) {
+      const conv = soDigitos(c.convenio);
+      if (conv.length >= 7) return '000000' + pad(conv, 7) + pad(soDigitos(nossoNumero).slice(-10), 10) + pad(c.carteira, 2);
+      return pad(conv, 6) + pad(soDigitos(nossoNumero).slice(-5), 5) + pad(soDigitos(c.agencia), 4) + pad(soDigitos(c.conta), 8) + pad(c.carteira, 2);
+    },
+    nossoNumeroImpresso(c, nossoNumero) {
+      const conv = soDigitos(c.convenio);
+      const base = conv.length >= 7 ? pad(conv, 7) + pad(soDigitos(nossoNumero).slice(-10), 10) : pad(conv, 6) + pad(soDigitos(nossoNumero).slice(-5), 5);
+      return base + '-' + dvModulo11Banco(base);
+    }
+  },
+  '104': { nome: 'Caixa Econômica Federal', carteiras: ['14', '24'], nossoNumeroDigitos: 17, campoLivre: null, nossoNumeroImpresso: null },
+  '237': { nome: 'Bradesco', carteiras: ['09', '06', '19'], nossoNumeroDigitos: 11, campoLivre: null, nossoNumeroImpresso: null },
+  '756': { nome: 'Sicoob', carteiras: ['01', '02'], nossoNumeroDigitos: 10, campoLivre: null, nossoNumeroImpresso: null },
+  '336': { nome: 'C6 Bank', carteiras: ['01'], nossoNumeroDigitos: 11, campoLivre: null, nossoNumeroImpresso: null }
+};
+
+function soDigitos(s) { return String(s ?? '').replace(/\D/g, ''); }
+function pad(v, n) { return soDigitos(v).slice(-n).padStart(n, '0'); }
+function padTxt(s, n) { return String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().slice(0, n).padEnd(n, ' '); }
+
+/* Dígito verificador do código de barras (módulo 11, pesos 2 a 9, resto 0/1/10 vira 1). */
+function dvCodigoBarras(base43) {
+  let peso = 2, soma = 0;
+  for (let i = base43.length - 1; i >= 0; i--) { soma += Number(base43[i]) * peso; peso = peso === 9 ? 2 : peso + 1; }
+  const resto = soma % 11, dv = 11 - resto;
+  return (dv === 0 || dv === 10 || dv === 11) ? 1 : dv;
+}
+/* Módulo 10, usado nos campos da linha digitável. */
+function dvModulo10(num) {
+  let soma = 0, peso = 2;
+  for (let i = num.length - 1; i >= 0; i--) {
+    let v = Number(num[i]) * peso;
+    if (v > 9) v -= 9;
+    soma += v; peso = peso === 2 ? 1 : 2;
+  }
+  return (10 - (soma % 10)) % 10;
+}
+/* Módulo 11 dos bancos, para nosso número (resto 10 vira X, 0 e 1 viram 0). */
+function dvModulo11Banco(num) {
+  let peso = 2, soma = 0;
+  for (let i = num.length - 1; i >= 0; i--) { soma += Number(num[i]) * peso; peso = peso === 9 ? 2 : peso + 1; }
+  const resto = soma % 11;
+  if (resto === 0) return '0';
+  if (resto === 1) return 'X';
+  return String(11 - resto);
+}
+/* Fator de vencimento Febraban: dias desde 07/10/1997, com a virada de 2025 já tratada. */
+function fatorVencimento(venc) {
+  const base = Date.UTC(1997, 9, 7);
+  const [y, m, d] = String(venc).split('-').map(Number);
+  const dias = Math.round((Date.UTC(y, m - 1, d) - base) / 86400000);
+  if (dias < 1000) return '0000';
+  return String(((dias - 1000) % 9000) + 1000);
+}
+
+/* Código de barras de 44 posições. */
+function codigoBarras(conta, nossoNumero, venc, valor) {
+  const banco = pad(conta.banco, 3);
+  const perfil = BANCOS[banco];
+  if (!perfil || !perfil.campoLivre) throw new Error('Layout do banco ainda não configurado.');
+  const livre = pad(perfil.campoLivre(conta, nossoNumero), 25);
+  // 43 posições sem o dígito: banco(3) moeda(1) fator(4) valor(10) campo livre(25)
+  const base43 = banco + '9' + fatorVencimento(venc) + pad(Math.round(num(valor) * 100), 10) + livre;
+  const dv = dvCodigoBarras(base43);
+  return base43.slice(0, 4) + dv + base43.slice(4);
+}
+/* Linha digitável (47 dígitos) a partir do código de barras. */
+function linhaDigitavel(cb) {
+  const c1 = cb.slice(0, 4) + cb.slice(19, 24);
+  const c2 = cb.slice(24, 34);
+  const c3 = cb.slice(34, 44);
+  const fmt = campo => campo.slice(0, 5) + '.' + campo.slice(5) + dvModulo10(campo);
+  return `${fmt(c1)} ${fmt(c2)} ${fmt(c3)} ${cb[4]} ${cb.slice(5, 19)}`;
+}
+/* Confere a linha digitável reconstruindo o código de barras. */
+function barrasDaLinha(linha) {
+  const n = soDigitos(linha);
+  if (n.length !== 47) return null;
+  return n.slice(0, 4) + n[32] + n.slice(33, 47) + n.slice(4, 9) + n.slice(10, 20) + n.slice(21, 31);
+}
+
+/* Desenho do código de barras no padrão 2 de 5 intercalado, em SVG. */
+const I25 = { '0': 'nnwwn', '1': 'wnnnw', '2': 'nwnnw', '3': 'wwnnn', '4': 'nnwnw', '5': 'wnwnn', '6': 'nwwnn', '7': 'nnnww', '8': 'wnnwn', '9': 'nwnwn' };
+function barrasSvg(cb, altura) {
+  const h = altura || 50;
+  let barras = '110'; // início
+  for (let i = 0; i < cb.length; i += 2) {
+    const a = I25[cb[i]], b = I25[cb[i + 1]];
+    for (let k = 0; k < 5; k++) { barras += (a[k] === 'w' ? '111' : '1') + (b[k] === 'w' ? '000' : '0'); }
+  }
+  barras += '1001'; // fim
+  let x = 0, rects = '';
+  let i = 0;
+  while (i < barras.length) {
+    let j = i; while (j < barras.length && barras[j] === barras[i]) j++;
+    const larg = j - i;
+    if (barras[i] === '1') rects += `<rect x="${x}" y="0" width="${larg}" height="${h}" fill="#000"/>`;
+    x += larg; i = j;
+  }
+  return `<svg class="boleto-barras" viewBox="0 0 ${x} ${h}" width="${Math.min(x, 420)}" height="${h}" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">${rects}</svg>`;
+}
+
+// ================================================================ CADASTRO DA CONTA
+function contaCobranca(loteamentoId) {
+  return db.contasBanco.find(c => c.loteamentoId === loteamentoId) || db.contasBanco.find(c => !c.loteamentoId) || null;
+}
+function cadBancoHtml() {
+  if (!pode('config.editar')) return semPermissaoHtml('cadastro bancário');
+  const lot = curLot();
+  const c = (lot && contaCobranca(lot.id)) || { banco: '001', carteira: '17', variacao: '019', nossoNumeroAtual: 1, remessaSeq: 1, protestoDias: 0, baixaDias: 0, multaPct: num(db.config.multaPct), jurosDia: num(db.config.jurosMesPct) / 30, descontoPct: 0, especie: 'DM', aceite: 'N', mensagem1: '', mensagem2: '' };
+  const perfil = BANCOS[pad(c.banco, 3)] || BANCOS['001'];
+  return `<div class="card"><h3>🏦 Conta de cobrança</h3>
+    <p class="help">Dados do convênio de cobrança registrada da empresa. Eles vão no boleto e no arquivo de remessa. Cada empresa preenche os seus; o layout de cada banco é do sistema.</p>
+    <div class="frow"><div class="fg"><label>Banco</label><select id="bcBanco" onchange="renderCadastros()">${Object.entries(BANCOS).map(([k, v]) => `<option value="${k}" ${pad(c.banco, 3) === k ? 'selected' : ''}>${k} — ${esc(v.nome)}</option>`).join('')}</select></div>
+      <div class="fg"><label>Carteira</label><select id="bcCarteira">${perfil.carteiras.map(x => `<option value="${x}" ${c.carteira === x ? 'selected' : ''}>${x}</option>`).join('')}</select></div></div>
+    <div class="frow3"><div class="fg"><label>Agência (sem dígito)</label><input type="text" id="bcAgencia" value="${esc(c.agencia || '')}" placeholder="1234"></div>
+      <div class="fg"><label>Dígito da agência</label><input type="text" id="bcAgenciaDv" value="${esc(c.agenciaDv || '')}" maxlength="1"></div>
+      <div class="fg"><label>Variação da carteira</label><input type="text" id="bcVariacao" value="${esc(c.variacao || '')}" placeholder="019"></div></div>
+    <div class="frow3"><div class="fg"><label>Conta corrente</label><input type="text" id="bcConta" value="${esc(c.conta || '')}"></div>
+      <div class="fg"><label>Dígito da conta</label><input type="text" id="bcContaDv" value="${esc(c.contaDv || '')}" maxlength="1"></div>
+      <div class="fg"><label>Convênio / código do cedente</label><input type="text" id="bcConvenio" value="${esc(c.convenio || '')}" placeholder="1234567"></div></div>
+    <div class="frow"><div class="fg"><label>Próximo nosso número</label><input type="number" id="bcNN" value="${c.nossoNumeroAtual || 1}"><div class="hint">O sistema numera sozinho a partir daqui.</div></div>
+      <div class="fg"><label>Próxima remessa (sequencial)</label><input type="number" id="bcSeq" value="${c.remessaSeq || 1}"></div></div>
+    <div class="fieldset"><span class="lg">📄 Instruções do boleto</span>
+      <div class="frow3"><div class="fg"><label>Multa por atraso (%)</label><input type="number" id="bcMulta" step="0.01" value="${c.multaPct ?? 2}"></div>
+        <div class="fg"><label>Juros ao dia (%)</label><input type="number" id="bcJuros" step="0.001" value="${c.jurosDia ?? 0.033}"></div>
+        <div class="fg"><label>Desconto até o vencimento (%)</label><input type="number" id="bcDesc" step="0.01" value="${c.descontoPct ?? 0}"></div></div>
+      <div class="frow3"><div class="fg"><label>Protestar após (dias)</label><input type="number" id="bcProtesto" value="${c.protestoDias ?? 0}"><div class="hint">0 = não protestar</div></div>
+        <div class="fg"><label>Baixar após vencimento (dias)</label><input type="number" id="bcBaixa" value="${c.baixaDias ?? 0}"></div>
+        <div class="fg"><label>Espécie / aceite</label><select id="bcEspecie"><option value="DM" ${c.especie === 'DM' ? 'selected' : ''}>Duplicata mercantil</option><option value="DS" ${c.especie === 'DS' ? 'selected' : ''}>Duplicata de serviço</option><option value="OU" ${c.especie === 'OU' ? 'selected' : ''}>Outros</option></select></div></div>
+      <div class="fg"><label>Mensagem 1 no boleto</label><input type="text" id="bcMsg1" value="${esc(c.mensagem1 || '')}" placeholder="Referente ao lote {{lote}} do {{loteamento}}"></div>
+      <div class="fg"><label>Mensagem 2 no boleto</label><input type="text" id="bcMsg2" value="${esc(c.mensagem2 || '')}" placeholder="Não receber após 30 dias do vencimento"></div></div>
+    <div class="btn-row"><button class="btn btn-primary" onclick="salvarContaBanco('${c.id || ''}')">Salvar conta de cobrança</button>
+      ${c.id ? `<button class="btn btn-secondary" onclick="testarBoleto()">👁️ Ver um boleto de exemplo</button>` : ''}</div>
+    ${!perfil.campoLivre ? `<div class="alert warn" style="cursor:default;margin-top:10px"><span>O layout do ${esc(perfil.nome)} ainda não está implementado. Hoje o sistema gera boleto do Banco do Brasil; os outros entram assim que eu tiver o manual de cada um.</span></div>` : ''}
+    <p class="help mt">A geração do arquivo de remessa e a leitura do retorno entram na próxima etapa, quando eu tiver o manual de layout do banco.</p></div>`;
+}
+
+function salvarContaBanco(id) {
+  const lot = curLot(); if (!lot) return;
+  const prev = id ? db.contasBanco.find(x => x.id === id) : null;
+  const rec = Object.assign({}, prev || { id: genId(), criadoEm: new Date().toISOString() }, {
+    loteamentoId: lot.id, banco: val('bcBanco'), carteira: val('bcCarteira'), variacao: val('bcVariacao'),
+    agencia: val('bcAgencia'), agenciaDv: val('bcAgenciaDv'), conta: val('bcConta'), contaDv: val('bcContaDv'),
+    convenio: val('bcConvenio'), nossoNumeroAtual: Math.max(1, Math.round(num(val('bcNN')))), remessaSeq: Math.max(1, Math.round(num(val('bcSeq')))),
+    multaPct: num(val('bcMulta')), jurosDia: num(val('bcJuros')), descontoPct: num(val('bcDesc')),
+    protestoDias: Math.round(num(val('bcProtesto'))), baixaDias: Math.round(num(val('bcBaixa'))),
+    especie: val('bcEspecie'), aceite: 'N', mensagem1: val('bcMsg1'), mensagem2: val('bcMsg2')
+  });
+  if (!rec.agencia || !rec.conta || !rec.convenio) { toast('⚠️', 'Faltam dados', 'Agência, conta e convênio são obrigatórios.', true); return; }
+  upsert('contasBanco', rec);
+  logAct(`Conta de cobrança salva: ${(BANCOS[pad(rec.banco, 3)] || {}).nome || rec.banco}`);
+  renderCadastros(); toast('✅', 'Conta salva', 'Já dá para gerar boletos.');
+}
+
+// ================================================================ BOLETO
+function dadosBoleto(rec) {
+  const v = getVenda(rec.vendaId); const l = v ? getLote(v.loteId) : null;
+  const lot = getLoteamento(rec.loteamentoId) || curLot();
+  const conta = contaCobranca(rec.loteamentoId || (lot && lot.id));
+  if (!conta) throw new Error('Cadastre a conta de cobrança em Cadastros › Banco.');
+  const perfil = BANCOS[pad(conta.banco, 3)];
+  if (!perfil || !perfil.campoLivre) throw new Error(`O layout do ${(perfil || {}).nome || 'banco'} ainda não está implementado.`);
+  const nn = rec.nossoNumero || String(conta.nossoNumeroAtual || 1);
+  const valor = recValor(rec);
+  const cb = codigoBarras(conta, nn, rec.vencimento, valor);
+  const ctx = { lote: l ? loteLabel(l) : '', loteamento: lot ? lot.nome : '', cliente: v ? v.cliente.nome : '', parcela: rec.descricao };
+  const msg = t => String(t || '').replace(/\{\{(\w+)\}\}/g, (m, k) => ctx[k] || '');
+  return {
+    conta, perfil, nossoNumero: nn, valor, venda: v, lote: l, loteamento: lot, rec,
+    codigoBarras: cb, linha: linhaDigitavel(cb),
+    nossoNumeroImpresso: perfil.nossoNumeroImpresso ? perfil.nossoNumeroImpresso(conta, nn) : nn,
+    mensagem1: msg(conta.mensagem1), mensagem2: msg(conta.mensagem2)
+  };
+}
+
+function boletoHtml(d) {
+  const c = d.conta, v = d.venda;
+  const agConta = `${pad(c.agencia, 4)}${c.agenciaDv ? '-' + c.agenciaDv : ''} / ${soDigitos(c.conta)}${c.contaDv ? '-' + c.contaDv : ''}`;
+  const linhaCliente = v ? `${esc(v.cliente.nome)}${v.cliente.cpf ? ' · CPF/CNPJ ' + esc(fmtCPF(v.cliente.cpf)) : ''}` : '';
+  return `<div class="boleto">
+    <div class="boleto-topo"><div class="banco">${esc(pad(c.banco, 3))}-${dvModulo11Banco(pad(c.banco, 3))}</div><div class="linha">${esc(d.linha)}</div></div>
+    <table class="boleto-tab">
+      <tr><td colspan="3"><small>Beneficiário</small>${esc(db.config.empresa || '')}${db.config.cnpj ? ' · CNPJ ' + esc(db.config.cnpj) : ''}</td><td><small>Agência / conta</small>${esc(agConta)}</td></tr>
+      <tr><td><small>Vencimento</small><b>${fmtDate(d.rec.vencimento)}</b></td><td><small>Nosso número</small>${esc(d.nossoNumeroImpresso)}</td><td><small>Carteira</small>${esc(c.carteira)}</td><td><small>Valor do documento</small><b>${fmtMoney(d.valor)}</b></td></tr>
+      <tr><td colspan="4"><small>Pagador</small>${linhaCliente}</td></tr>
+      <tr><td colspan="4"><small>Instruções</small>
+        ${c.multaPct ? `Após o vencimento, multa de ${fmtNum(c.multaPct, 2)}%` : ''}${c.jurosDia ? ` e juros de ${fmtNum(c.jurosDia, 3)}% ao dia` : ''}.
+        ${c.protestoDias ? `Protestar após ${c.protestoDias} dias do vencimento.` : ''}
+        ${d.mensagem1 ? `<br>${esc(d.mensagem1)}` : ''}${d.mensagem2 ? `<br>${esc(d.mensagem2)}` : ''}</td></tr>
+    </table>
+    <div class="boleto-barras-box">${barrasSvg(d.codigoBarras, 50)}</div>
+  </div>`;
+}
+
+function abrirBoleto(recId) {
+  const rec = db.recebiveis.find(r => r.id === recId); if (!rec) return;
+  let d;
+  try { d = dadosBoleto(rec); } catch (e) { toast('⚠️', 'Não dá para gerar', e.message, true); return; }
+  openModal({
+    title: '🏦 Boleto · ' + esc(rec.descricao),
+    wide: true,
+    body: `<p class="help mb">Confira antes de imprimir. O boleto só é válido depois que o banco registrar o título pelo arquivo de remessa.</p>
+      <div id="boletoBox">${boletoHtml(d)}</div>
+      <div class="fg mt"><label>Linha digitável</label><input type="text" readonly value="${esc(d.linha)}" onclick="this.select()"></div>`,
+    footer: `<button class="btn btn-secondary" onclick="closeModal()">Fechar</button>
+      ${rec.vendaId && getVenda(rec.vendaId) && getVenda(rec.vendaId).cliente.telefone ? `<a class="btn btn-wa" target="_blank" href="${waLink(getVenda(rec.vendaId).cliente.telefone, `Segue a linha digitável do boleto de ${rec.descricao}, vencimento ${fmtDate(rec.vencimento)}, valor ${fmtMoney(d.valor)}:\n\n${d.linha}`)}">💬 Enviar linha</a>` : ''}
+      <button class="btn btn-primary" onclick="imprimirBoleto('${rec.id}')">🖨️ Imprimir</button>`
+  });
+}
+function imprimirBoleto(recId) {
+  const rec = db.recebiveis.find(r => r.id === recId); if (!rec) return;
+  const d = dadosBoleto(rec);
+  $('#printArea').innerHTML = boletoHtml(d);
+  window.print();
+}
+function testarBoleto() {
+  const lot = curLot(); if (!lot) return;
+  const rec = recebiveisDo(lot.id).find(r => recStatus(r) !== 'pago') || recebiveisDo(lot.id)[0];
+  if (!rec) { toast('⚠️', 'Sem parcelas', 'Cadastre uma venda para ver um boleto.', true); return; }
+  abrirBoleto(rec.id);
+}

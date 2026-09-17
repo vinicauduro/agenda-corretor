@@ -171,10 +171,10 @@ function defaultDB() {
     meta: { version: 1, createdAt: new Date().toISOString() },
     config: defaultConfig(),
     loteamentos: [], lotes: [], reservas: [], vendas: [], recebiveis: [], custos: [],
-    categorias: defaultCategorias(), corretores: [], leads: [], modelos: [], indices: [], cobrancas: [], log: []
+    categorias: defaultCategorias(), corretores: [], leads: [], modelos: [], indices: [], cobrancas: [], contasBanco: [], log: []
   };
 }
-const COLLECTIONS = ['loteamentos', 'lotes', 'reservas', 'vendas', 'recebiveis', 'custos', 'categorias', 'corretores', 'leads', 'modelos', 'indices', 'cobrancas', 'log'];
+const COLLECTIONS = ['loteamentos', 'lotes', 'reservas', 'vendas', 'recebiveis', 'custos', 'categorias', 'corretores', 'leads', 'modelos', 'indices', 'cobrancas', 'contasBanco', 'log'];
 function normalizeDB(data) {
   const d = data && typeof data === 'object' ? data : {};
   d.meta = d.meta || { version: 1 };
@@ -246,10 +246,11 @@ const TABLE_COLS = {
   lotes: ['id', 'loteamentoId', 'quadra', 'numero', 'area', 'frente', 'fundos', 'preco', 'tipo', 'status', 'obs', 'matricula', 'pts', 'reservaId', 'vendaId', 'criadoEm'],
   reservas: ['id', 'loteamentoId', 'loteId', 'corretor', 'corretorUserId', 'cliente', 'dataReserva', 'validade', 'status', 'proposta', 'obs', 'motivo', 'aprovadaEm', 'encerradaEm', 'criadoEm'],
   vendas: ['id', 'loteamentoId', 'loteId', 'reservaId', 'cliente', 'corretor', 'corretorUserId', 'dataVenda', 'valorTotal', 'entrada', 'dataEntrada', 'nParcelas', 'jurosMes', 'valorParcela', 'primeiroVencimento', 'baloes', 'indiceId', 'indiceBase', 'comissaoPct', 'comissaoValor', 'comissaoPaga', 'comissaoData', 'status', 'obs', 'motivo', 'distratoEm', 'criadoEm'],
-  recebiveis: ['id', 'loteamentoId', 'vendaId', 'tipo', 'numero', 'descricao', 'vencimento', 'valor', 'valorPago', 'valorCorrigido', 'dataPagamento', 'forma', 'obsPagamento'],
+  recebiveis: ['id', 'loteamentoId', 'vendaId', 'tipo', 'numero', 'descricao', 'vencimento', 'valor', 'valorPago', 'valorCorrigido', 'nossoNumero', 'remessaEm', 'dataPagamento', 'forma', 'obsPagamento'],
   custos: ['id', 'loteamentoId', 'loteId', 'descricao', 'categoriaId', 'fornecedor', 'valor', 'formaPagamento', 'dataCompetencia', 'vencimento', 'status', 'dataPagamento', 'obs', 'criadoEm'],
   modelos: ['id', 'nome', 'tipo', 'corpo', 'criadoEm'],
   indices: ['id', 'codigo', 'nome', 'tipo', 'valores', 'criadoEm'],
+  contasBanco: ['id', 'loteamentoId', 'banco', 'carteira', 'variacao', 'agencia', 'agenciaDv', 'conta', 'contaDv', 'convenio', 'nossoNumeroAtual', 'remessaSeq', 'multaPct', 'jurosDia', 'descontoPct', 'protestoDias', 'baixaDias', 'especie', 'aceite', 'mensagem1', 'mensagem2', 'criadoEm'],
   cobrancas: ['id', 'vendaId', 'loteamentoId', 'data', 'canal', 'faixa', 'dias', 'valor', 'obs', 'quem', 'criadoEm'],
   leads: ['id', 'loteamentoId', 'loteId', 'nome', 'telefone', 'email', 'msg', 'origem', 'status', 'obs', 'criadoEm'],
   log: ['id', 'ts', 'who', 'msg']
@@ -409,7 +410,7 @@ const Cloud = {
   async replaceAll() {
     try {
       await this.rpc('limpar_dados_org', { p_org: this.org.id });
-      for (const t of ['loteamentos', 'categorias', 'lotes', 'reservas', 'vendas', 'recebiveis', 'custos', 'leads', 'modelos', 'indices', 'cobrancas', 'log']) {
+      for (const t of ['loteamentos', 'categorias', 'lotes', 'reservas', 'vendas', 'recebiveis', 'custos', 'leads', 'modelos', 'indices', 'cobrancas', 'contasBanco', 'log']) {
         const rows = db[t].map(r => toRow(t, r));
         for (let i = 0; i < rows.length; i += 400) {
           const { error } = await this.client.from(t).upsert(rows.slice(i, i + 400), { onConflict: 'org_id,id' });
