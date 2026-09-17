@@ -531,7 +531,7 @@ function renderAVendas() {
   const f = state.filters.avendas = state.filters.avendas || { sub: 'vendas', status: 'all', busca: '' };
   if (f.sub === 'comissoes') { renderComissoes(v, f); return; }
   const all = db.vendas.filter(x => x.loteamentoId === lot.id).sort((a, b) => (b.dataVenda || '').localeCompare(a.dataVenda || ''));
-  const list = all.filter(x => (f.status === 'all' || x.status === f.status) && (!f.busca || x.cliente.nome.toLowerCase().includes(f.busca.toLowerCase()) || (getLote(x.loteId) && loteLabel(getLote(x.loteId)).toLowerCase().includes(f.busca.toLowerCase()))));
+  const list = all.filter(x => (f.status === 'all' || x.status === f.status) && (!f.busca || x.cliente.nome.toLowerCase().includes(f.busca.toLowerCase()) || imovelLabel(x).toLowerCase().includes(f.busca.toLowerCase())));
   const ativas = all.filter(x => x.status !== 'distrato');
   const tot = ativas.reduce((s, x) => s + num(x.valorTotal), 0);
   v.innerHTML = `
@@ -542,13 +542,13 @@ function renderAVendas() {
       <div class="kpi c-primary"><div class="lbl">Ticket médio</div><div class="val">${fmtMoneyShort(ativas.length ? tot / ativas.length : 0)}</div></div>
     </div>
     <div class="chips">${[['all', 'Todas'], ['ativa', 'Ativas'], ['quitada', 'Quitadas'], ['distrato', 'Distratos']].map(([k, l]) => `<div class="chip ${f.status === k ? 'active' : ''}" onclick="state.filters.avendas.status='${k}';renderAVendas()">${l}<span class="n">${k === 'all' ? all.length : all.filter(x => x.status === k).length}</span></div>`).join('')}</div>
-    <div class="filters"><input type="text" placeholder="🔎 Cliente ou lote" value="${esc(f.busca)}" oninput="aSetFiltro('avendas','busca',this.value,renderAVendas,this)"><button class="btn btn-primary btn-sm" onclick="abrirVendaForm()">＋ Nova venda</button></div>
+    <div class="filters"><input type="text" placeholder="🔎 Cliente ou imóvel" value="${esc(f.busca)}" oninput="aSetFiltro('avendas','busca',this.value,renderAVendas,this)"><button class="btn btn-primary btn-sm" onclick="abrirVendaForm()">＋ Nova venda</button></div>
     ${list.length ? list.map(x => vendaCardHtml(x)).join('') : `<div class="empty"><div class="ic">💰</div><p>Nenhuma venda registrada.<br>Converta uma reserva ou registre uma venda direta.</p></div>`}`;
 }
 function vendaCardHtml(x) {
-  const l = getLote(x.loteId); const r = vendaResumo(x); const pct = r.total ? Math.round(r.pago / r.total * 100) : 0;
+  const r = vendaResumo(x); const pct = r.total ? Math.round(r.pago / r.total * 100) : 0;
   return `<div class="item ${x.status === 'distrato' ? 'cancelada' : x.status}" onclick="abrirVendaAdmin('${x.id}')">
-    <div class="info"><div class="title">${l ? esc(loteLabel(l)) : 'Lote removido'} · ${esc(x.cliente.nome)}</div>
+    <div class="info"><div class="title">${esc(imovelLabel(x))} · ${esc(x.cliente.nome)}</div>
       <div class="meta"><span>📅 ${fmtDate(x.dataVenda)}</span><span>· 🧑‍💼 ${esc(x.corretor.nome)}</span><span>· ${x.nParcelas}× ${fmtMoney(x.valorParcela)}</span>${r.atrasado ? `<span style="color:var(--danger)">· ${fmtMoney(r.atrasado)} em atraso</span>` : ''}</div>
       ${x.status !== 'distrato' ? `<div class="progress"><div style="width:${pct}%"></div></div><div class="tiny muted">${r.nPagas}/${r.n} parcelas · ${fmtMoney(r.pago)} recebido (${pct}%)</div>` : ''}</div>
     <div class="side"><div class="value">${fmtMoney(x.valorTotal)}</div><span class="badge ${x.status === 'distrato' ? 'distrato' : x.status}">${statusLabel(x.status)}</span></div></div>`;
@@ -559,7 +559,7 @@ function abrirVendaAdmin(id) {
     <div class="row-between mb"><div><div class="price-big">${fmtMoney(x.valorTotal)}</div><div class="price-sub">Recebido ${fmtMoney(r.pago)} · Restante ${fmtMoney(r.restante)}${r.atrasado ? ` · <span style="color:var(--danger)">Atrasado ${fmtMoney(r.atrasado)}</span>` : ''}</div></div><span class="badge ${x.status === 'distrato' ? 'distrato' : x.status}" style="font-size:0.75rem">${statusLabel(x.status)}</span></div>
     <div class="progress mb"><div style="width:${r.total ? Math.round(r.pago / r.total * 100) : 0}%"></div></div>
     <div class="detail-grid">
-      <div><div class="k">Lote</div><div class="v">${l ? esc(loteLabel(l)) : '—'}</div></div><div><div class="k">Data da venda</div><div class="v">${fmtDate(x.dataVenda)}</div></div>
+      <div><div class="k">Imóvel</div><div class="v">${esc(imovelLabel(x))}</div></div><div><div class="k">Data da venda</div><div class="v">${fmtDate(x.dataVenda)}</div></div>
       <div><div class="k">Cliente</div><div class="v">${esc(c.nome)}</div></div><div><div class="k">CPF/CNPJ</div><div class="v">${esc(fmtCPF(c.cpf)) || '—'}</div></div>
       <div><div class="k">Telefone</div><div class="v"><a href="${waLink(c.telefone, '')}" target="_blank">${esc(fmtPhone(c.telefone))}</a></div></div><div><div class="k">E-mail</div><div class="v">${esc(c.email) || '—'}</div></div>
       <div class="full"><div class="k">Endereço</div><div class="v">${esc([c.endereco, c.cidade].filter(Boolean).join(' · ')) || '—'}</div></div>
@@ -575,17 +575,19 @@ function abrirVendaAdmin(id) {
   let footer = `${pode('vendas.editar') ? `<button class="btn btn-secondary" onclick="abrirVendaForm('${x.id}')">✏️ Editar</button>` : ''}<button class="btn btn-outline" onclick="imprimirExtrato('${x.id}')">🖨️ Extrato</button><button class="btn btn-outline" onclick="gerarContratoVenda('${x.id}')">📄 Contrato</button>${x.status !== 'distrato' && vendaResumo(x).restante > 0.005 && pode('financeiro.antecipar') ? `<button class="btn btn-success" onclick="abrirAntecipacao('${x.id}')">💸 Antecipar / quitar</button>` : ''}`;
   if (c.telefone) footer += `<a class="btn btn-wa" target="_blank" href="${waLink(c.telefone, extratoTexto(x))}">💬 Enviar resumo</a>`;
   if (x.status !== 'distrato' && pode('vendas.distrato')) footer += `<button class="btn btn-outline-danger" onclick="distratoVenda('${x.id}')">Distrato</button>`;
-  openModal({ title: `💰 Venda · ${l ? esc(loteShort(l)) : ''}`, body, footer, wide: true });
+  openModal({ title: `💰 Venda · ${esc(imovelShort(x))}`, body, footer, wide: true });
 }
 function abrirVendaForm(id, loteId, reservaId) {
   const lot = curLot(); const x = id ? getVenda(id) : null;
   const res = reservaId ? getReserva(reservaId) : null;
   const cond = lot.cond || {};
   window.vfReservaId = reservaId || null;
-  const lotes = lotesDo(lot.id).filter(l => l.status === 'disponivel' || (x && l.id === x.loteId) || (loteId && l.id === loteId));
-  if (!x && !lotes.length) { toast('⚠️', 'Nenhum lote disponível para venda', '', true); return; }
+  const carteira = ehCarteira(lot);
+  const lotes = carteira ? [] : lotesDo(lot.id).filter(l => l.status === 'disponivel' || (x && l.id === x.loteId) || (loteId && l.id === loteId));
+  if (!carteira && !x && !lotes.length) { toast('⚠️', 'Nenhum lote disponível para venda', '', true); return; }
   const c = x ? x.cliente : (res ? res.cliente : {}); const k = x ? x.corretor : (res ? res.corretor : { nome: db.config.empresa || 'Venda direta' });
-  const sel = x ? x.loteId : (loteId || lotes[0].id); const lsel = getLote(sel);
+  const sel = carteira ? '' : (x ? x.loteId : (loteId || lotes[0].id)); const lsel = sel ? getLote(sel) : null;
+  const im = (x && x.imovel) || {};
   const pv = res && res.proposta ? res.proposta : {};
   const total = x ? x.valorTotal : (pv.valor || (lsel ? lsel.preco : 0));
   const entrada = x ? x.entrada : (pv.entrada != null ? pv.entrada : Math.round(total * (num(cond.entradaMinPct) || 10) / 100));
@@ -595,7 +597,11 @@ function abrirVendaForm(id, loteId, reservaId) {
   const corrs = db.corretores.filter(cc => cc.ativo !== false);
   const body = `
     ${res ? `<div class="alert info" style="cursor:default"><span>Convertendo a reserva de <b>${esc(res.cliente.nome)}</b> (corretor ${esc(res.corretor.nome)}).</span></div>` : ''}
-    <div class="fg"><label>Lote *</label><select id="vfLote" onchange="vfLoteChange()" ${x ? 'disabled' : ''}>${optionsHtml(lotes, sel, l => `${loteLabel(l)} — ${fmtMoney(l.preco)}`)}</select></div>
+    ${carteira ? `<div class="fieldset"><span class="lg">🏠 Imóvel</span>
+      <div class="fg"><label>Descrição *</label><input type="text" id="vfImDesc" value="${esc(im.descricao || '')}" placeholder="Ex.: Apartamento 302, Ed. Aurora"></div>
+      <div class="frow"><div class="fg"><label>Endereço</label><input type="text" id="vfImEnd" value="${esc(im.endereco || '')}"></div>
+        <div class="fg"><label>Matrícula</label><input type="text" id="vfImMat" value="${esc(im.matricula || '')}"></div></div></div>`
+    : `<div class="fg"><label>Lote *</label><select id="vfLote" onchange="vfLoteChange()" ${x ? 'disabled' : ''}>${optionsHtml(lotes, sel, l => `${loteLabel(l)} — ${fmtMoney(l.preco)}`)}</select></div>`}
     <div class="fieldset"><span class="lg">🧑‍🤝‍🧑 Comprador</span>
       <div class="fg"><label>Nome *</label><input type="text" id="vcNome" value="${esc(c.nome || '')}"></div>
       <div class="frow"><div class="fg"><label>CPF/CNPJ</label><input type="text" id="vcCpf" value="${esc(c.cpf || '')}"></div><div class="fg"><label>Telefone *</label><input type="tel" id="vcTel" value="${esc(c.telefone || '')}"></div></div>
@@ -644,15 +650,19 @@ function vfCalc() {
 function vfCalcPct() { const total = num(val('vfTotal')), v = num(val('vkVal')); if (total) setVal('vkPct', Math.round(v / total * 1000) / 10); }
 function salvarVenda(id, reservaId) {
   const lot = curLot(); const x = id ? getVenda(id) : null; const res = reservaId ? getReserva(reservaId) : null;
-  const l = getLote(x ? x.loteId : val('vfLote'));
-  if (!l) { toast('⚠️', 'Selecione o lote', '', true); return; }
-  if (!x && l.status !== 'disponivel' && !(reservaId && l.status === 'reservado')) { toast('⚠️', 'Lote não está disponível', '', true); return; }
+  const carteira = ehCarteira(lot);
+  const l = carteira ? null : getLote(x ? x.loteId : val('vfLote'));
+  if (!carteira) {
+    if (!l) { toast('⚠️', 'Selecione o lote', '', true); return; }
+    if (!x && l.status !== 'disponivel' && !(reservaId && l.status === 'reservado')) { toast('⚠️', 'Lote não está disponível', '', true); return; }
+  } else if (!val('vfImDesc')) { toast('⚠️', 'Descreva o imóvel', 'Ex.: Apartamento 302, Ed. Aurora', true); return; }
   if (!val('vcNome') || !val('vcTel')) { toast('⚠️', 'Informe nome e telefone do comprador', '', true); return; }
   const total = num(val('vfTotal')); if (!total || !val('vfData')) { toast('⚠️', 'Informe valor e data da venda', '', true); return; }
   const n = Math.max(0, Math.round(num(val('vfN'))));
   if (n && !val('vfPrimeiro')) { toast('⚠️', 'Informe o 1º vencimento', '', true); return; }
   const baloes = (window.vfBaloes || []).filter(b => b.data && num(b.valor) > 0);
-  const venda = Object.assign({}, x || { id: genId(), loteId: l.id, loteamentoId: lot.id, status: 'ativa', reservaId: reservaId || null, criadoEm: new Date().toISOString(), comissaoPaga: false, comissaoData: null }, {
+  const venda = Object.assign({}, x || { id: genId(), loteId: l ? l.id : null, loteamentoId: lot.id, status: 'ativa', reservaId: reservaId || null, criadoEm: new Date().toISOString(), comissaoPaga: false, comissaoData: null }, {
+    imovel: carteira ? { descricao: val('vfImDesc'), endereco: val('vfImEnd'), matricula: val('vfImMat') } : null,
     cliente: { nome: val('vcNome'), cpf: val('vcCpf'), telefone: val('vcTel'), email: val('vcEmail'), cidade: val('vcCidade'), endereco: val('vcEnd'), profissao: val('vcProf') },
     corretor: { nome: val('vkNome') || 'Venda direta', creci: val('vkCreci'), telefone: val('vkTel'), imobiliaria: val('vkImob'), email: (x && x.corretor.email) || '', userId: (x && x.corretor.userId) || (res && res.corretor && res.corretor.userId) || (corretorSelecionado('vkSel') || {}).userId || null },
     corretorUserId: (x && x.corretorUserId) || (res && res.corretorUserId) || (corretorSelecionado('vkSel') || {}).userId || null,
@@ -667,21 +677,21 @@ function salvarVenda(id, reservaId) {
     gerarRecebiveis(venda).forEach(r => upsert('recebiveis', r));
   }
   if (!x) {
-    upsert('lotes', Object.assign({}, l, { status: 'vendido', vendaId: venda.id, reservaId: null }));
+    if (l) upsert('lotes', Object.assign({}, l, { status: 'vendido', vendaId: venda.id, reservaId: null }));
     if (reservaId) { const r = getReserva(reservaId); if (r) upsert('reservas', Object.assign({}, r, { status: 'convertida', encerradaEm: new Date().toISOString() })); }
     if (venda.corretor.telefone || venda.corretor.creci) registrarCorretor(venda.corretor);
-    logAct(`Venda registrada: ${loteLabel(l)} — ${venda.cliente.nome} — ${fmtMoney(total)}`);
-  } else logAct(`Venda editada: ${loteLabel(l)} — ${venda.cliente.nome}`);
+    logAct(`Venda registrada: ${imovelLabel(venda)} — ${venda.cliente.nome} — ${fmtMoney(total)}`);
+  } else logAct(`Venda editada: ${imovelLabel(venda)} — ${venda.cliente.nome}`);
   atualizarStatusVenda(venda.id);
-  closeModal(); renderCurrent(); toast('✅', x ? 'Venda atualizada' : 'Venda registrada', loteLabel(l));
+  closeModal(); renderCurrent(); toast('✅', x ? 'Venda atualizada' : 'Venda registrada', imovelLabel(venda));
 }
 function distratoVenda(id) {
   const x = getVenda(id); if (!x) return;
   const motivo = prompt('Confirmar DISTRATO desta venda? O lote volta a ficar disponível e as parcelas em aberto são canceladas. Motivo:', '');
   if (motivo === null) return;
   upsert('vendas', Object.assign({}, x, { status: 'distrato', distratoEm: todayStr(), motivo }));
-  const l = getLote(x.loteId); if (l && l.vendaId === x.id) upsert('lotes', Object.assign({}, l, { status: 'disponivel', vendaId: null }));
-  logAct(`Distrato: ${l ? loteLabel(l) : ''} — ${x.cliente.nome}${motivo ? ' (' + motivo + ')' : ''}`);
+  const l = x.loteId ? getLote(x.loteId) : null; if (l && l.vendaId === x.id) upsert('lotes', Object.assign({}, l, { status: 'disponivel', vendaId: null }));
+  logAct(`Distrato: ${imovelLabel(x)} — ${x.cliente.nome}${motivo ? ' (' + motivo + ')' : ''}`);
   closeModal(); renderCurrent(); toast('↩️', 'Distrato registrado', '');
 }
 
@@ -717,7 +727,7 @@ function cadLoteamentoHtml() {
   const lot = curLot(); if (!lot) return `<div class="card"><p class="help">Nenhum loteamento. <button class="btn btn-primary btn-sm" onclick="abrirLoteamentoForm()">＋ Cadastrar</button></p></div>`;
   const c = lot.cond || {}; const orc = lot.orcamento || {};
   const cs = custosDo(lot.id);
-  return `<div class="card"><h3>🏘️ ${esc(lot.nome)} <span class="h-actions"><button class="btn btn-secondary btn-sm" onclick="abrirLoteamentoForm('${lot.id}')">✏️ Editar</button></span></h3>
+  return `<div class="card"><h3>${ehCarteira(lot) ? '🏠' : '🏘️'} ${esc(lot.nome)} <span class="badge neutral">${esc(empLabel(lot))}</span> <span class="h-actions"><button class="btn btn-secondary btn-sm" onclick="abrirLoteamentoForm('${lot.id}')">✏️ Editar</button></span></h3>
       <div class="detail-grid"><div><div class="k">Cidade</div><div class="v">${esc(lot.cidade) || '—'}</div></div><div><div class="k">Endereço</div><div class="v">${esc(lot.endereco) || '—'}</div></div><div class="full"><div class="k">Descrição (aparece para os corretores)</div><div class="v">${esc(lot.descricao) || '—'}</div></div>
       <div><div class="k">Entrada mínima</div><div class="v">${fmtNum(c.entradaMinPct || 0, 0)}%</div></div><div><div class="k">Parcelas máx.</div><div class="v">${c.maxParcelas || '—'}</div></div><div><div class="k">Juros</div><div class="v">${c.jurosMes ? fmtNum(c.jurosMes, 2) + '% a.m.' : 'sem juros'}</div></div><div><div class="k">Desconto à vista</div><div class="v">${fmtNum(c.descontoVistaPct || 0, 0)}%</div></div></div></div>
     <div class="card"><h3>📋 Orçamento de custos por categoria <span class="h-actions"><button class="btn btn-secondary btn-sm" onclick="abrirOrcamentoForm()">✏️ Editar</button></span></h3>
@@ -726,22 +736,27 @@ function cadLoteamentoHtml() {
 }
 function abrirLoteamentoForm(id) {
   const l = id ? getLoteamento(id) : null; const c = (l && l.cond) || { entradaMinPct: 10, maxParcelas: 120, jurosMes: 0, descontoVistaPct: 5 };
-  const body = `<div class="fg"><label>Nome do loteamento *</label><input type="text" id="lmNome" value="${esc(l ? l.nome : '')}" placeholder="Ex.: Residencial Vista Verde"></div>
+  const tipo = empTipo(l);
+  const body = `<div class="fg"><label>Tipo *</label><select id="lmTipo" ${l ? 'disabled' : ''}>
+      <option value="loteamento" ${tipo === 'loteamento' ? 'selected' : ''}>Loteamento — com planta e lotes numerados</option>
+      <option value="carteira" ${tipo === 'carteira' ? 'selected' : ''}>Carteira — imóveis avulsos, sem planta</option></select>
+      <div class="hint">${l ? 'O tipo não muda depois de criado.' : 'Na carteira cada venda descreve o imóvel. Serve para apartamento, sala, casa, terreno de terceiros — tudo que não é lote do seu loteamento.'}</div></div>
+    <div class="fg"><label>Nome *</label><input type="text" id="lmNome" value="${esc(l ? l.nome : '')}" placeholder="Ex.: Residencial Vista Verde"></div>
     <div class="frow"><div class="fg"><label>Cidade / UF</label><input type="text" id="lmCidade" value="${esc(l ? l.cidade || '' : '')}"></div><div class="fg"><label>Endereço / acesso</label><input type="text" id="lmEnd" value="${esc(l ? l.endereco || '' : '')}"></div></div>
     <div class="fg"><label>Descrição para os corretores</label><textarea id="lmDesc" placeholder="Infraestrutura, diferenciais, área de lazer…">${esc(l ? l.descricao || '' : '')}</textarea></div>
     <div class="fieldset"><span class="lg">💳 Condições de pagamento padrão</span>
       <div class="frow"><div class="fg"><label>Entrada mínima (%)</label><input type="number" id="lmEntrada" step="0.1" value="${c.entradaMinPct ?? 10}"></div><div class="fg"><label>Máximo de parcelas</label><input type="number" id="lmMaxP" value="${c.maxParcelas ?? 120}"></div></div>
       <div class="frow"><div class="fg"><label>Juros do parcelamento (% a.m.)</label><input type="number" id="lmJuros" step="0.01" value="${c.jurosMes ?? 0}"><div class="hint">0 = sem juros (parcelas lineares)</div></div><div class="fg"><label>Desconto à vista (%)</label><input type="number" id="lmDesc2" step="0.1" value="${c.descontoVistaPct ?? 0}"></div></div></div>`;
-  openModal({ title: l ? '✏️ Editar loteamento' : '＋ Novo loteamento', body, footer: `${l && db.loteamentos.length > 1 ? `<button class="btn btn-outline-danger" onclick="excluirLoteamento('${l.id}')">Excluir</button>` : ''}<button class="btn btn-secondary" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" onclick="salvarLoteamento('${l ? l.id : ''}')">Salvar</button>` });
+  openModal({ title: l ? `✏️ Editar ${empLabel(l).toLowerCase()}` : '＋ Novo empreendimento', body, footer: `${l && db.loteamentos.length > 1 ? `<button class="btn btn-outline-danger" onclick="excluirLoteamento('${l.id}')">Excluir</button>` : ''}<button class="btn btn-secondary" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" onclick="salvarLoteamento('${l ? l.id : ''}')">Salvar</button>` });
   setTimeout(() => $('#lmNome').focus(), 60);
 }
 function salvarLoteamento(id) {
   const nome = val('lmNome'); if (!nome) { toast('⚠️', 'Informe o nome', '', true); return; }
   const prev = id ? getLoteamento(id) : null;
-  const rec = Object.assign({}, prev || { id: genId(), criadoEm: new Date().toISOString(), orcamento: {} }, { nome, cidade: val('lmCidade'), endereco: val('lmEnd'), descricao: val('lmDesc'), cond: { entradaMinPct: num(val('lmEntrada')), maxParcelas: Math.round(num(val('lmMaxP'))) || 120, jurosMes: num(val('lmJuros')), descontoVistaPct: num(val('lmDesc2')) } });
+  const rec = Object.assign({}, prev || { id: genId(), criadoEm: new Date().toISOString(), orcamento: {}, tipo: val('lmTipo') === 'carteira' ? 'carteira' : 'loteamento' }, { nome, cidade: val('lmCidade'), endereco: val('lmEnd'), descricao: val('lmDesc'), cond: { entradaMinPct: num(val('lmEntrada')), maxParcelas: Math.round(num(val('lmMaxP'))) || 120, jurosMes: num(val('lmJuros')), descontoVistaPct: num(val('lmDesc2')) } });
   upsert('loteamentos', rec);
   if (!prev) { logAct(`Loteamento cadastrado: ${nome}`); setCurLot(rec.id); state.sub.cad = 'loteamento'; }
-  closeModal(); renderCurrent(); toast('✅', 'Loteamento salvo', nome);
+  closeModal(); renderCurrent(); toast('✅', `${empLabel(rec)} salva`.replace('Loteamento salva', 'Loteamento salvo'), nome);
 }
 function excluirLoteamento(id) {
   const l = getLoteamento(id); if (!l) return;
@@ -755,7 +770,7 @@ function excluirLoteamento(id) {
 }
 function cadLoteamentosHtml() {
   return `<div class="card"><h3>📋 Loteamentos <span class="h-actions"><button class="btn btn-primary btn-sm" onclick="abrirLoteamentoForm()">＋ Novo</button></span></h3>
-    ${db.loteamentos.map(l => { const ls = lotesDo(l.id); return `<div class="item ${l.id === state.lotId ? '' : 'bloqueado'}" onclick="setCurLot('${l.id}');state.sub.cad='loteamento';renderCadastros()"><div class="info"><div class="title">${esc(l.nome)} ${l.id === state.lotId ? '<span class="badge aprovada">atual</span>' : ''}</div><div class="meta"><span>${esc(l.cidade || '')}</span><span>· ${ls.length} lotes</span><span>· ${ls.filter(x => x.status === 'vendido').length} vendidos</span></div></div><div class="side"><button class="btn-icon" onclick="event.stopPropagation();abrirLoteamentoForm('${l.id}')">✏️</button></div></div>`; }).join('') || '<p class="help">Nenhum loteamento.</p>'}</div>`;
+    ${db.loteamentos.map(l => { const ls = lotesDo(l.id); return `<div class="item ${l.id === state.lotId ? '' : 'bloqueado'}" onclick="setCurLot('${l.id}');state.sub.cad='loteamento';renderCadastros()"><div class="info"><div class="title">${esc(l.nome)} ${l.id === state.lotId ? '<span class="badge aprovada">atual</span>' : ''}</div><div class="meta"><span class="badge neutral">${esc(empLabel(l))}</span><span>${esc(l.cidade || '')}</span>${ehCarteira(l) ? `<span>· ${db.vendas.filter(v => v.loteamentoId === l.id && v.status !== 'distrato').length} venda(s)</span>` : `<span>· ${ls.length} lotes</span><span>· ${ls.filter(x => x.status === 'vendido').length} vendidos</span>`}</div></div><div class="side"><button class="btn-icon" onclick="event.stopPropagation();abrirLoteamentoForm('${l.id}')">✏️</button></div></div>`; }).join('') || '<p class="help">Nenhum empreendimento.</p>'}</div>`;
 }
 function abrirOrcamentoForm() {
   const lot = curLot(); const orc = lot.orcamento || {};

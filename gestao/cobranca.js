@@ -60,7 +60,7 @@ function renderCobranca() {
   const todos = inadimplentes(lot.id);
   const lista = todos.filter(it => {
     if (f.faixa !== 'todas') { const [, min, max] = FAIXAS_DIAS.find(x => x[0] === f.faixa); if (it.dias < min || it.dias > max) return false; }
-    if (f.busca) { const l = getLote(it.venda.loteId); const alvo = (it.venda.cliente.nome + ' ' + (l ? loteLabel(l) : '')).toLowerCase(); if (!alvo.includes(f.busca.toLowerCase())) return false; }
+    if (f.busca) { const alvo = (it.venda.cliente.nome + ' ' + imovelLabel(it.venda)).toLowerCase(); if (!alvo.includes(f.busca.toLowerCase())) return false; }
     return true;
   });
   const total = todos.reduce((s, x) => s + x.valor, 0);
@@ -92,12 +92,11 @@ function renderCobranca() {
 }
 
 function cobrancaCardHtml(it) {
-  const l = getLote(it.venda.loteId);
   const c = it.venda.cliente;
   const cor = it.dias > 60 ? 'atrasado' : it.dias > 30 ? 'pendente' : 'neutral';
   return `<div class="card">
     <div class="row-between">
-      <div><b>${esc(c.nome)}</b> <span class="tiny muted">· ${l ? esc(loteShort(l)) : ''}</span>
+      <div><b>${esc(c.nome)}</b> <span class="tiny muted">· ${esc(imovelShort(it.venda))}</span>
         <div class="small muted">${it.parcelas.length} parcela(s) · mais antiga venceu ${fmtDate(it.maisAntiga.vencimento)}</div></div>
       <div style="text-align:right"><div class="value" style="font-weight:800;font-size:1.05rem">${fmtMoney(it.valor)}</div>
         <span class="badge ${cor}">${it.dias} dias</span></div>
@@ -115,11 +114,11 @@ function cobrancaCardHtml(it) {
 }
 
 function cobrancaCtx(it) {
-  const l = getLote(it.venda.loteId), lot = getLoteamento(it.venda.loteamentoId);
+  const lot = getLoteamento(it.venda.loteamentoId);
   const c = it.venda.cliente;
   return {
     cliente: c.nome, primeiroNome: (c.nome || '').split(' ')[0], empresa: db.config.empresa || '',
-    lote: l ? loteLabel(l) : '', loteamento: lot ? lot.nome : '',
+    lote: imovelLabel(it.venda), loteamento: lot ? lot.nome : '',
     parcelas: String(it.parcelas.length), dias: String(it.dias),
     vencimento: fmtDate(it.maisAntiga.vencimento), valor: fmtMoney(it.valor),
     valorPrincipal: fmtMoney(it.valorBase), pix: db.config.pix || ''
@@ -195,8 +194,7 @@ function exportarInadimplenciaCSV() {
   const lot = curLot();
   const rows = [['Cliente', 'Lote', 'Parcelas em atraso', 'Dias', 'Principal', 'Atualizado', 'Última cobrança', 'Canal', 'Telefone']];
   inadimplentes(lot.id).forEach(it => {
-    const l = getLote(it.venda.loteId);
-    rows.push([it.venda.cliente.nome, l ? loteShort(l) : '', it.parcelas.length, it.dias, fmtNum(it.valorBase), fmtNum(it.valor),
+    rows.push([it.venda.cliente.nome, imovelShort(it.venda), it.parcelas.length, it.dias, fmtNum(it.valorBase), fmtNum(it.valor),
       it.ultima ? fmtDate(it.ultima.data) : '', it.ultima ? it.ultima.canal : '', it.venda.cliente.telefone || '']);
   });
   download(`inadimplencia-${todayStr()}.csv`, toCSV(rows), 'text/csv');

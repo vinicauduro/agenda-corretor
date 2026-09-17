@@ -73,13 +73,12 @@ function projecaoQuitacao(v, nMeses) {
 // ================================================================ TELA
 function abrirAntecipacao(vendaId) {
   const v = getVenda(vendaId); if (!v) return;
-  const l = getLote(v.loteId);
   const s = saldoQuitacao(v, todayStr());
   if (!s.itens.length) { toast('✅', 'Contrato quitado', 'Não há parcelas em aberto.', false); return; }
   const futuras = s.itens.filter(x => !x.vencida);
   const proj = projecaoQuitacao(v, 12);
   const body = `
-    <p class="small mb"><b>${esc(v.cliente.nome)}</b> · ${l ? esc(loteLabel(l)) : ''} · ${s.itens.length} parcela(s) em aberto</p>
+    <p class="small mb"><b>${esc(v.cliente.nome)}</b> · ${esc(imovelLabel(v))} · ${s.itens.length} parcela(s) em aberto</p>
     <div class="kpi-grid">
       <div class="kpi c-amber"><div class="lbl">Saldo pelos vencimentos</div><div class="val">${fmtMoneyShort(s.nominal)}</div><div class="sub">${s.itens.length} parcela(s)</div></div>
       <div class="kpi c-green"><div class="lbl">Desconto de juros</div><div class="val">${fmtMoneyShort(s.desconto)}</div><div class="sub">meses não usados</div></div>
@@ -215,19 +214,18 @@ function aplicarAntecipacao(vendaId) {
 }
 
 function textoAntecipacao(v, s) {
-  const l = getLote(v.loteId);
-  return `*${db.config.empresa || ''}*\n${l ? loteLabel(l) : ''} — ${v.cliente.nome}\n\nPara quitar até ${fmtDate(s.dataRef)}:\n• Saldo pelos vencimentos: ${fmtMoney(s.nominal)}\n• Desconto de juros: ${fmtMoney(s.desconto)}\n• *Valor para quitação: ${fmtMoney(s.total)}*\n\nAntecipando, você não paga os juros do prazo que não usou.`;
+  return `*${db.config.empresa || ''}*\n${imovelLabel(v)} — ${v.cliente.nome}\n\nPara quitar até ${fmtDate(s.dataRef)}:\n• Saldo pelos vencimentos: ${fmtMoney(s.nominal)}\n• Desconto de juros: ${fmtMoney(s.desconto)}\n• *Valor para quitação: ${fmtMoney(s.total)}*\n\nAntecipando, você não paga os juros do prazo que não usou.`;
 }
 
 function imprimirDemonstrativo(vendaId) {
   const v = getVenda(vendaId); if (!v) return;
   const data = val('anData') || todayStr();
   const s = saldoQuitacao(v, data);
-  const l = getLote(v.loteId), lot = getLoteamento(v.loteamentoId);
+  const lot = getLoteamento(v.loteamentoId);
   const proj = projecaoQuitacao(v, 6);
   $('#printArea').innerHTML = `
     <h1>${esc(db.config.empresa || (lot ? lot.nome : ''))}</h1><div>${lot ? esc(lot.nome) : ''}${lot && lot.cidade ? ' · ' + esc(lot.cidade) : ''}</div>
-    <h2>Demonstrativo de antecipação — ${l ? esc(loteLabel(l)) : ''}</h2>
+    <h2>Demonstrativo de antecipação — ${esc(imovelLabel(v))}</h2>
     <table><tr><th>Cliente</th><td>${esc(v.cliente.nome)}</td><th>CPF/CNPJ</th><td>${esc(fmtCPF(v.cliente.cpf))}</td></tr>
       <tr><th>Data de referência</th><td>${fmtDate(data)}</td><th>Juros do contrato</th><td>${v.jurosMes ? fmtNum(v.jurosMes, 2) + '% a.m.' : 'sem juros'}</td></tr>
       <tr><th>Parcelas em aberto</th><td>${s.itens.length}</td><th>Valor para quitação</th><td><b>${fmtMoney(s.total)}</b></td></tr></table>

@@ -38,12 +38,12 @@ function renderRecebiveis() {
     <p class="small muted mb">${list.length} parcela(s) · ${fmtMoney(somaLista)}</p>
     ${list.length ? list.map(r => recRowHtml(r)).join('') : `<div class="empty"><div class="ic">📆</div><p>Nenhuma parcela nesta lista.</p></div>`}`;
 }
-function clienteDe(r) { const v = getVenda(r.vendaId); if (!v) return ''; const l = getLote(v.loteId); return v.cliente.nome + ' ' + (l ? loteLabel(l) : ''); }
+function clienteDe(r) { const v = getVenda(r.vendaId); if (!v) return ''; return v.cliente.nome + ' ' + imovelLabel(v); }
 function recRowHtml(r) {
-  const v = getVenda(r.vendaId); const l = v ? getLote(v.loteId) : null; const st = recStatus(r);
+  const v = getVenda(r.vendaId); const st = recStatus(r);
   const rest = recRestante(r);
   return `<div class="item ${st}" onclick="abrirVendaAdmin('${r.vendaId}')">
-    <div class="info"><div class="title">${v ? esc(v.cliente.nome) : '—'} <span class="tiny muted">· ${l ? esc(loteShort(l)) : ''}</span></div>
+    <div class="info"><div class="title">${v ? esc(v.cliente.nome) : '—'} <span class="tiny muted">· ${v ? esc(imovelShort(v)) : ''}</span></div>
       <div class="meta"><span>${esc(r.descricao)}</span><span>· vence ${fmtDate(r.vencimento)}</span>${recCorrecao(r) > 0.005 && st !== 'pago' ? `<span title="Correção pelo índice do contrato">· base ${fmtMoney(r.valor)} + ${fmtMoney(recCorrecao(r))} de correção</span>` : ''}${st === 'atrasado' ? `<span style="color:var(--danger)">· ${daysBetween(r.vencimento, todayStr())} dias · atualizado ${fmtMoney(recAtualizado(r))}</span>` : ''}${st === 'pago' && r.dataPagamento ? `<span>· pago em ${fmtDate(r.dataPagamento)}${r.forma ? ' (' + esc(r.forma) + ')' : ''}</span>` : ''}${st === 'parcial' ? `<span>· pago ${fmtMoney(r.valorPago)}, resta ${fmtMoney(rest)}</span>` : ''}</div></div>
     <div class="side"><div class="value">${fmtMoney(st === 'pago' ? r.valorPago : rest)}</div><span class="badge ${st}">${statusLabel(st)}</span>
       <div class="btns" onclick="event.stopPropagation()">${st !== 'pago' && v && v.status !== 'distrato' && pode('financeiro.baixar') ? `<button class="btn-icon ok" title="Registrar pagamento" onclick="abrirPagamento('${r.id}')">💵</button>` : ''}${pode('financeiro.baixar') ? `<button class="btn-icon" title="Editar" onclick="editarRecebivel('${r.id}')">✏️</button>` : ''}</div></div></div>`;
@@ -110,24 +110,24 @@ function excluirRecebivel(id, voltarVendaId) {
 }
 function exportarRecebiveisCSV() {
   const lot = curLot(); const rows = [['Cliente', 'Lote', 'Parcela', 'Vencimento', 'Valor', 'Pago', 'Data pagamento', 'Forma', 'Status']];
-  recebiveisDo(lot.id).sort((a, b) => a.vencimento.localeCompare(b.vencimento)).forEach(r => { const v = getVenda(r.vendaId); const l = v && getLote(v.loteId); rows.push([v ? v.cliente.nome : '', l ? loteShort(l) : '', r.descricao, fmtDate(r.vencimento), fmtNum(recValor(r)), fmtNum(r.valorPago), r.dataPagamento ? fmtDate(r.dataPagamento) : '', r.forma || '', statusLabel(recStatus(r))]); });
+  recebiveisDo(lot.id).sort((a, b) => a.vencimento.localeCompare(b.vencimento)).forEach(r => { const v = getVenda(r.vendaId); rows.push([v ? v.cliente.nome : '', v ? imovelShort(v) : '', r.descricao, fmtDate(r.vencimento), fmtNum(recValor(r)), fmtNum(r.valorPago), r.dataPagamento ? fmtDate(r.dataPagamento) : '', r.forma || '', statusLabel(recStatus(r))]); });
   download(`recebiveis-${todayStr()}.csv`, toCSV(rows), 'text/csv');
 }
 
 // ================================================================ EXTRATO
 function extratoTexto(v) {
-  const l = getLote(v.loteId); const lot = getLoteamento(v.loteamentoId); const r = vendaResumo(v);
+  const lot = getLoteamento(v.loteamentoId); const r = vendaResumo(v);
   const abertas = recebiveisDe(v.id).filter(x => recStatus(x) !== 'pago');
-  let t = `*${lot ? lot.nome : ''}* — ${l ? loteLabel(l) : ''}\nCliente: ${v.cliente.nome}\nValor: ${fmtMoney(v.valorTotal)} · Pago: ${fmtMoney(r.pago)} · Saldo: ${fmtMoney(r.restante)}`;
+  let t = `*${lot ? lot.nome : ''}* — ${imovelLabel(v)}\nCliente: ${v.cliente.nome}\nValor: ${fmtMoney(v.valorTotal)} · Pago: ${fmtMoney(r.pago)} · Saldo: ${fmtMoney(r.restante)}`;
   if (abertas.length) t += `\n\nPróximas parcelas:\n` + abertas.slice(0, 6).map(x => `• ${x.descricao} — ${fmtDate(x.vencimento)} — ${fmtMoney(recRestante(x))}${recStatus(x) === 'atrasado' ? ' (em atraso)' : ''}`).join('\n');
   return t;
 }
 function imprimirExtrato(vendaId) {
-  const v = getVenda(vendaId); if (!v) return; const l = getLote(v.loteId); const lot = getLoteamento(v.loteamentoId); const r = vendaResumo(v);
+  const v = getVenda(vendaId); if (!v) return; const lot = getLoteamento(v.loteamentoId); const r = vendaResumo(v);
   const recs = recebiveisDe(v.id);
   $('#printArea').innerHTML = `
     <h1>${esc(db.config.empresa || lot.nome)}</h1><div>${esc(lot.nome)}${lot.cidade ? ' · ' + esc(lot.cidade) : ''}</div>
-    <h2>Extrato de pagamentos — ${l ? esc(loteLabel(l)) : ''}</h2>
+    <h2>Extrato de pagamentos — ${esc(imovelLabel(v))}</h2>
     <table><tr><th>Cliente</th><td>${esc(v.cliente.nome)}</td><th>CPF/CNPJ</th><td>${esc(fmtCPF(v.cliente.cpf))}</td></tr>
     <tr><th>Data da venda</th><td>${fmtDate(v.dataVenda)}</td><th>Valor</th><td>${fmtMoney(v.valorTotal)}</td></tr>
     <tr><th>Recebido</th><td>${fmtMoney(r.pago)}</td><th>Saldo devedor</th><td>${fmtMoney(r.restante)}</td></tr>
@@ -236,7 +236,7 @@ function renderComissoes(v, f) {
     <div class="subtabs"><div class="chip" onclick="state.filters.avendas.sub='vendas';renderAVendas()">💰 Vendas</div><div class="chip active">🤝 Comissões</div></div>
     <div class="kpi-grid cols3"><div class="kpi c-primary"><div class="lbl">Total de comissões</div><div class="val">${fmtMoneyShort(tot)}</div></div><div class="kpi c-green"><div class="lbl">Pagas</div><div class="val">${fmtMoneyShort(pago)}</div></div><div class="kpi c-amber"><div class="lbl">A pagar</div><div class="val">${fmtMoneyShort(tot - pago)}</div></div></div>
     <div class="card"><h3>Por corretor</h3><div class="table-wrap"><table class="tbl"><thead><tr><th>Corretor</th><th class="num">Vendas</th><th class="num">Comissões</th><th class="num">Pagas</th><th class="num">A pagar</th></tr></thead><tbody>${Object.entries(porCorretor).sort((a, b) => b[1].tot - a[1].tot).map(([k, s]) => `<tr><td>${esc(k)}</td><td class="num">${s.n}</td><td class="num">${fmtMoney(s.tot)}</td><td class="num">${fmtMoney(s.pago)}</td><td class="num"><b>${fmtMoney(s.tot - s.pago)}</b></td></tr>`).join('') || '<tr><td colspan="5" class="muted">Sem vendas.</td></tr>'}</tbody></table></div></div>
-    ${vendas.map(x => { const l = getLote(x.loteId); const r = vendaResumo(x); return `<div class="item ${x.comissaoPaga ? 'pago' : 'pendente'}" onclick="abrirVendaAdmin('${x.id}')"><div class="info"><div class="title">${esc(x.corretor.nome)} <span class="tiny muted">· ${l ? esc(loteShort(l)) : ''} · ${esc(x.cliente.nome)}</span></div><div class="meta"><span>Venda ${fmtDate(x.dataVenda)} · ${fmtMoney(x.valorTotal)}</span><span>· ${fmtNum(x.comissaoPct, 1)}%</span><span>· cliente já pagou ${fmtMoney(r.pago)}</span>${x.comissaoPaga && x.comissaoData ? `<span>· paga em ${fmtDate(x.comissaoData)}</span>` : ''}</div></div>
+    ${vendas.map(x => { const r = vendaResumo(x); return `<div class="item ${x.comissaoPaga ? 'pago' : 'pendente'}" onclick="abrirVendaAdmin('${x.id}')"><div class="info"><div class="title">${esc(x.corretor.nome)} <span class="tiny muted">· ${esc(imovelShort(x))} · ${esc(x.cliente.nome)}</span></div><div class="meta"><span>Venda ${fmtDate(x.dataVenda)} · ${fmtMoney(x.valorTotal)}</span><span>· ${fmtNum(x.comissaoPct, 1)}%</span><span>· cliente já pagou ${fmtMoney(r.pago)}</span>${x.comissaoPaga && x.comissaoData ? `<span>· paga em ${fmtDate(x.comissaoData)}</span>` : ''}</div></div>
       <div class="side"><div class="value">${fmtMoney(x.comissaoValor)}</div><span class="badge ${x.comissaoPaga ? 'paga' : 'pendente'}">${x.comissaoPaga ? 'Paga' : 'A pagar'}</span><div class="btns" onclick="event.stopPropagation()"><button class="btn-icon ${x.comissaoPaga ? '' : 'ok'}" title="${x.comissaoPaga ? 'Marcar como não paga' : 'Marcar como paga'}" onclick="toggleComissao('${x.id}')">${x.comissaoPaga ? '↩' : '💵'}</button></div></div></div>`; }).join('') || '<div class="empty"><div class="ic">🤝</div><p>Nenhuma comissão.</p></div>'}`;
 }
 function toggleComissao(id) {

@@ -271,6 +271,31 @@ Storage e o link segue na mensagem.
 
 ---
 
+## 7e. Empreendimentos e imóveis avulsos
+
+Decidido em 17/09: o sistema deixa de ser só de loteamento e passa a gerir **todos os
+recebíveis da empresa**.
+
+Ao cadastrar um empreendimento você escolhe o tipo:
+
+- **Loteamento** — como sempre foi: planta, lotes numerados, reservas pelo corretor.
+- **Carteira** — sem planta e sem lotes. Cada venda descreve o imóvel (descrição, endereço,
+  matrícula). Serve para apartamento, sala, casa, terreno de terceiros, prédio — qualquer
+  coisa que não seja lote do seu loteamento.
+
+Numa carteira somem as abas Planta, Lotes e Reservas. Tudo o que vem depois da venda funciona
+igual: recebíveis, correção por índice, antecipação e quitação, régua de cobrança, boleto,
+remessa e retorno CNAB, relatórios e permissões. A conta bancária é por empreendimento, então
+dá para usar convênio diferente em cada um.
+
+O corretor não vê carteiras no seletor — a área dele é planta e reserva de lote.
+
+- [ ] Criar uma carteira em Cadastros › Empreendimentos e registrar uma venda de imóvel avulso.
+- [ ] Conferir que a venda aparece nos recebíveis, nos relatórios e na geração de cobranças.
+- [ ] Decidir se as carteiras precisam de orçamento de custos (hoje a tela existe igual).
+
+---
+
 ## 8. O que ainda não foi construído
 
 Em ordem de prioridade acordada:
