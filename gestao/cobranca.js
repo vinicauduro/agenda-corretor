@@ -25,10 +25,10 @@ function faixaDe(dias) {
 function cobrancasDe(vendaId) { return db.cobrancas.filter(c => c.vendaId === vendaId).sort((a, b) => (b.data || '').localeCompare(a.data || '')); }
 
 /* Um item por contrato em atraso. */
-function inadimplentes(lotId) {
+function inadimplentes(escopo) {
   const hoje = todayStr();
   const mapa = new Map();
-  recebiveisDo(lotId).filter(r => recStatus(r) === 'atrasado').forEach(r => {
+  recebiveisDo(escopo).filter(r => recStatus(r) === 'atrasado').forEach(r => {
     const v = getVenda(r.vendaId); if (!v || v.status === 'distrato') return;
     const it = mapa.get(v.id) || { venda: v, parcelas: [], valor: 0, valorBase: 0, dias: 0 };
     it.parcelas.push(r);
@@ -54,19 +54,19 @@ const FAIXAS_DIAS = [['1-15', 1, 15], ['16-30', 16, 30], ['31-60', 31, 60], ['61
 
 // ================================================================ PAINEL
 function renderCobranca() {
-  const lot = curLot(); const v = $('#av-recebiveis');
+  const esc0 = escopoAtual(); const v = $('#av-recebiveis');
   if (!pode('cobranca.ver')) { v.innerHTML = semPermissaoHtml('cobrança'); return; }
   const f = state.filters.cob = state.filters.cob || { faixa: 'todas', busca: '' };
-  const todos = inadimplentes(lot.id);
+  const todos = inadimplentes(esc0);
   const lista = todos.filter(it => {
     if (f.faixa !== 'todas') { const [, min, max] = FAIXAS_DIAS.find(x => x[0] === f.faixa); if (it.dias < min || it.dias > max) return false; }
     if (f.busca) { const alvo = (it.venda.cliente.nome + ' ' + imovelLabel(it.venda)).toLowerCase(); if (!alvo.includes(f.busca.toLowerCase())) return false; }
     return true;
   });
   const total = todos.reduce((s, x) => s + x.valor, 0);
-  const carteira = recebiveisDo(lot.id).reduce((s, r) => s + recRestante(r), 0);
+  const carteira = recebiveisDo(esc0).reduce((s, r) => s + recRestante(r), 0);
   const mesKey = todayStr().slice(0, 7);
-  const recuperado = recebiveisDo(lot.id).filter(r => r.dataPagamento && monthKey(r.dataPagamento) === mesKey && r.vencimento < r.dataPagamento).reduce((s, r) => s + num(r.valorPago), 0);
+  const recuperado = recebiveisDo(esc0).filter(r => r.dataPagamento && monthKey(r.dataPagamento) === mesKey && r.vencimento < r.dataPagamento).reduce((s, r) => s + num(r.valorPago), 0);
   const semCobranca = todos.filter(x => !x.ultima).length;
 
   v.innerHTML = `
@@ -84,7 +84,7 @@ function renderCobranca() {
       return `<div class="chip ${f.faixa === k ? 'active' : ''}" onclick="state.filters.cob.faixa='${k}';renderCobranca()">${l}<span class="n">${n}</span></div>`;
     }).join('')}</div>
     <div class="filters">
-      <input type="text" placeholder="🔎 Cliente ou lote" value="${esc(f.busca)}" oninput="aSetFiltro('cob','busca',this.value,renderCobranca,this)">
+      <input type="text" placeholder="🔎 Cliente ou imóvel" value="${esc(f.busca)}" oninput="aSetFiltro('cob','busca',this.value,renderCobranca,this)">
       <button class="btn btn-secondary btn-sm" onclick="state.sub.cad='cobranca';switchTab('cadastros')">⚙️ Régua</button>
       <button class="btn btn-secondary btn-sm" onclick="exportarInadimplenciaCSV()">⬇️ CSV</button>
     </div>
@@ -126,7 +126,7 @@ function cobrancaCtx(it) {
 }
 
 function abrirCobranca(vendaId) {
-  const it = inadimplentes(curLot().id).find(x => x.venda.id === vendaId);
+  const it = inadimplentes(escopoAtual()).find(x => x.venda.id === vendaId);
   if (!it) { toast('✅', 'Sem atraso', 'Este contrato não tem parcelas vencidas.'); return; }
   const ctx = cobrancaCtx(it);
   const faixa = it.faixa || reguaConfig()[0];
@@ -149,14 +149,14 @@ function abrirCobranca(vendaId) {
   });
 }
 function cbTrocaFaixa(vendaId) {
-  const it = inadimplentes(curLot().id).find(x => x.venda.id === vendaId); if (!it) return;
+  const it = inadimplentes(escopoAtual()).find(x => x.venda.id === vendaId); if (!it) return;
   const f = reguaConfig().find(x => String(x.dias) === val('cbFaixa')); if (!f) return;
   setVal('cbTexto', docPreencher(f.texto, cobrancaCtx(it)).replace(/__________/g, ''));
 }
 
 function registrarCobranca(vendaId, abrirZap) {
   if (!pode('cobranca.registrar')) { toast('🔒', 'Sem permissão', 'Seu perfil não registra cobranças.', true); return; }
-  const it = inadimplentes(curLot().id).find(x => x.venda.id === vendaId); if (!it) return;
+  const it = inadimplentes(escopoAtual()).find(x => x.venda.id === vendaId); if (!it) return;
   const texto = val('cbTexto');
   const canal = val('cbCanal') || 'whatsapp';
   const f = reguaConfig().find(x => String(x.dias) === val('cbFaixa'));
@@ -191,9 +191,9 @@ function excluirCobranca(id, vendaId) {
 }
 
 function exportarInadimplenciaCSV() {
-  const lot = curLot();
+  const esc0 = escopoAtual();
   const rows = [['Cliente', 'Lote', 'Parcelas em atraso', 'Dias', 'Principal', 'Atualizado', 'Última cobrança', 'Canal', 'Telefone']];
-  inadimplentes(lot.id).forEach(it => {
+  inadimplentes(esc0).forEach(it => {
     rows.push([it.venda.cliente.nome, imovelShort(it.venda), it.parcelas.length, it.dias, fmtNum(it.valorBase), fmtNum(it.valor),
       it.ultima ? fmtDate(it.ultima.data) : '', it.ultima ? it.ultima.canal : '', it.venda.cliente.telefone || '']);
   });

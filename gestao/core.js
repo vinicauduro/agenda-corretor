@@ -545,12 +545,42 @@ const state = {
   role: null, tab: null, lotId: prefs.lotId || null,
   modalOnClose: null, filters: {}, sub: {}, plantaCorretor: null, plantaAdmin: null, editorLoteId: null
 };
+/* Empreendimento escolhido no filtro das telas globais. '' = todos. */
+function escopoAtual() { return state.escopo || ''; }
+function escopoNome() { const l = escopoAtual() && getLoteamento(escopoAtual()); return l ? l.nome : 'Todos os empreendimentos'; }
+function escopoSelectHtml(onchange) {
+  if (db.loteamentos.length < 2) return '';
+  return `<select onchange="state.escopo=this.value;${onchange}"><option value="">Todos os empreendimentos</option>${db.loteamentos.map(l => `<option value="${esc(l.id)}" ${escopoAtual() === l.id ? 'selected' : ''}>${esc(l.nome)}</option>`).join('')}</select>`;
+}
 function curLot() {
   let l = db.loteamentos.find(x => x.id === state.lotId);
   if (!l && db.loteamentos.length) { l = db.loteamentos[0]; state.lotId = l.id; }
   return l || null;
 }
 function setCurLot(id) { state.lotId = id; prefs.lotId = id; savePrefs(); renderCurrent(); }
+/* Troca o empreendimento do espaço de trabalho sem redesenhar: quem chamou já vai desenhar. */
+/* Onde desenhar uma tela que vive dentro do espaço do empreendimento. Quando o usuário
+   clica num filtro lá dentro, o redesenho tem de voltar para o mesmo lugar. */
+/* Telas globais que precisam de UM empreendimento (nova venda, cobrança bancária, porque a
+   conta é de cada um). Se o filtro já aponta um, usa; se só existe um, usa; senão pergunta. */
+function comEmpreendimento(titulo, ajuda, seguir, filtro) {
+  const lista = (db.loteamentos || []).filter(l => !filtro || filtro(l));
+  if (!lista.length) { toast('⚠️', 'Nenhum empreendimento disponível', ajuda || '', true); return; }
+  const doFiltro = escopoAtual() && lista.find(l => l.id === escopoAtual());
+  if (doFiltro) { setCurLotSilencioso(doFiltro.id); seguir(doFiltro); return; }
+  if (lista.length === 1) { setCurLotSilencioso(lista[0].id); seguir(lista[0]); return; }
+  window.__seguirEmp = seguir;
+  openModal({ title: titulo, body: `<p class="help mb">${esc(ajuda || '')}</p>
+    <div class="fg"><label>Empreendimento</label><select id="ceEmp">${lista.map(l => `<option value="${esc(l.id)}">${esc(l.nome)} — ${esc(empLabel(l))}</option>`).join('')}</select></div>`,
+    footer: `<button class="btn btn-secondary" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" onclick="confirmarEmpreendimento()">Continuar</button>` });
+}
+function confirmarEmpreendimento() {
+  const id = val('ceEmp'); const l = getLoteamento(id); const seguir = window.__seguirEmp;
+  window.__seguirEmp = null; closeModal();
+  if (l && seguir) { setCurLotSilencioso(l.id); seguir(l); }
+}
+function alvoDoEmp(idFallback) { return (state.tab === 'emp' && $('#empConteudo')) || $('#' + idFallback); }
+function setCurLotSilencioso(id) { state.lotId = id; prefs.lotId = id; savePrefs(); }
 function lotesDo(lotId) { return db.lotes.filter(l => l.loteamentoId === lotId).sort(cmpLote); }
 function cmpLote(a, b) { return naturalCmp(a.quadra, b.quadra) || naturalCmp(a.numero, b.numero); }
 function getLote(id) { return db.lotes.find(l => l.id === id); }
@@ -614,12 +644,18 @@ function recAtualizado(r) { // valor com multa e juros de mora
   return rest + multa + juros;
 }
 function recebiveisDe(vendaId) { return db.recebiveis.filter(r => r.vendaId === vendaId).sort((a, b) => a.vencimento.localeCompare(b.vencimento) || a.numero - b.numero); }
-function recebiveisDo(lotId) {
-  const vendasOk = new Set(db.vendas.filter(v => v.loteamentoId === lotId && v.status !== 'distrato').map(v => v.id));
+/* ---- Escopo -----------------------------------------------------------------------------
+   As telas de dinheiro — vendas, recebíveis, cobrança, relatórios — trabalham na empresa
+   inteira. Passar um id de empreendimento restringe; passar vazio traz tudo. O espaço de
+   trabalho do empreendimento (planta, lotes, reservas, obra) é que é sempre de um só. */
+function noEscopo(rec, escopo) { return !escopo || rec.loteamentoId === escopo; }
+function vendasDo(escopo) { return db.vendas.filter(v => noEscopo(v, escopo)); }
+function recebiveisDo(escopo) {
+  const vendasOk = new Set(db.vendas.filter(v => noEscopo(v, escopo) && v.status !== 'distrato').map(v => v.id));
   return db.recebiveis.filter(r => vendasOk.has(r.vendaId));
 }
 function custoStatus(c) { if (c.status === 'pago') return 'pago'; if (c.vencimento && c.vencimento < todayStr()) return 'atrasado'; return 'pendente'; }
-function custosDo(lotId) { return db.custos.filter(c => c.loteamentoId === lotId); }
+function custosDo(escopo) { return db.custos.filter(c => noEscopo(c, escopo)); }
 
 function gerarRecebiveis(venda) {
   const list = [];

@@ -271,28 +271,43 @@ Storage e o link segue na mensagem.
 
 ---
 
-## 7e. Empreendimentos e imóveis avulsos
+## 7e. Empreendimentos e navegação nova
 
-Decidido em 17/09: o sistema deixa de ser só de loteamento e passa a gerir **todos os
-recebíveis da empresa**.
+Reorganizado em 17/09, conforme você propôs. O sistema deixa de girar em torno de um
+loteamento por vez e passa a gerir **a empresa inteira**.
 
-Ao cadastrar um empreendimento você escolhe o tipo:
+**Barra de cima, seis abas:** Painel · 🏗️ Empreendimentos · Vendas · Recebíveis · Relatórios ·
+Cadastros.
 
-- **Loteamento** — como sempre foi: planta, lotes numerados, reservas pelo corretor.
-- **Carteira** — sem planta e sem lotes. Cada venda descreve o imóvel (descrição, endereço,
-  matrícula). Serve para apartamento, sala, casa, terreno de terceiros, prédio — qualquer
-  coisa que não seja lote do seu loteamento.
+**Aba Empreendimentos** — lista tudo que a empresa toca, com lotes, vendidos, disponíveis,
+reservas a aprovar e total vendido. Clicando em um, abre o espaço dele, com sub-abas:
 
-Numa carteira somem as abas Planta, Lotes e Reservas. Tudo o que vem depois da venda funciona
-igual: recebíveis, correção por índice, antecipação e quitação, régua de cobrança, boleto,
-remessa e retorno CNAB, relatórios e permissões. A conta bancária é por empreendimento, então
-dá para usar convênio diferente em cada um.
+| Resumo | Planta | Lotes | Reservas | Obra e custos | Leads |
+|---|---|---|---|---|---|
 
-O corretor não vê carteiras no seletor — a área dele é planta e reserva de lote.
+Ao cadastrar, escolhe-se o tipo:
 
-- [ ] Criar uma carteira em Cadastros › Empreendimentos e registrar uma venda de imóvel avulso.
-- [ ] Conferir que a venda aparece nos recebíveis, nos relatórios e na geração de cobranças.
-- [ ] Decidir se as carteiras precisam de orçamento de custos (hoje a tela existe igual).
+- **Loteamento** — planta, lotes numerados, reservas pelo corretor.
+- **Carteira** — sem planta e sem lotes; cada venda descreve o imóvel (descrição, endereço,
+  matrícula). Apartamento, sala, casa, terreno de terceiros. Nela as sub-abas de planta, lotes
+  e reservas nem aparecem.
+
+**Vendas, Recebíveis, Relatórios e Painel** passaram a ser da empresa inteira, com um seletor
+"Todos os empreendimentos" para restringir quando quiser. A inadimplência, a régua de cobrança
+e os relatórios somam tudo.
+
+**A cobrança bancária continua por empreendimento**, porque a conta de cobrança é de cada um:
+ao clicar em Gerar cobranças ou Ler retorno, o sistema pergunta de qual empreendimento é (ou
+usa o do filtro, se já houver um escolhido).
+
+O corretor não muda: continua vendo planta e reservando lote, e carteiras não aparecem para ele.
+
+- [ ] Passear pelas seis abas e conferir que nada sumiu do caminho.
+- [ ] Abrir um empreendimento e usar planta, lotes, reservas e obra por dentro dele.
+- [ ] Criar uma carteira e registrar uma venda de imóvel avulso.
+- [ ] Ver os recebíveis e os relatórios com todos os empreendimentos juntos, e depois filtrados.
+- [ ] Gerar cobranças e conferir que ele pergunta o empreendimento.
+- [ ] Decidir se a carteira precisa de orçamento de custos (hoje a tela existe igual).
 
 ---
 

@@ -10,63 +10,121 @@ function renderAdminTab() {
   const bl = $('#aBadgeLeads'); if (bl) { bl.style.display = novos ? '' : 'none'; bl.textContent = novos; }
   const fab = $('#fab'); fab.classList.remove('show');
   const tab = state.tab;
-  if (!curLot() && tab !== 'cadastros') {
-    $('#av-' + tab).innerHTML = `<div class="card"><div class="empty"><div class="ic">🏘️</div><p><b>Bem-vindo!</b> Cadastre o seu primeiro loteamento para começar.</p><div class="btn-row" style="justify-content:center"><button class="btn btn-primary" style="flex:none" onclick="abrirLoteamentoForm()">＋ Cadastrar loteamento</button><button class="btn btn-secondary" style="flex:none" onclick="carregarDemo()">✨ Ver com dados de exemplo</button></div></div></div>`;
+  if (!db.loteamentos.length && tab !== 'cadastros' && tab !== 'emp') {
+    $('#av-' + tab).innerHTML = `<div class="card"><div class="empty"><div class="ic">🏗️</div><p><b>Bem-vindo!</b> Cadastre o seu primeiro empreendimento para começar.</p><div class="btn-row" style="justify-content:center"><button class="btn btn-primary" style="flex:none" onclick="abrirLoteamentoForm()">＋ Cadastrar empreendimento</button><button class="btn btn-secondary" style="flex:none" onclick="carregarDemo()">✨ Ver com dados de exemplo</button></div></div></div>`;
     return;
   }
   aplicarPermissoesNasAbas();
   const bloqueia = (chave, oQue) => { if (pode(chave)) return false; $('#av-' + state.tab).innerHTML = semPermissaoHtml(oQue); return true; };
   if (tab === 'painel') renderPainel();
-  else if (tab === 'planta') { if (!bloqueia('planta.editar', 'edição da planta')) renderPlantaEditor(); }
-  else if (tab === 'lotes') { if (!bloqueia('lotes.editar', 'cadastro de lotes')) { renderALotes(); fabShow('abrirLoteForm()'); } }
-  else if (tab === 'reservas') { if (!bloqueia('reservas.aprovar', 'gestão de reservas')) { renderAReservas(); fabShow('abrirReservaAdminForm()'); } }
-  else if (tab === 'leads') { if (!bloqueia('leads.ver', 'lista de leads')) renderLeads(); }
-  else if (tab === 'vendas') { if (!bloqueia('vendas.criar', 'vendas')) { renderAVendas(); if (pode('vendas.criar')) fabShow('abrirVendaForm()'); } }
+  else if (tab === 'emp') renderEmpreendimentos();
+  else if (tab === 'vendas') { if (!bloqueia('vendas.criar', 'vendas')) { renderAVendas(); if (pode('vendas.criar')) fabShow('novaVendaEscolhendoEmp()'); } }
   else if (tab === 'recebiveis') { if (!bloqueia('financeiro.ver', 'recebíveis')) { if (state.sub.rec === 'cobranca') renderCobranca(); else renderRecebiveis(); } }
-  else if (tab === 'custos') { if (!bloqueia('custos.ver', 'custos')) { renderCustos(); if (pode('custos.editar')) fabShow('abrirCustoForm()'); } }
   else if (tab === 'relatorios') renderRelatorios();
   else if (tab === 'cadastros') renderCadastros();
+}
+
+/* ================================================================ EMPREENDIMENTOS
+   Aqui mora tudo que é de um empreendimento só: planta, lotes, reservas, obra e vitrine.
+   Vendas, recebíveis e relatórios ficam de fora, porque são da empresa inteira. */
+const EMP_SUBS = [
+  ['resumo', '📋 Resumo', null],
+  ['planta', '🗺️ Planta', 'planta.editar'],
+  ['lotes', '📦 Lotes', 'lotes.editar'],
+  ['reservas', '📝 Reservas', 'reservas.aprovar'],
+  ['custos', '🧾 Obra e custos', 'custos.ver'],
+  ['leads', '🎯 Leads', 'leads.ver']
+];
+function empSubsVisiveis(lot) {
+  const soLoteamento = ['planta', 'lotes', 'reservas'];
+  return EMP_SUBS.filter(([k, , chave]) => (!chave || pode(chave)) && !(ehCarteira(lot) && soLoteamento.includes(k)));
+}
+function abrirEmpreendimento(id, sub) {
+  state.empAberto = id; if (id) setCurLotSilencioso(id);
+  if (sub) state.empSub = sub;
+  switchTab('emp');
+}
+function fecharEmpreendimento() { state.empAberto = null; renderEmpreendimentos(); }
+function renderEmpreendimentos() {
+  const v = $('#av-emp');
+  const aberto = state.empAberto ? getLoteamento(state.empAberto) : null;
+  if (!aberto) { v.innerHTML = listaEmpreendimentosHtml(); return; }
+  const subs = empSubsVisiveis(aberto);
+  if (!subs.some(s => s[0] === state.empSub)) state.empSub = subs.length ? subs[0][0] : 'resumo';
+  v.innerHTML = `
+    <div class="row-between mb">
+      <div><button class="btn btn-secondary btn-sm" onclick="fecharEmpreendimento()">‹ Empreendimentos</button></div>
+      <div class="small muted"><b>${esc(aberto.nome)}</b> · ${esc(empLabel(aberto))}${aberto.cidade ? ' · ' + esc(aberto.cidade) : ''}</div>
+    </div>
+    <div class="subtabs">${subs.map(([k, rot]) => `<div class="chip ${state.empSub === k ? 'active' : ''}" onclick="state.empSub='${k}';renderEmpreendimentos()">${rot}</div>`).join('')}</div>
+    <div id="empConteudo"></div>`;
+  const alvo = $('#empConteudo');
+  const fab = $('#fab'); fab.classList.remove('show');
+  if (state.empSub === 'resumo') alvo.innerHTML = cadLoteamentoHtml();
+  else if (state.empSub === 'planta') renderPlantaEditor(alvo);
+  else if (state.empSub === 'lotes') { renderALotes(alvo); fabShow('abrirLoteForm()'); }
+  else if (state.empSub === 'reservas') { renderAReservas(alvo); fabShow('abrirReservaAdminForm()'); }
+  else if (state.empSub === 'custos') { renderCustos(alvo); if (pode('custos.editar')) fabShow('abrirCustoForm()'); }
+  else if (state.empSub === 'leads') renderLeads(alvo);
+}
+function listaEmpreendimentosHtml() {
+  const podeCriar = pode('config.editar') || pode('lotes.editar');
+  return `<div class="card"><h3>🏗️ Empreendimentos ${podeCriar ? '<span class="h-actions"><button class="btn btn-primary btn-sm" onclick="abrirLoteamentoForm()">＋ Novo</button></span>' : ''}</h3>
+    <p class="help mb">Cada empreendimento tem a sua planta, os seus lotes, a sua obra e a sua conta de cobrança. Vendas, recebíveis e relatórios ficam nas abas de cima, com todos os empreendimentos juntos.</p>
+    ${db.loteamentos.map(l => {
+      const ls = lotesDo(l.id);
+      const vend = db.vendas.filter(v => v.loteamentoId === l.id && v.status !== 'distrato');
+      const pend = db.reservas.filter(r => r.loteamentoId === l.id && reservaStatus(r) === 'pendente').length;
+      return `<div class="item" onclick="abrirEmpreendimento('${l.id}')"><div class="info">
+        <div class="title">${ehCarteira(l) ? '🏠' : '🏘️'} ${esc(l.nome)} <span class="badge neutral">${esc(empLabel(l))}</span>${pend ? ` <span class="badge pendente">${pend} reserva(s) a aprovar</span>` : ''}</div>
+        <div class="meta">${esc(l.cidade || '')}${ehCarteira(l) ? `<span>· ${vend.length} venda(s)</span>` : `<span>· ${ls.length} lotes</span><span>· ${ls.filter(x => x.status === 'vendido').length} vendidos</span><span>· ${ls.filter(x => x.status === 'disponivel').length} disponíveis</span>`}</div>
+      </div><div class="side"><div class="value">${fmtMoneyShort(vend.reduce((s, x) => s + num(x.valorTotal), 0))}</div><span class="tiny muted">vendido</span></div></div>`;
+    }).join('') || `<div class="empty"><div class="ic">🏗️</div><p><b>Nenhum empreendimento ainda.</b></p><p class="small">Cadastre um loteamento, com planta e lotes, ou uma carteira para imóveis avulsos.</p></div>`}</div>`;
 }
 function fabShow(action) { const f = $('#fab'); f.classList.add('show'); f.setAttribute('onclick', action); }
 
 // ================================================================ PAINEL
 function renderPainel() {
-  const lot = curLot(); const v = $('#av-painel');
-  const ls = lotesDo(lot.id);
+  const esc0 = escopoAtual(); const v = $('#av-painel');
+  /* O painel é da empresa inteira; o filtro em cima restringe a um empreendimento. */
+  const emps = esc0 ? db.loteamentos.filter(l => l.id === esc0) : db.loteamentos;
+  const lot = esc0 ? getLoteamento(esc0) : (db.loteamentos.length === 1 ? db.loteamentos[0] : null);
+  const ls = db.lotes.filter(l => noEscopo(l, esc0));
   const cnt = s => ls.filter(l => l.status === s).length;
   const vgv = ls.reduce((s, l) => s + num(l.preco), 0);
-  const vendas = db.vendas.filter(x => x.loteamentoId === lot.id && x.status !== 'distrato');
+  const vendas = vendasDo(esc0).filter(x => x.status !== 'distrato');
   const vendido = vendas.reduce((s, x) => s + num(x.valorTotal), 0);
-  const recs = recebiveisDo(lot.id);
+  const recs = recebiveisDo(esc0);
   const recebido = recs.reduce((s, r) => s + num(r.valorPago), 0);
   const aReceber = recs.reduce((s, r) => s + recRestante(r), 0);
   const atrasados = recs.filter(r => recStatus(r) === 'atrasado');
   const atrasado = atrasados.reduce((s, r) => s + recRestante(r), 0);
-  const cs = custosDo(lot.id);
+  const cs = custosDo(esc0);
   const custoTotal = cs.reduce((s, c) => s + num(c.valor), 0);
   const custoPago = cs.filter(c => c.status === 'pago').reduce((s, c) => s + num(c.valor), 0);
   const custosAtr = cs.filter(c => custoStatus(c) === 'atrasado');
   const comissoesPend = vendas.filter(x => !x.comissaoPaga).reduce((s, x) => s + num(x.comissaoValor), 0);
-  const orcTotal = Object.values(lot.orcamento || {}).reduce((s, x) => s + num(x), 0);
-  const resPend = db.reservas.filter(r => r.loteamentoId === lot.id && r.status === 'pendente');
-  const resExp = db.reservas.filter(r => r.loteamentoId === lot.id && reservaStatus(r) === 'expirada');
-  const resVencendo = db.reservas.filter(r => r.loteamentoId === lot.id && reservaStatus(r) === 'aprovada' && daysBetween(todayStr(), r.validade) <= 2);
+  const orcTotal = emps.reduce((s, e) => s + Object.values(e.orcamento || {}).reduce((a, x) => a + num(x), 0), 0);
+  const resPend = db.reservas.filter(r => noEscopo(r, esc0) && r.status === 'pendente');
+  const resExp = db.reservas.filter(r => noEscopo(r, esc0) && reservaStatus(r) === 'expirada');
+  const resVencendo = db.reservas.filter(r => noEscopo(r, esc0) && reservaStatus(r) === 'aprovada' && daysBetween(todayStr(), r.validade) <= 2);
   const mesKey = todayStr().slice(0, 7);
   const prevMes = recs.filter(r => monthKey(r.vencimento) === mesKey).reduce((s, r) => s + recRestante(r), 0);
   const custosMes = cs.filter(c => c.status !== 'pago' && monthKey(c.vencimento || c.dataCompetencia) === mesKey).reduce((s, c) => s + num(c.valor), 0);
   const pctVend = ls.length ? Math.round(cnt('vendido') / ls.length * 100) : 0;
 
   let alerts = '';
-  if (resPend.length) alerts += `<div class="alert warn" onclick="switchTab('reservas')"><span><b>${resPend.length} reserva(s) aguardando aprovação</b></span><span>›</span></div>`;
+  if (resPend.length) alerts += `<div class="alert warn" onclick="abrirEmpreendimento('${resPend[0].loteamentoId}','reservas')"><span><b>${resPend.length} reserva(s) aguardando aprovação</b></span><span>›</span></div>`;
   if (resExp.length) alerts += `<div class="alert" onclick="aSetFiltroRes('expirada')"><span><b>${resExp.length} reserva(s) vencida(s)</b> — libere o lote ou renove</span><span>›</span></div>`;
-  if (resVencendo.length) alerts += `<div class="alert info" onclick="switchTab('reservas')"><span><b>${resVencendo.length} reserva(s) vencem em até 2 dias</b></span><span>›</span></div>`;
+  if (resVencendo.length) alerts += `<div class="alert info" onclick="abrirEmpreendimento('${resVencendo[0].loteamentoId}','reservas')"><span><b>${resVencendo.length} reserva(s) vencem em até 2 dias</b></span><span>›</span></div>`;
   if (atrasados.length) alerts += `<div class="alert" onclick="abrirPainelCobranca()"><span><b>${atrasados.length} parcela(s) em atraso</b> — ${fmtMoney(atrasado)} · cobrar</span><span>›</span></div>`;
   if (custosAtr.length) alerts += `<div class="alert" onclick="aSetFiltroCusto('atrasado')"><span><b>${custosAtr.length} conta(s) a pagar vencida(s)</b> — ${fmtMoney(custosAtr.reduce((s, c) => s + num(c.valor), 0))}</span><span>›</span></div>`;
   const semPreco = ls.filter(l => !num(l.preco)).length;
-  if (semPreco) alerts += `<div class="alert info" onclick="switchTab('lotes')"><span><b>${semPreco} lote(s) sem preço</b></span><span>›</span></div>`;
+  if (semPreco) alerts += `<div class="alert info" onclick="abrirEmpreendimento('${(ls.find(l => !num(l.preco)) || {}).loteamentoId}','lotes')"><span><b>${semPreco} lote(s) sem preço</b></span><span>›</span></div>`;
   if (!alerts) alerts = `<div class="alert ok"><span>Tudo em dia. 👍</span></div>`;
 
   v.innerHTML = `
+    ${db.loteamentos.length > 1 ? `<div class="filters">${escopoSelectHtml('renderPainel()')}</div>` : ''}
     ${alerts}
     <div class="status-strip">
       <div class="pill"><span class="dot disponivel"></span><div><b>${cnt('disponivel')}</b><br>disponíveis</div></div>
@@ -100,8 +158,8 @@ function renderPainel() {
 }
 
 // ================================================================ PLANTA (editor)
-function renderPlantaEditor() {
-  const lot = curLot(); const v = $('#av-planta');
+function renderPlantaEditor(alvo) {
+  const lot = curLot(); const v = alvo || alvoDoEmp('av-planta');
   const ls = lotesDo(lot.id);
   const hasImg = !!(lot.planta && lot.planta.img);
   if (!state.plantaAdmin || !v.querySelector('.planta-wrap')) {
@@ -232,8 +290,8 @@ function removerPlanta() {
 }
 
 // ================================================================ LOTES (admin)
-function renderALotes() {
-  const lot = curLot(); const v = $('#av-lotes');
+function renderALotes(alvo) {
+  const lot = curLot(); const v = alvo || alvoDoEmp('av-lotes');
   const f = state.filters.alotes = state.filters.alotes || { quadra: 'all', status: 'all', busca: '' };
   const ls = lotesDo(lot.id); const quadras = quadrasDo(lot.id);
   const list = ls.filter(l => (f.quadra === 'all' || l.quadra === f.quadra) && (f.status === 'all' || l.status === f.status) && (!f.busca || loteLabel(l).toLowerCase().includes(f.busca.toLowerCase())));
@@ -418,8 +476,8 @@ function exportarLotesCSV() {
 
 // ================================================================ RESERVAS (admin)
 function aSetFiltroRes(st) { state.filters.ares = { status: st }; switchTab('reservas'); }
-function renderAReservas() {
-  const lot = curLot(); const v = $('#av-reservas');
+function renderAReservas(alvo) {
+  const lot = curLot(); const v = alvo || alvoDoEmp('av-reservas');
   const f = state.filters.ares = state.filters.ares || { status: 'ativas' };
   const all = db.reservas.filter(r => r.loteamentoId === lot.id);
   const grupos = { ativas: r => ['pendente', 'aprovada'].includes(reservaStatus(r)), pendente: r => r.status === 'pendente', aprovada: r => reservaStatus(r) === 'aprovada', expirada: r => reservaStatus(r) === 'expirada', historico: r => ['recusada', 'cancelada', 'convertida', 'expirada'].includes(r.status) || (reservaStatus(r) === 'expirada') };
@@ -527,10 +585,10 @@ function salvarReservaAdminNova() {
 
 // ================================================================ VENDAS
 function renderAVendas() {
-  const lot = curLot(); const v = $('#av-vendas');
+  const esc0 = escopoAtual(); const v = $('#av-vendas');
   const f = state.filters.avendas = state.filters.avendas || { sub: 'vendas', status: 'all', busca: '' };
   if (f.sub === 'comissoes') { renderComissoes(v, f); return; }
-  const all = db.vendas.filter(x => x.loteamentoId === lot.id).sort((a, b) => (b.dataVenda || '').localeCompare(a.dataVenda || ''));
+  const all = vendasDo(esc0).sort((a, b) => (b.dataVenda || '').localeCompare(a.dataVenda || ''));
   const list = all.filter(x => (f.status === 'all' || x.status === f.status) && (!f.busca || x.cliente.nome.toLowerCase().includes(f.busca.toLowerCase()) || imovelLabel(x).toLowerCase().includes(f.busca.toLowerCase())));
   const ativas = all.filter(x => x.status !== 'distrato');
   const tot = ativas.reduce((s, x) => s + num(x.valorTotal), 0);
@@ -542,13 +600,13 @@ function renderAVendas() {
       <div class="kpi c-primary"><div class="lbl">Ticket médio</div><div class="val">${fmtMoneyShort(ativas.length ? tot / ativas.length : 0)}</div></div>
     </div>
     <div class="chips">${[['all', 'Todas'], ['ativa', 'Ativas'], ['quitada', 'Quitadas'], ['distrato', 'Distratos']].map(([k, l]) => `<div class="chip ${f.status === k ? 'active' : ''}" onclick="state.filters.avendas.status='${k}';renderAVendas()">${l}<span class="n">${k === 'all' ? all.length : all.filter(x => x.status === k).length}</span></div>`).join('')}</div>
-    <div class="filters"><input type="text" placeholder="🔎 Cliente ou imóvel" value="${esc(f.busca)}" oninput="aSetFiltro('avendas','busca',this.value,renderAVendas,this)"><button class="btn btn-primary btn-sm" onclick="abrirVendaForm()">＋ Nova venda</button></div>
+    <div class="filters">${escopoSelectHtml('renderAVendas()')}<input type="text" placeholder="🔎 Cliente ou imóvel" value="${esc(f.busca)}" oninput="aSetFiltro('avendas','busca',this.value,renderAVendas,this)"><button class="btn btn-primary btn-sm" onclick="novaVendaEscolhendoEmp()">＋ Nova venda</button></div>
     ${list.length ? list.map(x => vendaCardHtml(x)).join('') : `<div class="empty"><div class="ic">💰</div><p>Nenhuma venda registrada.<br>Converta uma reserva ou registre uma venda direta.</p></div>`}`;
 }
 function vendaCardHtml(x) {
   const r = vendaResumo(x); const pct = r.total ? Math.round(r.pago / r.total * 100) : 0;
   return `<div class="item ${x.status === 'distrato' ? 'cancelada' : x.status}" onclick="abrirVendaAdmin('${x.id}')">
-    <div class="info"><div class="title">${esc(imovelLabel(x))} · ${esc(x.cliente.nome)}</div>
+    <div class="info"><div class="title">${esc(imovelLabel(x))} · ${esc(x.cliente.nome)}${!escopoAtual() ? ` <span class="tiny muted">· ${esc((getLoteamento(x.loteamentoId) || {}).nome || '')}</span>` : ''}</div>
       <div class="meta"><span>📅 ${fmtDate(x.dataVenda)}</span><span>· 🧑‍💼 ${esc(x.corretor.nome)}</span><span>· ${x.nParcelas}× ${fmtMoney(x.valorParcela)}</span>${r.atrasado ? `<span style="color:var(--danger)">· ${fmtMoney(r.atrasado)} em atraso</span>` : ''}</div>
       ${x.status !== 'distrato' ? `<div class="progress"><div style="width:${pct}%"></div></div><div class="tiny muted">${r.nPagas}/${r.n} parcelas · ${fmtMoney(r.pago)} recebido (${pct}%)</div>` : ''}</div>
     <div class="side"><div class="value">${fmtMoney(x.valorTotal)}</div><span class="badge ${x.status === 'distrato' ? 'distrato' : x.status}">${statusLabel(x.status)}</span></div></div>`;
@@ -576,6 +634,10 @@ function abrirVendaAdmin(id) {
   if (c.telefone) footer += `<a class="btn btn-wa" target="_blank" href="${waLink(c.telefone, extratoTexto(x))}">💬 Enviar resumo</a>`;
   if (x.status !== 'distrato' && pode('vendas.distrato')) footer += `<button class="btn btn-outline-danger" onclick="distratoVenda('${x.id}')">Distrato</button>`;
   openModal({ title: `💰 Venda · ${esc(imovelShort(x))}`, body, footer, wide: true });
+}
+/* Venda nova a partir da aba global: primeiro o empreendimento, depois o formulário. */
+function novaVendaEscolhendoEmp() {
+  comEmpreendimento('💰 Nova venda', 'Em qual empreendimento entra esta venda?', () => abrirVendaForm());
 }
 function abrirVendaForm(id, loteId, reservaId) {
   const lot = curLot(); const x = id ? getVenda(id) : null;
@@ -698,18 +760,16 @@ function distratoVenda(id) {
 // ================================================================ CADASTROS
 function renderCadastros() {
   const v = $('#av-cadastros');
-  state.sub.cad = state.sub.cad || (curLot() ? 'loteamento' : 'loteamentos');
-  const todasTabs = [['loteamento', '🏘️ Loteamento', null], ['loteamentos', '📋 Todos', null], ['corretores', Cloud.active ? '👥 Equipe' : '🧑‍💼 Corretores', 'equipe.gerenciar'],
+  state.sub.cad = state.sub.cad || 'corretores';
+  const todasTabs = [['corretores', Cloud.active ? '👥 Equipe' : '🧑‍💼 Corretores', 'equipe.gerenciar'],
     ['permissoes', '🔐 Permissões', 'equipe.gerenciar'], ['categorias', '🏷️ Categorias', 'custos.editar'], ['documentos', '📄 Documentos', 'documentos.editar'],
     ['indices', '📈 Índices', 'indices.editar'], ['cobranca', '🔔 Cobrança', 'cobranca.registrar'], ['banco', '🏦 Banco', 'config.editar'], ['vitrine', '🌐 Vitrine', 'vitrine.gerenciar'],
     ['config', '⚙️ Configurações', 'config.editar'], ['nuvem', Cloud.active ? '☁️ Conta' : '☁️ Nuvem', null], ['backup', '💾 Backup', 'backup.usar']];
   const tabs = todasTabs.filter(t => !t[2] || pode(t[2])).map(t => [t[0], t[1]]);
-  if (!tabs.find(t => t[0] === state.sub.cad)) state.sub.cad = 'loteamento';
+  if (!tabs.find(t => t[0] === state.sub.cad)) state.sub.cad = tabs.length ? tabs[0][0] : 'config';
   const sub = state.sub.cad;
   let html = `<div class="subtabs">${tabs.map(([k, l]) => `<div class="chip ${sub === k ? 'active' : ''}" onclick="state.sub.cad='${k}';renderCadastros()">${l}</div>`).join('')}</div>`;
-  if (sub === 'loteamento') html += cadLoteamentoHtml();
-  else if (sub === 'loteamentos') html += cadLoteamentosHtml();
-  else if (sub === 'corretores') html += Cloud.active ? cadEquipeHtml() : cadCorretoresHtml();
+  if (sub === 'corretores') html += Cloud.active ? cadEquipeHtml() : cadCorretoresHtml();
   else if (sub === 'categorias') html += cadCategoriasHtml();
   else if (sub === 'documentos') html += cadDocumentosHtml();
   else if (sub === 'indices') html += cadIndicesHtml();
@@ -755,7 +815,7 @@ function salvarLoteamento(id) {
   const prev = id ? getLoteamento(id) : null;
   const rec = Object.assign({}, prev || { id: genId(), criadoEm: new Date().toISOString(), orcamento: {}, tipo: val('lmTipo') === 'carteira' ? 'carteira' : 'loteamento' }, { nome, cidade: val('lmCidade'), endereco: val('lmEnd'), descricao: val('lmDesc'), cond: { entradaMinPct: num(val('lmEntrada')), maxParcelas: Math.round(num(val('lmMaxP'))) || 120, jurosMes: num(val('lmJuros')), descontoVistaPct: num(val('lmDesc2')) } });
   upsert('loteamentos', rec);
-  if (!prev) { logAct(`Loteamento cadastrado: ${nome}`); setCurLot(rec.id); state.sub.cad = 'loteamento'; }
+  if (!prev) { logAct(`${empLabel(rec)} cadastrado: ${nome}`); state.empAberto = rec.id; state.empSub = 'resumo'; setCurLotSilencioso(rec.id); state.tab = 'emp'; }
   closeModal(); renderCurrent(); toast('✅', `${empLabel(rec)} salva`.replace('Loteamento salva', 'Loteamento salvo'), nome);
 }
 function excluirLoteamento(id) {
@@ -883,8 +943,8 @@ function cadBackupHtml() {
 function leadsDo(lotId) { return db.leads.filter(l => l.loteamentoId === lotId || !l.loteamentoId); }
 const LEAD_STATUS = { novo: ['🆕', 'Novo'], contatado: ['📞', 'Contatado'], convertido: ['✅', 'Convertido'], descartado: ['🚫', 'Descartado'] };
 
-function renderLeads() {
-  const lot = curLot(); const v = $('#av-leads');
+function renderLeads(alvo) {
+  const lot = curLot(); const v = alvo || alvoDoEmp('av-leads');
   const f = state.filters.leads = state.filters.leads || { status: 'novo' };
   const all = leadsDo(lot.id);
   const list = (f.status === 'todos' ? all : all.filter(l => (l.status || 'novo') === f.status))

@@ -5,9 +5,9 @@
 function aSetFiltroRec(st) { state.filters.rec = Object.assign(state.filters.rec || {}, { status: st, mes: 'all' }); state.sub.rec = 'lista'; switchTab('recebiveis'); }
 function abrirPainelCobranca() { state.sub.rec = 'cobranca'; switchTab('recebiveis'); }
 function renderRecebiveis() {
-  const lot = curLot(); const v = $('#av-recebiveis');
+  const esc0 = escopoAtual(); const v = $('#av-recebiveis');
   const f = state.filters.rec = state.filters.rec || { status: 'aberto', mes: 'all', busca: '' };
-  const all = recebiveisDo(lot.id);
+  const all = recebiveisDo(esc0);
   const grupos = { aberto: r => recStatus(r) !== 'pago', atrasado: r => recStatus(r) === 'atrasado', pago: r => recStatus(r) === 'pago', all: () => true };
   const meses = [...new Set(all.map(r => monthKey(r.vencimento)))].sort();
   const list = all.filter(r => grupos[f.status](r) && (f.mes === 'all' || monthKey(r.vencimento) === f.mes) && (!f.busca || clienteDe(r).toLowerCase().includes(f.busca.toLowerCase())))
@@ -19,7 +19,7 @@ function renderRecebiveis() {
   const recMes = all.filter(r => r.dataPagamento && monthKey(r.dataPagamento) === mesKey).reduce((s, r) => s + num(r.valorPago), 0);
   const somaLista = list.reduce((s, r) => s + (f.status === 'pago' ? num(r.valorPago) : recRestante(r)), 0);
   v.innerHTML = `
-    ${avisoRemessaHtml(lot.id)}
+    ${avisoRemessaHtml(esc0)}
     <div class="kpi-grid">
       <div class="kpi c-amber"><div class="lbl">A receber</div><div class="val">${fmtMoneyShort(tot - pago)}</div><div class="sub">de ${fmtMoneyShort(tot)} contratado</div></div>
       <div class="kpi c-green"><div class="lbl">Recebido</div><div class="val">${fmtMoneyShort(pago)}</div><div class="sub">${fmtMoneyShort(recMes)} neste mês</div></div>
@@ -27,10 +27,11 @@ function renderRecebiveis() {
       <div class="kpi c-blue"><div class="lbl">Vence este mês</div><div class="val">${fmtMoneyShort(mes)}</div><div class="sub">${monthLabel(mesKey)}</div></div>
     </div>
     <div class="chips">${[['aberto', 'Em aberto'], ['atrasado', 'Atrasados'], ['pago', 'Pagos'], ['all', 'Todos']].map(([k, l]) => `<div class="chip ${f.status === k ? 'active' : ''}" onclick="state.filters.rec.status='${k}';renderRecebiveis()">${l}<span class="n">${all.filter(grupos[k]).length}</span></div>`).join('')}
-      <div class="chip" onclick="abrirPainelCobranca()">🔔 Cobrança<span class="n">${inadimplentes(lot.id).length}</span></div>
-      ${contaCobranca(lot.id) && layoutCnab(contaCobranca(lot.id).banco) ? `<div class="chip" onclick="abrirGerarCobrancas()">🧾 Gerar cobranças<span class="n">${parcelasDoMes(lot.id, mesAtual()).filter(r => !registradaNoBanco(r) && !bloqueioRemessa(r)).length}</span></div>
+      <div class="chip" onclick="abrirPainelCobranca()">🔔 Cobrança<span class="n">${inadimplentes(esc0).length}</span></div>
+      ${db.contasBanco.some(c => layoutCnab(c.banco)) ? `<div class="chip" onclick="abrirGerarCobrancas()">🧾 Gerar cobranças<span class="n">${parcelasDoMes(esc0, mesAtual()).filter(r => !registradaNoBanco(r) && !bloqueioRemessa(r)).length}</span></div>
       <div class="chip" onclick="abrirRetorno()">📥 Retorno</div>` : ''}</div>
     <div class="filters">
+      ${escopoSelectHtml('renderRecebiveis()')}
       <select onchange="state.filters.rec.mes=this.value;renderRecebiveis()"><option value="all">Todos os meses</option>${meses.map(m => `<option value="${m}" ${f.mes === m ? 'selected' : ''}>${monthLabel(m)}</option>`).join('')}</select>
       <input type="text" placeholder="🔎 Cliente ou lote" value="${esc(f.busca)}" oninput="aSetFiltro('rec','busca',this.value,renderRecebiveis,this)">
       <button class="btn btn-secondary btn-sm" onclick="exportarRecebiveisCSV()">⬇️ CSV</button>
@@ -109,8 +110,8 @@ function excluirRecebivel(id, voltarVendaId) {
   renderCurrent();
 }
 function exportarRecebiveisCSV() {
-  const lot = curLot(); const rows = [['Cliente', 'Lote', 'Parcela', 'Vencimento', 'Valor', 'Pago', 'Data pagamento', 'Forma', 'Status']];
-  recebiveisDo(lot.id).sort((a, b) => a.vencimento.localeCompare(b.vencimento)).forEach(r => { const v = getVenda(r.vendaId); rows.push([v ? v.cliente.nome : '', v ? imovelShort(v) : '', r.descricao, fmtDate(r.vencimento), fmtNum(recValor(r)), fmtNum(r.valorPago), r.dataPagamento ? fmtDate(r.dataPagamento) : '', r.forma || '', statusLabel(recStatus(r))]); });
+  const esc0 = escopoAtual(); const rows = [['Cliente', 'Imóvel', 'Parcela', 'Vencimento', 'Valor', 'Pago', 'Data pagamento', 'Forma', 'Status']];
+  recebiveisDo(esc0).sort((a, b) => a.vencimento.localeCompare(b.vencimento)).forEach(r => { const v = getVenda(r.vendaId); rows.push([v ? v.cliente.nome : '', v ? imovelShort(v) : '', r.descricao, fmtDate(r.vencimento), fmtNum(recValor(r)), fmtNum(r.valorPago), r.dataPagamento ? fmtDate(r.dataPagamento) : '', r.forma || '', statusLabel(recStatus(r))]); });
   download(`recebiveis-${todayStr()}.csv`, toCSV(rows), 'text/csv');
 }
 
@@ -142,8 +143,8 @@ function imprimirExtrato(vendaId) {
 
 // ================================================================ CUSTOS
 function aSetFiltroCusto(st) { state.filters.custos = Object.assign(state.filters.custos || {}, { status: st }); switchTab('custos'); }
-function renderCustos() {
-  const lot = curLot(); const v = $('#av-custos');
+function renderCustos(alvo) {
+  const lot = curLot(); const v = alvo || alvoDoEmp('av-custos');
   const f = state.filters.custos = state.filters.custos || { status: 'all', cat: 'all', mes: 'all', busca: '' };
   const all = custosDo(lot.id);
   const meses = [...new Set(all.map(c => monthKey(c.dataCompetencia)))].sort().reverse();
