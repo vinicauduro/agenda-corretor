@@ -82,12 +82,17 @@ function meuPapel() { return Cloud.active ? (Cloud.papel || 'corretor') : 'dono'
 
 /* Abas da administração que a pessoa enxerga. */
 const TAB_PERM = { relatorios: 'relatorios.ver', lotes: 'lotes.editar', planta: 'planta.editar', reservas: 'reservas.aprovar', vendas: 'vendas.criar', recebiveis: 'financeiro.ver', custos: 'custos.ver', leads: 'leads.ver' };
+/* Abas que só fazem sentido em loteamento com planta. Numa carteira de imóveis avulsos
+   não existe planta, lote nem reserva de lote — some tudo isso da barra. */
+const TAB_SO_LOTEAMENTO = ['planta', 'lotes', 'reservas'];
 function aplicarPermissoesNasAbas() {
-  if (!Cloud.active) return;
+  const lot = typeof curLot === 'function' ? curLot() : null;
+  const carteira = lot && ehCarteira(lot);
   let precisaTrocar = false;
   $$('#screen-admin .tab').forEach(t => {
     const chave = TAB_PERM[t.dataset.tab];
-    const ok = !chave || pode(chave) || (t.dataset.tab === 'vendas' && pode('vendas.editar'));
+    const permOk = !Cloud.active || !chave || pode(chave) || (t.dataset.tab === 'vendas' && pode('vendas.editar'));
+    const ok = permOk && !(carteira && TAB_SO_LOTEAMENTO.includes(t.dataset.tab));
     t.style.display = ok ? '' : 'none';
     if (!ok && state.tab === t.dataset.tab) precisaTrocar = true;
   });

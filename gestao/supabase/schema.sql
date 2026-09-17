@@ -555,6 +555,13 @@ alter table public.contas_banco add column if not exists nn_max bigint not null 
 alter table public.contas_banco add column if not exists instrucao1 text not null default '';
 alter table public.contas_banco add column if not exists instrucao2 text not null default '';
 
+-- Empreendimento: 'loteamento' (planta e lotes) ou 'carteira' (só agrupa vendas avulsas)
+alter table public.loteamentos add column if not exists tipo text not null default 'loteamento';
+-- Venda sem lote: o imóvel é descrito na própria venda
+alter table public.vendas add column if not exists imovel jsonb;
+-- numa carteira a venda não aponta para lote
+alter table public.vendas alter column lote_id drop not null;
+
 -- ---------------------------------------------------------------------
 -- 4c. Cobranças registradas (régua de inadimplência)
 -- ---------------------------------------------------------------------

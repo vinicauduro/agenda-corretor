@@ -128,10 +128,7 @@ function confirmarIndice(ind, valores, acao) {
   const porContrato = {};
   imp.mudam.forEach(x => { (porContrato[x.r.vendaId] = porContrato[x.r.vendaId] || []).push(x); });
   const difTotal = imp.mudam.reduce((s, x) => s + (x.para - x.de), 0);
-  const cabecalho = v => {
-    const l = v && getLote(v.loteId);
-    return `${l ? loteLabel(l) : 'Contrato'}${v && v.cliente && v.cliente.nome ? ' · ' + esc(v.cliente.nome) : ''}`;
-  };
+  const cabecalho = v => `${v ? esc(imovelLabel(v)) : 'Contrato'}${v && v.cliente && v.cliente.nome ? ' · ' + esc(v.cliente.nome) : ''}`;
   openModal({
     title: '⚠️ Isto muda parcelas que já existem',
     wide: true,

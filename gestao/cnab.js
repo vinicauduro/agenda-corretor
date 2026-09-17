@@ -254,8 +254,8 @@ function sacadoDaVenda(v) {
   return { nome: c.nome || '', cpf: c.cpf || '', endereco: c.endereco || '', bairro: c.bairro || '', cep: c.cep || '', cidade: c.cidade || db.config.cidade || '', uf: c.uf || '' };
 }
 function mensagemDoTitulo(conta, r) {
-  const v = getVenda(r.vendaId), l = v && getLote(v.loteId), lot = getLoteamento(r.loteamentoId);
-  return (conta.mensagem1 || '').replace('{{lote}}', l ? loteLabel(l) : '').replace('{{loteamento}}', lot ? lot.nome : '');
+  const v = getVenda(r.vendaId), lot = getLoteamento(r.loteamentoId);
+  return (conta.mensagem1 || '').replace('{{lote}}', v ? imovelLabel(v) : '').replace('{{loteamento}}', lot ? lot.nome : '');
 }
 /* Monta e grava uma remessa. novas: parcelas a registrar; pendentes: [{r, acao}] de
    alteração ou baixa. Devolve o texto do arquivo ou null se não havia nada. */
@@ -335,12 +335,12 @@ function abrirGerarCobrancas(mes) {
       </div>
       ${Object.keys(semIndice).length ? `<div class="card"><h3>⏳ Contratos esperando índice</h3>
         <p class="help">Estes contratos sofrem correção mensal e o índice que corrige a parcela de ${monthLabel(m)} ainda não foi lançado. Gerar agora mandaria boleto com valor errado, então eles ficam de fora até você lançar em <b>Cadastros › Índices</b>.</p>
-        ${Object.keys(semIndice).map(vid => { const v = getVenda(vid), l = getLote(v.loteId); return `<div class="item"><div class="info"><div class="title">${l ? esc(loteLabel(l)) : ''} · ${esc(v.cliente.nome || '')}</div><div class="meta"><span>${esc(semIndice[vid])}</span></div></div></div>`; }).join('')}</div>` : ''}
+        ${Object.keys(semIndice).map(vid => { const v = getVenda(vid); return `<div class="item"><div class="info"><div class="title">${esc(imovelLabel(v))} · ${esc(v.cliente.nome || '')}</div><div class="meta"><span>${esc(semIndice[vid])}</span></div></div></div>`; }).join('')}</div>` : ''}
       ${pend.length ? `<div class="alert warn" style="cursor:default"><span><b>${pend.length} cobrança(s) alterada(s) depois de registrada(s)</b> vão junto nesta remessa, para o banco atualizar: ${pend.filter(x => x.acao === 'alterar').length} alteração(ões) e ${pend.filter(x => x.acao === 'baixar').length} baixa(s).</span></div>` : ''}
       ${prontas.length ? `<div class="card"><h3>O que vai ser gerado</h3>
         <p class="help">Uma cobrança por parcela. O sistema numera o nosso número, marca como registrada e gera o arquivo de remessa para você enviar ao banco.</p>
         <div class="table-wrap"><table class="tbl"><thead><tr><th>Cliente</th><th>Lote</th><th>Parcela</th><th>Vencimento</th><th class="num">Valor</th></tr></thead><tbody>
-        ${prontas.map(r => { const v = getVenda(r.vendaId), l = v && getLote(v.loteId); return `<tr><td>${esc(v.cliente.nome || '')}</td><td>${l ? esc(loteShort(l)) : ''}</td><td>${esc(r.descricao || '')}</td><td>${fmtDate(r.vencimento)}</td><td class="num">${esc(fmtMoney(recValor(r)))}</td></tr>`; }).join('')}
+        ${prontas.map(r => { const v = getVenda(r.vendaId); return `<tr><td>${esc(v.cliente.nome || '')}</td><td>${esc(imovelShort(v))}</td><td>${esc(r.descricao || '')}</td><td>${fmtDate(r.vencimento)}</td><td class="num">${esc(fmtMoney(recValor(r)))}</td></tr>`; }).join('')}
         </tbody><tfoot><tr><td colspan="4">Total</td><td class="num">${esc(fmtMoney(total))}</td></tr></tfoot></table></div></div>`
         : `<div class="empty"><div class="ic">📭</div><p><b>Nada a gerar em ${monthLabel(m)}</b></p><p class="small">${geradas.length ? 'As cobranças deste mês já foram geradas.' : 'Nenhuma parcela em aberto neste mês.'}</p></div>`}`,
     footer: `<button class="btn btn-secondary" onclick="closeModal()">Fechar</button>
@@ -359,8 +359,8 @@ function simularCobrancas(mes) {
     <h1>${esc(db.config.empresa || lot.nome)}</h1>
     <h2>Simulação da geração de cobranças — ${monthLabel(mes)}</h2>
     <p>${esc(lot.nome)} · ${prontas.length} cobrança(s) · ${esc(fmtMoney(total))} · ${conta ? 'Banco ' + esc(BANCOS[pad(conta.banco, 3)].nome) + ', convênio ' + esc(conta.convenio) : ''}</p>
-    ${Object.keys(porVenda).map(vid => { const v = getVenda(vid), l = getLote(v.loteId); const recs = porVenda[vid];
-      return `<h3 style="margin:14px 0 4px">${esc(v.cliente.nome || '')} — ${l ? esc(loteLabel(l)) : ''}</h3>
+    ${Object.keys(porVenda).map(vid => { const v = getVenda(vid); const recs = porVenda[vid];
+      return `<h3 style="margin:14px 0 4px">${esc(v.cliente.nome || '')} — ${esc(imovelLabel(v))}</h3>
         <table class="tbl"><thead><tr><th>Parcela</th><th>Vencimento</th><th>Valor base</th><th>Correção</th><th>Total</th></tr></thead><tbody>
         ${recs.map(r => `<tr><td>${esc(r.descricao || '')}</td><td>${fmtDate(r.vencimento)}</td><td>${esc(fmtMoney(r.valor))}</td><td>${esc(fmtMoney(recCorrecao(r)))}</td><td><b>${esc(fmtMoney(recValor(r)))}</b></td></tr>`).join('')}
         </tbody></table><p style="text-align:right"><b>Total do cliente: ${esc(fmtMoney(recs.reduce((s, r) => s + recValor(r), 0)))}</b></p>`; }).join('')}
@@ -428,8 +428,8 @@ function mostrarRetorno() {
   const tarifas = r.itens.reduce((s, x) => s + num(x.tarifa), 0);
   const total = baixar.reduce((s, x) => s + (x.valorPago || 0), 0);
   const linha = x => {
-    const v = x.rec && getVenda(x.rec.vendaId), l = v && getLote(v.loteId);
-    return `<tr><td>${x.rec ? esc(l ? loteLabel(l) : '') + ' · ' + esc(x.rec.descricao || '') : '<span class="muted">não localizada</span>'}</td>
+    const v = x.rec && getVenda(x.rec.vendaId);
+    return `<tr><td>${x.rec ? esc(v ? imovelLabel(v) : '') + ' · ' + esc(x.rec.descricao || '') : '<span class="muted">não localizada</span>'}</td>
       <td>${esc(x.nossoNumero)}</td><td>${esc(x.descricao)}${x.motivo ? ' <span class="muted">(' + esc(x.motivo) + ')</span>' : ''}</td><td>${x.data ? fmtDate(x.data) : '—'}</td>
       <td class="num">${esc(fmtMoney(x.valorPago))}</td></tr>`;
   };
@@ -445,7 +445,7 @@ function mostrarRetorno() {
       ${recusados.length ? `<div class="card"><h3>🚫 ${recusados.length} título(s) recusado(s) pelo banco</h3>
         <p class="help">Estes títulos não foram registrados — motivo mais comum é nosso número já usado no convênio. Ao confirmar, eles voltam a ficar sem registro e saem na próxima remessa com um número novo.</p>
         <div class="table-wrap"><table class="tbl"><thead><tr><th>Parcela</th><th>Nosso número</th><th>Motivo</th></tr></thead><tbody>
-        ${recusados.map(x => { const v = getVenda(x.rec.vendaId), l = v && getLote(v.loteId); return `<tr><td>${esc(l ? loteLabel(l) : '')} · ${esc(x.rec.descricao || '')}</td><td>${esc(x.nossoNumero)}</td><td>${esc(x.motivo || '—')}</td></tr>`; }).join('')}
+        ${recusados.map(x => { const v = getVenda(x.rec.vendaId); return `<tr><td>${esc(v ? imovelLabel(v) : '')} · ${esc(x.rec.descricao || '')}</td><td>${esc(x.nossoNumero)}</td><td>${esc(x.motivo || '—')}</td></tr>`; }).join('')}
         </tbody></table></div></div>` : ''}
       ${r.avisos.length ? `<div class="card"><h3>⚠️ Confira antes</h3>${r.avisos.slice(0, 20).map(a => `<p class="help">${esc(a)}</p>`).join('')}</div>` : ''}`,
     footer: baixar.length || recusados.length ? `<button class="btn btn-secondary" onclick="closeModal()">Cancelar</button><button class="btn btn-success" onclick="aplicarRetorno()">${baixar.length ? 'Dar baixa em ' + baixar.length + ' parcela(s)' : ''}${baixar.length && recusados.length ? ' e liberar ' : ''}${!baixar.length && recusados.length ? 'Liberar ' + recusados.length + ' recusado(s)' : recusados.length ? recusados.length + ' recusado(s)' : ''}</button>`

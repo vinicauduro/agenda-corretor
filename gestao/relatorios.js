@@ -170,9 +170,9 @@ function relVendas(lot) {
     .sort((a, b) => a.dataVenda.localeCompare(b.dataVenda));
   const linhas = [], csv = [];
   lista.forEach(v => {
-    const l = getLote(v.loteId); const r = vendaResumo(v);
-    linhas.push({ cells: [fmtDate(v.dataVenda), l ? esc(loteShort(l)) : '—', esc(v.cliente.nome), esc(v.corretor.nome || '—'), fmtMoney(v.valorTotal), fmtMoney(v.entrada), `${v.nParcelas}× ${fmtMoney(v.valorParcela)}`, fmtMoney(r.pago), fmtMoney(r.restante), statusLabel(v.status)] });
-    csv.push([fmtDate(v.dataVenda), l ? loteShort(l) : '', v.cliente.nome, v.cliente.cpf || '', v.corretor.nome || '', fmtNum(v.valorTotal), fmtNum(v.entrada), v.nParcelas, fmtNum(v.valorParcela), fmtNum(r.pago), fmtNum(r.restante), fmtNum(v.comissaoValor), statusLabel(v.status)]);
+    const r = vendaResumo(v);
+    linhas.push({ cells: [fmtDate(v.dataVenda), esc(imovelShort(v)) || '—', esc(v.cliente.nome), esc(v.corretor.nome || '—'), fmtMoney(v.valorTotal), fmtMoney(v.entrada), `${v.nParcelas}× ${fmtMoney(v.valorParcela)}`, fmtMoney(r.pago), fmtMoney(r.restante), statusLabel(v.status)] });
+    csv.push([fmtDate(v.dataVenda), imovelShort(v), v.cliente.nome, v.cliente.cpf || '', v.corretor.nome || '', fmtNum(v.valorTotal), fmtNum(v.entrada), v.nParcelas, fmtNum(v.valorParcela), fmtNum(r.pago), fmtNum(r.restante), fmtNum(v.comissaoValor), statusLabel(v.status)]);
   });
   const cols = [{ t: 'Data' }, { t: 'Lote' }, { t: 'Cliente' }, { t: 'Corretor' }, { t: 'Valor', num: true }, { t: 'Entrada', num: true }, { t: 'Parcelas' }, { t: 'Recebido', num: true }, { t: 'Saldo', num: true }, { t: 'Situação' }];
   const total = lista.reduce((s, v) => s + num(v.valorTotal), 0);
@@ -206,9 +206,9 @@ function relReceber(lot) {
       const doMes = lista.filter(x => monthKey(x.vencimento) === mk);
       linhas.push({ grupo: monthLabel(mk), info: `${doMes.length} parcela(s) · previsto ${fmtMoney(doMes.reduce((s, x) => s + recValor(x), 0))} · recebido ${fmtMoney(doMes.reduce((s, x) => s + num(x.valorPago), 0))}` });
     }
-    const v = getVenda(r.vendaId); const l = v ? getLote(v.loteId) : null;
-    linhas.push({ cells: [fmtDate(r.vencimento), v ? esc(v.cliente.nome) : '—', l ? esc(loteShort(l)) : '—', esc(r.descricao), fmtMoney(recValor(r)), fmtMoney(r.valorPago), r.dataPagamento ? fmtDate(r.dataPagamento) : '—', statusLabel(recStatus(r))] });
-    csv.push([fmtDate(r.vencimento), v ? v.cliente.nome : '', l ? loteShort(l) : '', r.descricao, fmtNum(r.valor), fmtNum(recValor(r)), fmtNum(r.valorPago), r.dataPagamento ? fmtDate(r.dataPagamento) : '', r.forma || '', statusLabel(recStatus(r))]);
+    const v = getVenda(r.vendaId);
+    linhas.push({ cells: [fmtDate(r.vencimento), v ? esc(v.cliente.nome) : '—', v ? esc(imovelShort(v)) : '—', esc(r.descricao), fmtMoney(recValor(r)), fmtMoney(r.valorPago), r.dataPagamento ? fmtDate(r.dataPagamento) : '—', statusLabel(recStatus(r))] });
+    csv.push([fmtDate(r.vencimento), v ? v.cliente.nome : '', v ? imovelShort(v) : '', r.descricao, fmtNum(r.valor), fmtNum(recValor(r)), fmtNum(r.valorPago), r.dataPagamento ? fmtDate(r.dataPagamento) : '', r.forma || '', statusLabel(recStatus(r))]);
   });
   const cols = [{ t: 'Vencimento' }, { t: 'Cliente' }, { t: 'Lote' }, { t: 'Parcela' }, { t: 'Valor', num: true }, { t: 'Pago', num: true }, { t: 'Data pgto' }, { t: 'Situação' }];
   const previsto = lista.reduce((s, r) => s + recValor(r), 0);
@@ -237,9 +237,8 @@ function relInadimplencia(lot) {
     if (!daFaixa.length) return;
     linhas.push({ grupo: `${nome} dias`, info: `${daFaixa.length} contrato(s) · ${fmtMoney(daFaixa.reduce((s, x) => s + x.valor, 0))}` });
     daFaixa.forEach(it => {
-      const l = getLote(it.venda.loteId);
-      linhas.push({ cells: [esc(it.venda.cliente.nome), l ? esc(loteShort(l)) : '—', String(it.parcelas.length), fmtDate(it.maisAntiga.vencimento), String(it.dias), fmtMoney(it.valorBase), fmtMoney(it.valor), it.ultima ? fmtDate(it.ultima.data) : '—'] });
-      csv.push([it.venda.cliente.nome, l ? loteShort(l) : '', it.parcelas.length, fmtDate(it.maisAntiga.vencimento), it.dias, fmtNum(it.valorBase), fmtNum(it.valor), it.ultima ? fmtDate(it.ultima.data) : '', it.venda.cliente.telefone || '']);
+      linhas.push({ cells: [esc(it.venda.cliente.nome), esc(imovelShort(it.venda)) || '—', String(it.parcelas.length), fmtDate(it.maisAntiga.vencimento), String(it.dias), fmtMoney(it.valorBase), fmtMoney(it.valor), it.ultima ? fmtDate(it.ultima.data) : '—'] });
+      csv.push([it.venda.cliente.nome, imovelShort(it.venda), it.parcelas.length, fmtDate(it.maisAntiga.vencimento), it.dias, fmtNum(it.valorBase), fmtNum(it.valor), it.ultima ? fmtDate(it.ultima.data) : '', it.venda.cliente.telefone || '']);
     });
   });
   const cols = [{ t: 'Cliente' }, { t: 'Lote' }, { t: 'Parcelas', num: true }, { t: 'Venceu em' }, { t: 'Dias', num: true }, { t: 'Principal', num: true }, { t: 'Atualizado', num: true }, { t: 'Última cobrança' }];
@@ -275,9 +274,8 @@ function relComissoes(lot) {
       const doCorretor = lista.filter(x => (x.corretor.nome || 'Venda direta') === nome);
       linhas.push({ grupo: nome, info: `${doCorretor.length} venda(s) · ${fmtMoney(doCorretor.reduce((s, x) => s + num(x.comissaoValor), 0))} de comissão` });
     }
-    const l = getLote(v.loteId);
-    linhas.push({ cells: [fmtDate(v.dataVenda), l ? esc(loteShort(l)) : '—', esc(v.cliente.nome), fmtMoney(v.valorTotal), fmtNum(v.comissaoPct, 1) + '%', fmtMoney(v.comissaoValor), v.comissaoPaga ? `paga${v.comissaoData ? ' em ' + fmtDate(v.comissaoData) : ''}` : 'a pagar'] });
-    csv.push([v.corretor.nome || 'Venda direta', v.corretor.creci || '', fmtDate(v.dataVenda), l ? loteShort(l) : '', v.cliente.nome, fmtNum(v.valorTotal), fmtNum(v.comissaoPct, 1), fmtNum(v.comissaoValor), v.comissaoPaga ? 'paga' : 'a pagar', v.comissaoData ? fmtDate(v.comissaoData) : '']);
+    linhas.push({ cells: [fmtDate(v.dataVenda), esc(imovelShort(v)) || '—', esc(v.cliente.nome), fmtMoney(v.valorTotal), fmtNum(v.comissaoPct, 1) + '%', fmtMoney(v.comissaoValor), v.comissaoPaga ? `paga${v.comissaoData ? ' em ' + fmtDate(v.comissaoData) : ''}` : 'a pagar'] });
+    csv.push([v.corretor.nome || 'Venda direta', v.corretor.creci || '', fmtDate(v.dataVenda), imovelShort(v), v.cliente.nome, fmtNum(v.valorTotal), fmtNum(v.comissaoPct, 1), fmtNum(v.comissaoValor), v.comissaoPaga ? 'paga' : 'a pagar', v.comissaoData ? fmtDate(v.comissaoData) : '']);
   });
   const cols = [{ t: 'Data' }, { t: 'Lote' }, { t: 'Cliente' }, { t: 'Venda', num: true }, { t: '%', num: true }, { t: 'Comissão', num: true }, { t: 'Situação' }];
   const total = lista.reduce((s, v) => s + num(v.comissaoValor), 0);

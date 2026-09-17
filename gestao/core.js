@@ -303,11 +303,11 @@ function codigoConvite(n) {
 }
 
 const TABLE_COLS = {
-  loteamentos: ['id', 'nome', 'cidade', 'endereco', 'descricao', 'cond', 'orcamento', 'planta', 'criadoEm'],
+  loteamentos: ['id', 'nome', 'tipo', 'cidade', 'endereco', 'descricao', 'cond', 'orcamento', 'planta', 'criadoEm'],
   categorias: ['id', 'nome', 'cor'],
   lotes: ['id', 'loteamentoId', 'quadra', 'numero', 'area', 'frente', 'fundos', 'preco', 'tipo', 'status', 'obs', 'matricula', 'pts', 'reservaId', 'vendaId', 'criadoEm'],
   reservas: ['id', 'loteamentoId', 'loteId', 'corretor', 'corretorUserId', 'cliente', 'dataReserva', 'validade', 'status', 'proposta', 'obs', 'motivo', 'aprovadaEm', 'encerradaEm', 'criadoEm'],
-  vendas: ['id', 'loteamentoId', 'loteId', 'reservaId', 'cliente', 'corretor', 'corretorUserId', 'dataVenda', 'valorTotal', 'entrada', 'dataEntrada', 'nParcelas', 'jurosMes', 'valorParcela', 'primeiroVencimento', 'baloes', 'indiceId', 'indiceBase', 'comissaoPct', 'comissaoValor', 'comissaoPaga', 'comissaoData', 'status', 'obs', 'motivo', 'distratoEm', 'criadoEm'],
+  vendas: ['id', 'loteamentoId', 'loteId', 'imovel', 'reservaId', 'cliente', 'corretor', 'corretorUserId', 'dataVenda', 'valorTotal', 'entrada', 'dataEntrada', 'nParcelas', 'jurosMes', 'valorParcela', 'primeiroVencimento', 'baloes', 'indiceId', 'indiceBase', 'comissaoPct', 'comissaoValor', 'comissaoPaga', 'comissaoData', 'status', 'obs', 'motivo', 'distratoEm', 'criadoEm'],
   recebiveis: ['id', 'loteamentoId', 'vendaId', 'tipo', 'numero', 'descricao', 'vencimento', 'valor', 'valorPago', 'valorCorrigido', 'nossoNumero', 'remessaEm', 'bancoValor', 'bancoVenc', 'dataPagamento', 'forma', 'obsPagamento'],
   custos: ['id', 'loteamentoId', 'loteId', 'descricao', 'categoriaId', 'fornecedor', 'valor', 'formaPagamento', 'dataCompetencia', 'vencimento', 'status', 'dataPagamento', 'obs', 'criadoEm'],
   modelos: ['id', 'nome', 'tipo', 'corpo', 'criadoEm'],
@@ -560,6 +560,27 @@ function getVenda(id) { return db.vendas.find(v => v.id === id); }
 function getCategoria(id) { return db.categorias.find(c => c.id === id); }
 function loteLabel(l) { return `Quadra ${l.quadra} · Lote ${l.numero}`; }
 function loteShort(l) { return `Q${l.quadra}-L${l.numero}`; }
+
+/* ---- Empreendimentos -------------------------------------------------------------------
+   Um empreendimento é ou um LOTEAMENTO, com planta e lotes numerados, ou uma CARTEIRA, que
+   é só um agrupador de vendas: imóvel avulso, apartamento, sala, o que a empresa vender.
+   Tudo que vem depois da venda — recebível, índice, antecipação, cobrança, remessa,
+   relatório — funciona igual nos dois, porque nada disso depende de lote. */
+function empTipo(lot) { return (lot && lot.tipo) === 'carteira' ? 'carteira' : 'loteamento'; }
+function ehCarteira(lot) { return empTipo(lot) === 'carteira'; }
+function empLabel(lot) { return ehCarteira(lot) ? 'Carteira' : 'Loteamento'; }
+
+/* O imóvel de uma venda: o lote, quando existe, ou a descrição livre da venda avulsa. */
+function imovelDaVenda(v) {
+  if (!v) return { label: '', curto: '', endereco: '', matricula: '', lote: null };
+  const l = v.loteId ? getLote(v.loteId) : null;
+  if (l) return { label: loteLabel(l), curto: loteShort(l), endereco: '', matricula: l.matricula || '', lote: l };
+  const im = v.imovel || {};
+  const d = (im.descricao || '').trim();
+  return { label: d || 'Imóvel sem descrição', curto: d ? d.slice(0, 22) : 'Imóvel', endereco: im.endereco || '', matricula: im.matricula || '', lote: null };
+}
+function imovelLabel(v) { return imovelDaVenda(v).label; }
+function imovelShort(v) { return imovelDaVenda(v).curto; }
 function statusLabel(s) {
   return { disponivel: 'Disponível', reservado: 'Reservado', vendido: 'Vendido', bloqueado: 'Indisponível',
     pendente: 'Pendente', aprovada: 'Aprovada', recusada: 'Recusada', cancelada: 'Cancelada', expirada: 'Expirada', convertida: 'Virou venda',
@@ -667,9 +688,11 @@ function renderCurrent() {
 }
 function updateTopbars() {
   const lot = curLot();
+  /* O corretor trabalha em cima da planta: carteiras de imóveis avulsos não aparecem para ele. */
+  const empsVisiveis = state.role === 'corretor' ? db.loteamentos.filter(l => !ehCarteira(l)) : db.loteamentos;
   $$('.lot-select').forEach(sel => {
-    sel.innerHTML = db.loteamentos.length ? optionsHtml(db.loteamentos, lot ? lot.id : '') : '<option value="">Nenhum loteamento</option>';
-    sel.style.display = db.loteamentos.length > 1 ? '' : 'none';
+    sel.innerHTML = empsVisiveis.length ? optionsHtml(empsVisiveis, lot ? lot.id : '') : '<option value="">Nenhum empreendimento</option>';
+    sel.style.display = empsVisiveis.length > 1 ? '' : 'none';
   });
   $$('.lot-name').forEach(el => { el.textContent = lot ? lot.nome : (Cloud.org ? Cloud.org.nome : 'Gestão de Loteamento'); });
   $$('.user-name').forEach(el => { el.textContent = Cloud.active ? (Cloud.membro.nome || Cloud.user.email || '') : ''; el.style.display = Cloud.active ? '' : 'none'; });

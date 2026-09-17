@@ -196,7 +196,7 @@ function dadosBoleto(rec) {
   const nn = rec.nossoNumero || String(conta.nossoNumeroAtual || 1);
   const valor = recValor(rec);
   const cb = codigoBarras(conta, nn, rec.vencimento, valor);
-  const ctx = { lote: l ? loteLabel(l) : '', loteamento: lot ? lot.nome : '', cliente: v ? v.cliente.nome : '', parcela: rec.descricao };
+  const ctx = { lote: v ? imovelLabel(v) : '', loteamento: lot ? lot.nome : '', cliente: v ? v.cliente.nome : '', parcela: rec.descricao };
   const msg = t => String(t || '').replace(/\{\{(\w+)\}\}/g, (m, k) => ctx[k] || '');
   return {
     conta, perfil, nossoNumero: nn, valor, venda: v, lote: l, loteamento: lot, rec,
