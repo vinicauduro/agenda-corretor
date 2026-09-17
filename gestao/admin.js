@@ -952,7 +952,7 @@ function cadVitrineHtml() {
       <div class="fg"><label>Título da página</label><input type="text" id="vitTitulo" value="${esc(v ? v.titulo : '')}" placeholder="${esc(lot.nome)}"></div>
       <div class="fg"><label>Chamada de vendas</label><textarea id="vitChamada" placeholder="Lotes prontos para construir, com asfalto, água e luz. Entrada facilitada e parcelamento direto.">${esc(v ? v.chamada : '')}</textarea></div>
       <div class="frow"><div class="fg"><label>WhatsApp de atendimento</label><input type="tel" id="vitZap" value="${esc(v ? v.whatsapp : (db.config.telefone || ''))}" placeholder="(48) 99999-9999"></div>
-        <div class="fg"><label>Mostrar preços</label><select id="vitPreco"><option value="1" ${!v || v.mostrarPreco ? 'selected' : ''}>Sim, mostrar os valores</option><option value="0" ${v && !v.mostrarPreco ? 'selected' : ''}>Não, “valor sob consulta”</option></select></div></div>
+        <div class="fg"><label>Mostrar preços</label><select id="vitPreco"><option value="0" ${!v || !v.mostrarPreco ? 'selected' : ''}>Não, “valor sob consulta”</option><option value="1" ${v && v.mostrarPreco ? 'selected' : ''}>Sim, mostrar os valores</option></select></div></div>
       <label class="check"><input type="checkbox" id="vitAtiva" ${!v || v.ativa ? 'checked' : ''}> Vitrine no ar</label>
     </div>
     <div class="btn-row">

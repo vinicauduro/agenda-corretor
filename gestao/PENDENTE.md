@@ -7,19 +7,16 @@ sua conferência. Atualizada em 17/09/2026, depois da revisão de segurança e d
 
 ## 0. Antes de tudo
 
-- [ ] **Rodar o `schema.sql` mais uma vez** (17/09, fim do dia): entrou só uma correção na
-      limpeza de dados, que antes deixava categorias de despesa e modelos de documento para
-      trás ao importar um backup. Não é urgente, mas rode quando puder.
-- [x] ~~Rodar o `schema.sql` de novo~~ — feito por você em 17/09.
-- [ ] **Rodar o `schema.sql` de novo** no SQL Editor do Supabase. Cole o arquivo inteiro de
-      `gestao/supabase/schema.sql` e clique em Run. Ele é idempotente e não apaga nada.
-      Desde a última vez entraram: vitrine, leads, modelos de documento, índices, cobranças,
-      conta bancária e a separação do perfil financeiro. **Este passo é obrigatório agora**,
-      porque as regras de permissão do banco mudaram.
+- [x] ~~Rodar o `schema.sql`~~ — feito por você em 17/09, já com a separação do perfil
+      financeiro e os convites novos.
+- [ ] **Rodar o `schema.sql` uma última vez.** Depois daquela execução entraram duas coisas
+      pequenas: a limpeza de dados passou a apagar também categorias e modelos (antes sobrava
+      resto ao importar backup) e a semente de categorias de novas empresas já vem dividida.
+      Nenhuma das duas é urgente — só afeta importar backup e empresa criada daqui pra frente.
 - [ ] Abrir o app e forçar a atualização (Ctrl+Shift+R no computador) para pegar a versão nova.
       Endereço: https://vinicauduro.github.io/agenda-corretor/gestao/
 - [ ] Conferir se aparecem as abas novas: **Leads** no topo, e em Cadastros as abas
-      **Documentos**, **Índices**, **Cobrança** e **Vitrine**.
+      **Documentos**, **Índices**, **Cobrança**, **Banco**, **Vitrine** e **Permissões**.
 
 ---
 
@@ -31,9 +28,8 @@ sua conferência. Atualizada em 17/09/2026, depois da revisão de segurança e d
 - [ ] Testar o filtro **Só lotes sem posição** no seletor de lotes.
 - [ ] Em "Rotação e camadas do desenho (avançado)", testar ligar e desligar camadas.
 
-**Decisão pendente:** o DXF é uma revisão diferente do PDF. No DXF a quadra G tem 5 lotes,
-H tem 25, P tem 32, Q tem 7, R tem 18 e não existe quadra S. No PDF era G:12, H:17, P:20,
-Q:16 e existia S. Confirmar qual revisão vale.
+**Decidido em 17/09: vale o PDF.** O DXF era outra revisão. Você vai mandar a planta nova
+nos próximos dias, com as alterações do loteamento — quando chegar, eu reimporto.
 
 ---
 
@@ -80,9 +76,23 @@ hora de gerar e ficam guardados para a próxima.
 - Parcela paga congela o valor pago.
 - A entrada nunca é corrigida.
 
-**Decisão pendente:** se você lançar o índice de setembro só em outubro, a parcela de outubro
-recebe essa correção normalmente. Hoje isso vale mesmo com atraso no lançamento. Confirmar se
-é assim que quer, ou se prefere travar pela data em que o índice foi lançado.
+**Decidido em 17/09: o índice atrasado vale, mas com aviso.** Se a loteadora esqueceu de
+lançar, ela pode lançar depois e o valor da parcela em aberto muda. O que o índice alcança não
+mudou: cada parcela é corrigida pelos índices até o mês anterior ao vencimento dela, e só isso.
+
+- A parcela de novembro usa o índice de **outubro**. Lançar o índice de novembro depois não
+  mexe nela, nem que esteja vencida — vencida só toma multa e juros.
+- Parcela paga fica quitada, sem diferença a cobrar.
+- O saldo em aberto segue corrigido mês a mês, porque cada parcela futura carrega o índice
+  acumulado até o vencimento dela.
+
+**O que foi construído:** ao lançar, editar ou apagar o índice de um mês que já passou, o
+sistema mostra antes de salvar **o que muda, de quanto para quanto**, contrato por contrato,
+com o total da diferença. Quem já pagou aparece numa lista à parte, com o aviso de que não
+muda e quanto deixou de ser cobrado. Se o lançamento não mexe em parcela nenhuma, salva direto.
+
+- [ ] Testar: lance um mês antigo de propósito e confira a tela de diferença.
+- [ ] Lembrar que, se a parcela já virou boleto, o boleto precisa ser refeito.
 
 ---
 
@@ -95,9 +105,8 @@ recebe essa correção normalmente. Hoje isso vale mesmo com atraso no lançamen
       livre, nos dois modos, reduzindo prazo e reduzindo parcela.
 - [ ] Imprimir o demonstrativo e conferir se está apresentável para o cliente.
 
-**Decisão pendente:** hoje o desconto é o juro integral dos meses não usados, que é o cálculo
-financeiro puro. Se você quiser uma política comercial diferente, como cobrar taxa de
-antecipação ou limitar o desconto, é só dizer.
+**Decidido em 17/09:** o desconto é exatamente o juro cobrado no contrato, sobre os meses que
+o cliente não usou. É o que já está implementado. Sem taxa de antecipação e sem teto.
 
 ---
 
@@ -116,7 +125,9 @@ antecipação ou limitar o desconto, é só dizer.
 
 - [ ] Publicar a vitrine do Hessen em Cadastros › Vitrine e abrir o link no celular.
 - [ ] Mandar um interesse de teste e ver chegar na aba Leads.
-- [ ] Decidir se os preços aparecem ou ficam como "valor sob consulta".
+- [x] ~~Decidir se os preços aparecem~~ — **decidido em 17/09: "valor sob consulta"**. A
+      vitrine já nasce assim, e o preço nem sai do banco para quem não tem login. Se um dia
+      quiser mostrar, é um seletor em Cadastros › Vitrine.
 
 **Combinado:** a aba Leads fica em segundo plano. Existe e funciona, mas não é prioridade.
 

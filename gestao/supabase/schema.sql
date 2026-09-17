@@ -597,7 +597,7 @@ create table if not exists public.vitrines (
   loteamento_id text not null,
   slug          text not null,
   ativa         boolean not null default true,
-  mostrar_preco boolean not null default true,
+  mostrar_preco boolean not null default false,   -- por decisão de uso: 'valor sob consulta'
   titulo        text not null default '',
   chamada       text not null default '',
   whatsapp      text not null default '',
