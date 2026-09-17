@@ -129,7 +129,7 @@ function remessaBB(conta, itens, opc) {
          usuário digitou do manual do banco dele. Sem isso, 00 = nenhuma instrução. */
       pad(o.instrucao1 || conta.instrucao1 || '00', 2),
       pad(o.instrucao2 || conta.instrucao2 || '00', 2),
-      dinheiro(num(it.valor) * num(conta.jurosDia) / 100, 13),              // 161-173 juros por dia, em reais
+      dinheiro(num(it.valor) * jurosDiaDaConta(conta) / 100, 13),           // 161-173 juros por dia, em reais
       num(conta.descontoPct) > 0 ? dataDDMMAA(it.vencimento) : '000000',
       dinheiro(num(it.valor) * num(conta.descontoPct) / 100, 13),
       dinheiro(0, 13), dinheiro(0, 13),             // IOF e abatimento

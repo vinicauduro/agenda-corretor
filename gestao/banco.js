@@ -118,6 +118,11 @@ function barrasSvg(cb, altura) {
 }
 
 // ================================================================ CADASTRO DA CONTA
+/* O contrato fala em juros ao mês; o arquivo do banco quer o valor em reais por dia.
+   Contas antigas guardavam só o valor ao dia, então a conversão aceita os dois. */
+function jurosMesDaConta(c) { return c && c.jurosMesPct != null ? num(c.jurosMesPct) : num((c || {}).jurosDia) * 30; }
+function jurosDiaDaConta(c) { return jurosMesDaConta(c) / 30; }
+function fmtNumPlano(v) { return String(Math.round(num(v) * 10000) / 10000).replace('.', ','); }
 function contaCobranca(loteamentoId) {
   return db.contasBanco.find(c => c.loteamentoId === loteamentoId) || db.contasBanco.find(c => !c.loteamentoId) || null;
 }
@@ -129,7 +134,7 @@ function cadBancoHtml() {
   const editandoId = state.sub.contaEdit;
   const lista = db.contasBanco;
   if (!editandoId && lista.length) return listaContasHtml(lista);
-  const c = (editandoId && db.contasBanco.find(x => x.id === editandoId)) || { banco: '001', carteira: '17', variacao: '019', nossoNumeroAtual: 1, remessaSeq: 1, protestoDias: 0, baixaDias: 0, multaPct: num(db.config.multaPct), jurosDia: num(db.config.jurosMesPct) / 30, descontoPct: 0, especie: 'DM', aceite: 'N', mensagem1: '', mensagem2: '' };
+  const c = (editandoId && db.contasBanco.find(x => x.id === editandoId)) || { banco: '001', carteira: '17', variacao: '019', nossoNumeroAtual: 1, remessaSeq: 1, protestoDias: 0, baixaDias: 0, multaPct: num(db.config.multaPct) || 2, jurosMesPct: num(db.config.jurosMesPct) || 1, descontoPct: 0, especie: 'DM', aceite: 'N', mensagem1: '', mensagem2: '' };
   const perfil = BANCOS[pad(c.banco, 3)] || BANCOS['001'];
   return `<div class="card"><h3>🏦 ${c.id ? 'Editar conta de cobrança' : 'Nova conta de cobrança'} ${lista.length ? '<span class="h-actions"><button class="btn btn-secondary btn-sm" onclick="state.sub.contaEdit=null;renderCadastros()">‹ Voltar</button></span>' : ''}</h3>
     <p class="help">Dados do convênio de cobrança registrada da empresa. Eles vão no boleto e no arquivo de remessa. Cada empresa preenche os seus; o layout de cada banco é do sistema.</p>
@@ -150,7 +155,7 @@ function cadBancoHtml() {
     <div class="alert info" style="cursor:default"><span><b>Vindo de outro sistema?</b> O banco recusa título cujo nosso número já foi usado neste convênio, e não existe jeito de descobrir onde o outro sistema parou — ele continua consumindo números enquanto os dois rodam. Em vez de tentar continuar a contagem, comece numa <b>faixa separada e bem alta</b>, por exemplo <b>1000000</b>. São 10 dígitos disponíveis, quase 10 bilhões de números: não há risco de um alcançar o outro.</span></div>
     <div class="fieldset"><span class="lg">📄 Instruções do boleto</span>
       <div class="frow3"><div class="fg"><label>Multa por atraso (%)</label><input type="number" id="bcMulta" step="0.01" value="${c.multaPct ?? 2}"></div>
-        <div class="fg"><label>Juros ao dia (%)</label><input type="number" id="bcJuros" step="0.001" value="${c.jurosDia ?? 0.033}"></div>
+        <div class="fg"><label>Juros de mora (% ao mês)</label><input type="number" id="bcJuros" step="0.01" value="${fmtNumPlano(jurosMesDaConta(c))}"><div class="hint">O banco cobra por dia; o sistema divide por 30 sozinho.</div></div>
         <div class="fg"><label>Desconto até o vencimento (%)</label><input type="number" id="bcDesc" step="0.01" value="${c.descontoPct ?? 0}"></div></div>
       <div class="frow3"><div class="fg"><label>Protestar após (dias)</label><input type="number" id="bcProtesto" value="${c.protestoDias ?? 0}"><div class="hint">0 = não protestar</div></div>
         <div class="fg"><label>Baixar após vencimento (dias)</label><input type="number" id="bcBaixa" value="${c.baixaDias ?? 0}"></div>
@@ -191,7 +196,7 @@ function salvarContaBanco(id) {
     loteamentoId: val('bcEmp') || '', banco: val('bcBanco'), carteira: val('bcCarteira'), variacao: val('bcVariacao'),
     agencia: val('bcAgencia'), agenciaDv: val('bcAgenciaDv'), conta: val('bcConta'), contaDv: val('bcContaDv'),
     convenio: val('bcConvenio'), nossoNumeroAtual: Math.max(1, Math.round(num(val('bcNN')))), nnMax: prev ? num(prev.nnMax) : 0, remessaSeq: Math.max(1, Math.round(num(val('bcSeq')))),
-    multaPct: num(val('bcMulta')), jurosDia: num(val('bcJuros')), descontoPct: num(val('bcDesc')),
+    multaPct: num(val('bcMulta')), jurosMesPct: num(val('bcJuros')), jurosDia: num(val('bcJuros')) / 30, descontoPct: num(val('bcDesc')),
     protestoDias: Math.round(num(val('bcProtesto'))), baixaDias: Math.round(num(val('bcBaixa'))),
     especie: val('bcEspecie'), aceite: 'N', instrucao1: soDigitos(val('bcInstr1')).slice(0, 2), instrucao2: soDigitos(val('bcInstr2')).slice(0, 2),
     mensagem1: val('bcMsg1'), mensagem2: val('bcMsg2')
@@ -242,7 +247,7 @@ function boletoHtml(d) {
       <tr><td><small>Vencimento</small><b>${fmtDate(d.rec.vencimento)}</b></td><td><small>Nosso número</small>${esc(d.nossoNumeroImpresso)}</td><td><small>Carteira</small>${esc(c.carteira)}</td><td><small>Valor do documento</small><b>${fmtMoney(d.valor)}</b></td></tr>
       <tr><td colspan="4"><small>Pagador</small>${linhaCliente}</td></tr>
       <tr><td colspan="4"><small>Instruções</small>
-        ${c.multaPct ? `Após o vencimento, multa de ${fmtNum(c.multaPct, 2)}%` : ''}${c.jurosDia ? ` e juros de ${fmtNum(c.jurosDia, 3)}% ao dia` : ''}.
+        ${c.multaPct ? `Após o vencimento, multa de ${fmtNum(c.multaPct, 2)}%` : ''}${jurosMesDaConta(c) ? ` e juros de ${fmtNum(jurosMesDaConta(c), 2)}% ao mês` : ''}.
         ${c.protestoDias ? `Protestar após ${c.protestoDias} dias do vencimento.` : ''}
         ${d.mensagem1 ? `<br>${esc(d.mensagem1)}` : ''}${d.mensagem2 ? `<br>${esc(d.mensagem2)}` : ''}</td></tr>
     </table>

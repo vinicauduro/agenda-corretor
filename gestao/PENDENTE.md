@@ -328,14 +328,15 @@ O corretor não muda: continua vendo planta e reservando lote, e carteiras não 
 
 Nenhuma me trava hoje, mas todas mudam o produto:
 
-- [ ] **Carteira precisa de orçamento de custos?** Hoje a carteira de imóveis avulsos mostra a
-      mesma tela de orçamento do loteamento. Para incorporação faz sentido; para imóvel de
-      terceiro, provavelmente não.
-- [ ] **Multa e juros padrão do loteamento.** O arquivo do BB que você mandou é de locação:
-      multa 10% e juros 0,067% ao dia (~2% ao mês). Para venda de lote o teto do Código de
-      Defesa do Consumidor é 2% de multa. Defina o seu padrão em Cadastros › Banco.
-- [ ] **Divisão dos planos do SaaS** — você disse que ia mandar a sua.
-- [ ] **Nome do produto e domínio** — trava a página de vendas e a saída do GitHub.
+- [x] ~~Carteira precisa de orçamento de custos?~~ — **não.** Imóvel de terceiros não tem obra:
+      a carteira perdeu a aba de obra e o orçamento no resumo. Se uma carteira já tiver custo
+      lançado, a aba reaparece, para não esconder dado que alguém registrou.
+- [x] ~~Multa e juros padrão~~ — **multa 2% e juros 1% ao mês**, já pré-preenchidos em toda
+      conta nova. O cliente muda como quiser em Cadastros › Banco. O campo de juros agora é em
+      **% ao mês**, do jeito que o contrato fala; o sistema converte para o valor por dia que o
+      banco pede.
+- [ ] **Divisão dos planos do SaaS** — ainda não definida.
+- [x] ~~Nome do produto~~ — **Lotifly**, provável. Falta confirmar e registrar o domínio.
 
 ---
 
@@ -360,7 +361,9 @@ comissão é definida em cada venda.
 Decidido em conversa: sair do endereço do GitHub e ir para domínio próprio, com página de
 vendas e área de login.
 
-- [ ] Escolher o **nome do produto** e o domínio.
+- [ ] Confirmar o nome: **Lotifly**. Conferir se `lotifly.com.br` e `lotifly.com` estão livres
+      (registro.br e qualquer registrador internacional) e se não há marca registrada no INPI
+      em classe parecida. Se estiver livre, registrar antes de falar do nome por aí.
 - [ ] Registrar o domínio (registro.br para .com.br).
 - [ ] Definir se o e-mail profissional será Zoho gratuito ou Google Workspace.
 

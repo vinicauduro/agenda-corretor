@@ -35,9 +35,13 @@ const EMP_SUBS = [
   ['custos', '🧾 Obra e custos', 'custos.ver'],
   ['leads', '🎯 Leads', 'leads.ver']
 ];
+/* Numa carteira de imóveis de terceiros não existe planta, lote, reserva nem obra: o imóvel
+   não é seu, você só administra o recebível. A aba de custos só reaparece se a carteira já
+   tiver lançamento, para não esconder dado que alguém já registrou. */
 function empSubsVisiveis(lot) {
-  const soLoteamento = ['planta', 'lotes', 'reservas'];
-  return EMP_SUBS.filter(([k, , chave]) => (!chave || pode(chave)) && !(ehCarteira(lot) && soLoteamento.includes(k)));
+  if (!lot) return EMP_SUBS.filter(([, , chave]) => !chave || pode(chave));
+  const fora = ehCarteira(lot) ? ['planta', 'lotes', 'reservas'].concat(custosDo(lot.id).length ? [] : ['custos']) : [];
+  return EMP_SUBS.filter(([k, , chave]) => (!chave || pode(chave)) && !fora.includes(k));
 }
 function abrirEmpreendimento(id, sub) {
   state.empAberto = id; if (id) setCurLotSilencioso(id);
@@ -790,9 +794,9 @@ function cadLoteamentoHtml() {
   return `<div class="card"><h3>${ehCarteira(lot) ? '🏠' : '🏘️'} ${esc(lot.nome)} <span class="badge neutral">${esc(empLabel(lot))}</span> <span class="h-actions"><button class="btn btn-secondary btn-sm" onclick="abrirLoteamentoForm('${lot.id}')">✏️ Editar</button></span></h3>
       <div class="detail-grid"><div><div class="k">Cidade</div><div class="v">${esc(lot.cidade) || '—'}</div></div><div><div class="k">Endereço</div><div class="v">${esc(lot.endereco) || '—'}</div></div><div class="full"><div class="k">Descrição (aparece para os corretores)</div><div class="v">${esc(lot.descricao) || '—'}</div></div>
       <div><div class="k">Entrada mínima</div><div class="v">${fmtNum(c.entradaMinPct || 0, 0)}%</div></div><div><div class="k">Parcelas máx.</div><div class="v">${c.maxParcelas || '—'}</div></div><div><div class="k">Juros</div><div class="v">${c.jurosMes ? fmtNum(c.jurosMes, 2) + '% a.m.' : 'sem juros'}</div></div><div><div class="k">Desconto à vista</div><div class="v">${fmtNum(c.descontoVistaPct || 0, 0)}%</div></div></div></div>
-    <div class="card"><h3>📋 Orçamento de custos por categoria <span class="h-actions"><button class="btn btn-secondary btn-sm" onclick="abrirOrcamentoForm()">✏️ Editar</button></span></h3>
+    ${ehCarteira(lot) && !custosDo(lot.id).length ? '' : `<div class="card"><h3>📋 Orçamento de custos por categoria <span class="h-actions"><button class="btn btn-secondary btn-sm" onclick="abrirOrcamentoForm()">✏️ Editar</button></span></h3>
       ${db.categorias.filter(cat => num(orc[cat.id]) > 0).map(cat => { const real = cs.filter(x => x.categoriaId === cat.id).reduce((s, x) => s + num(x.valor), 0); const pct = Math.round(real / orc[cat.id] * 100); return `<div class="mb"><div class="row-between small"><span><span class="dot" style="background:${cat.cor}"></span> ${esc(cat.nome)}</span><span class="muted">${fmtMoney(real)} de ${fmtMoney(orc[cat.id])} (${pct}%)</span></div><div class="progress"><div class="${pct > 100 ? 'over' : pct >= 90 ? 'warn' : ''}" style="width:${Math.min(100, pct)}%"></div></div></div>`; }).join('') || '<p class="help">Nenhum orçamento definido. Defina o valor planejado por categoria para acompanhar orçado × realizado.</p>'}
-      ${Object.values(orc).some(x => num(x) > 0) ? `<p class="small mt"><b>Total orçado: ${fmtMoney(Object.values(orc).reduce((s, x) => s + num(x), 0))}</b> · realizado ${fmtMoney(cs.reduce((s, x) => s + num(x.valor), 0))}</p>` : ''}</div>`;
+      ${Object.values(orc).some(x => num(x) > 0) ? `<p class="small mt"><b>Total orçado: ${fmtMoney(Object.values(orc).reduce((s, x) => s + num(x), 0))}</b> · realizado ${fmtMoney(cs.reduce((s, x) => s + num(x.valor), 0))}</p>` : ''}</div>`}`;
 }
 function abrirLoteamentoForm(id) {
   const l = id ? getLoteamento(id) : null; const c = (l && l.cond) || { entradaMinPct: 10, maxParcelas: 120, jurosMes: 0, descontoVistaPct: 5 };
@@ -800,7 +804,7 @@ function abrirLoteamentoForm(id) {
   const body = `<div class="fg"><label>Tipo *</label><select id="lmTipo" ${l ? 'disabled' : ''}>
       <option value="loteamento" ${tipo === 'loteamento' ? 'selected' : ''}>Loteamento — com planta e lotes numerados</option>
       <option value="carteira" ${tipo === 'carteira' ? 'selected' : ''}>Carteira — imóveis avulsos, sem planta</option></select>
-      <div class="hint">${l ? 'O tipo não muda depois de criado.' : 'Na carteira cada venda descreve o imóvel. Serve para apartamento, sala, casa, terreno de terceiros — tudo que não é lote do seu loteamento.'}</div></div>
+      <div class="hint">${l ? 'O tipo não muda depois de criado.' : 'Na carteira cada venda descreve o imóvel. Serve para apartamento, sala, casa, terreno de terceiros — tudo que não é lote do seu loteamento. Como o imóvel não é seu, ela não tem planta, lote, reserva nem controle de obra: só a venda e o recebível.'}</div></div>
     <div class="fg"><label>Nome *</label><input type="text" id="lmNome" value="${esc(l ? l.nome : '')}" placeholder="Ex.: Residencial Vista Verde"></div>
     <div class="frow"><div class="fg"><label>Cidade / UF</label><input type="text" id="lmCidade" value="${esc(l ? l.cidade || '' : '')}"></div><div class="fg"><label>Endereço / acesso</label><input type="text" id="lmEnd" value="${esc(l ? l.endereco || '' : '')}"></div></div>
     <div class="fg"><label>Descrição para os corretores</label><textarea id="lmDesc" placeholder="Infraestrutura, diferenciais, área de lazer…">${esc(l ? l.descricao || '' : '')}</textarea></div>
