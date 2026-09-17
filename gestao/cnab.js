@@ -259,7 +259,7 @@ function mensagemDoTitulo(conta, r) {
 }
 /* Monta e grava uma remessa. novas: parcelas a registrar; pendentes: [{r, acao}] de
    alteração ou baixa. Devolve o texto do arquivo ou null se não havia nada. */
-function emitirRemessa(lot, conta, novas, pendentes) {
+function emitirRemessa(conta, novas, pendentes) {
   let nn = proximoNossoNumero(conta);
   const proximoLivre = () => { while (nossoNumeroEmUso(conta, nn)) nn++; if (nn > NOSSO_NUMERO_MAX) throw new Error('O nosso número passou de 10 dígitos. Fale comigo antes de continuar.'); return nn; };
   const itens = [], atualizar = [];
@@ -291,7 +291,7 @@ function emitirRemessa(lot, conta, novas, pendentes) {
   const registrados = itens.filter(i => i.comando === '01');
   const total = registrados.reduce((s, x) => s + x.valor, 0);
   const nome = 'CB' + pad(seq, 6) + '.REM';
-  upsert('remessas', { id: genId(), loteamentoId: lot.id, contaId: conta.id, sequencial: seq, data: todayStr(), arquivo: nome,
+  upsert('remessas', { id: genId(), loteamentoId: conta.loteamentoId || '', contaId: conta.id, sequencial: seq, data: todayStr(), arquivo: nome,
     qtd: registrados.length, baixas: itens.length - registrados.length, valor: Math.round(total * 100) / 100,
     recIds: atualizar.map(r => r.id), primeiroNn: registrados.length ? String(registrados[0].nossoNumero) : '', ultimoNn: registrados.length ? String(registrados[registrados.length - 1].nossoNumero) : '',
     criadoEm: new Date().toISOString() });
@@ -299,39 +299,57 @@ function emitirRemessa(lot, conta, novas, pendentes) {
   logAct(`Remessa ${seq}: ${registrados.length} título(s) registrado(s), ${itens.length - registrados.length} baixa(s), ${fmtMoney(total)}`);
   return texto;
 }
-function contaPronta(lot) {
-  const conta = contaCobranca(lot.id);
-  if (!conta) {
-    openModal({ title: '🏦 Falta a conta de cobrança', body: '<p class="help">Antes de gerar cobranças, cadastre o convênio da empresa em <b>Cadastros › 🏦 Banco</b>: agência, conta, convênio, carteira e as instruções padrão do boleto (multa, juros, protesto, baixa).</p>', footer: '<button class="btn btn-primary" onclick="closeModal();switchTab(\'cadastros\');state.sub.cad=\'banco\';renderCadastros()">Ir para o cadastro</button>' });
-    return null;
-  }
-  if (!layoutCnab(conta.banco)) { toast('⚠️', 'Banco sem layout', 'Hoje só o Banco do Brasil gera remessa.', true); return null; }
-  return conta;
+/* ---------------------------------------------------------------- contas de cobrança
+   O banco exige um arquivo de remessa por convênio — isso nunca teve a ver com
+   empreendimento. Então a cobrança é organizada por CONTA: com uma conta só, tudo sai junto;
+   com mais de uma, o financeiro escolhe de qual conta é a remessa. Qual conta cobra uma
+   parcela continua vindo do empreendimento dela (conta sem empreendimento vale para todos). */
+function contaDoRec(rec) { return contaCobranca(rec.loteamentoId); }
+function contasComLayout() { return db.contasBanco.filter(c => layoutCnab(c.banco)); }
+function contaLabel(c) {
+  if (!c) return '';
+  const b = BANCOS[pad(c.banco, 3)];
+  const emp = c.loteamentoId && getLoteamento(c.loteamentoId);
+  return `${b ? b.nome : c.banco} · ag ${c.agencia}/${c.conta}${emp ? ' · ' + emp.nome : ''}`;
+}
+function contaAtual() {
+  const contas = contasComLayout();
+  if (!contas.length) return null;
+  return contas.find(c => c.id === state.contaId) || contas[0];
+}
+function recDaConta(rec, conta) { const c = contaDoRec(rec); return !!c && !!conta && c.id === conta.id; }
+function avisoSemConta() {
+  openModal({ title: '🏦 Falta a conta de cobrança', body: '<p class="help">Antes de gerar cobranças, cadastre o convênio da empresa em <b>Cadastros › 🏦 Banco</b>: agência, conta, convênio, carteira e as instruções padrão do boleto.</p>', footer: '<button class="btn btn-primary" onclick="closeModal();switchTab(\'cadastros\');state.sub.cad=\'banco\';renderCadastros()">Ir para o cadastro</button>' });
 }
 
 // ================================================================ TELA: GERAR COBRANÇAS DO MÊS
-function abrirGerarCobrancas(mes) {
+function abrirGerarCobrancas(mes, contaId) {
   if (!pode('financeiro.baixar')) { toast('🔒', 'Sem permissão', 'Seu perfil não gera cobranças.', true); return; }
-  /* A conta de cobrança é de cada empreendimento, então a remessa também é. */
-  comEmpreendimento('🧾 Gerar cobranças', 'A conta de cobrança é de cada empreendimento, então a remessa sai de um por vez.',
-    lot => gerarCobrancasTela(lot, mes), l => !!contaCobranca(l.id) && !!layoutCnab(contaCobranca(l.id).banco));
-}
-function gerarCobrancasTela(lot, mes) {
-  const conta = contaPronta(lot); if (!conta) return;
+  if (!contasComLayout().length) { avisoSemConta(); return; }
+  if (contaId) state.contaId = contaId;
+  const conta = contaAtual();
   const m = mes || state.sub.cobMes || mesAtual();
   state.sub.cobMes = m;
-  const parcelas = parcelasDoMes(lot.id, m);
-  const geradas = parcelas.filter(registradaNoBanco);
-  const abertas = parcelas.filter(r => !registradaNoBanco(r));
+  const contas = contasComLayout();
+
+  const doMes = parcelasDoMes('', m).filter(r => recDaConta(r, conta));
+  const geradas = doMes.filter(registradaNoBanco);
+  const abertas = doMes.filter(r => !registradaNoBanco(r));
   const travadas = abertas.map(r => ({ r, motivo: bloqueioRemessa(r) })).filter(x => x.motivo);
   const prontas = abertas.filter(r => !bloqueioRemessa(r));
-  const pend = pendentesDeRemessa(lot.id);
+  const pend = pendentesDeRemessa('').filter(x => recDaConta(x.r, conta));
   const semIndice = {};
   travadas.forEach(x => { const v = getVenda(x.r.vendaId); if (v) semIndice[v.id] = x.motivo; });
   const total = prontas.reduce((s, r) => s + recValor(r), 0);
+  const multiEmp = new Set(prontas.map(r => r.loteamentoId)).size > 1;
+
   openModal({
     title: '🧾 Gerar cobranças', wide: true,
-    body: `<div class="subtabs" style="justify-content:center"><div class="chip" onclick="gerarCobrancasTela(getLoteamento('${lot.id}'),'${mesAnterior(m)}')">‹ ${monthLabel(mesAnterior(m))}</div><div class="chip active">${esc(lot.nome)} · ${monthLabel(m)}</div><div class="chip" onclick="gerarCobrancasTela(getLoteamento('${lot.id}'),'${mesSeguinte(m)}')">${monthLabel(mesSeguinte(m))} ›</div></div>
+    body: `<div class="subtabs" style="justify-content:center"><div class="chip" onclick="abrirGerarCobrancas('${mesAnterior(m)}')">‹ ${monthLabel(mesAnterior(m))}</div><div class="chip active">${monthLabel(m)}</div><div class="chip" onclick="abrirGerarCobrancas('${mesSeguinte(m)}')">${monthLabel(mesSeguinte(m))} ›</div></div>
+      ${contas.length > 1 ? `<div class="fg"><label>Conta de cobrança</label>
+        <select onchange="abrirGerarCobrancas('${m}', this.value)">${contas.map(c => `<option value="${esc(c.id)}" ${conta.id === c.id ? 'selected' : ''}>${esc(contaLabel(c))}</option>`).join('')}</select>
+        <div class="hint">O banco aceita um arquivo por convênio, então a remessa sai de uma conta por vez. Os empreendimentos que cobram por esta conta entram todos juntos.</div></div>`
+        : `<p class="help mb">Cobrança por <b>${esc(contaLabel(conta))}</b> — todos os empreendimentos juntos.</p>`}
       <div class="kpi-grid">
         <div class="kpi ${Object.keys(semIndice).length ? 'c-red' : 'c-green'}"><div class="lbl">Contratos sem índice do mês</div><div class="val">${Object.keys(semIndice).length}</div><div class="sub">${Object.keys(semIndice).length ? 'lance o índice antes de gerar' : 'todos os índices lançados'}</div></div>
         <div class="kpi c-blue"><div class="lbl">Já geradas em ${monthLabel(m)}</div><div class="val">${geradas.length}</div><div class="sub">registradas no banco</div></div>
@@ -343,71 +361,81 @@ function gerarCobrancasTela(lot, mes) {
       ${pend.length ? `<div class="alert warn" style="cursor:default"><span><b>${pend.length} cobrança(s) alterada(s) depois de registrada(s)</b> vão junto nesta remessa, para o banco atualizar: ${pend.filter(x => x.acao === 'alterar').length} alteração(ões) e ${pend.filter(x => x.acao === 'baixar').length} baixa(s).</span></div>` : ''}
       ${prontas.length ? `<div class="card"><h3>O que vai ser gerado</h3>
         <p class="help">Uma cobrança por parcela. O sistema numera o nosso número, marca como registrada e gera o arquivo de remessa para você enviar ao banco.</p>
-        <div class="table-wrap"><table class="tbl"><thead><tr><th>Cliente</th><th>Lote</th><th>Parcela</th><th>Vencimento</th><th class="num">Valor</th></tr></thead><tbody>
-        ${prontas.map(r => { const v = getVenda(r.vendaId); return `<tr><td>${esc(v.cliente.nome || '')}</td><td>${esc(imovelShort(v))}</td><td>${esc(r.descricao || '')}</td><td>${fmtDate(r.vencimento)}</td><td class="num">${esc(fmtMoney(recValor(r)))}</td></tr>`; }).join('')}
-        </tbody><tfoot><tr><td colspan="4">Total</td><td class="num">${esc(fmtMoney(total))}</td></tr></tfoot></table></div></div>`
-        : `<div class="empty"><div class="ic">📭</div><p><b>Nada a gerar em ${monthLabel(m)}</b></p><p class="small">${geradas.length ? 'As cobranças deste mês já foram geradas.' : 'Nenhuma parcela em aberto neste mês.'}</p></div>`}`,
+        <div class="table-wrap"><table class="tbl"><thead><tr><th>Cliente</th><th>Imóvel</th>${multiEmp ? '<th>Empreendimento</th>' : ''}<th>Parcela</th><th>Vencimento</th><th class="num">Valor</th></tr></thead><tbody>
+        ${prontas.map(r => { const v = getVenda(r.vendaId); return `<tr><td>${esc(v.cliente.nome || '')}</td><td>${esc(imovelShort(v))}</td>${multiEmp ? `<td>${esc((getLoteamento(r.loteamentoId) || {}).nome || '')}</td>` : ''}<td>${esc(r.descricao || '')}</td><td>${fmtDate(r.vencimento)}</td><td class="num">${esc(fmtMoney(recValor(r)))}</td></tr>`; }).join('')}
+        </tbody><tfoot><tr><td colspan="${multiEmp ? 5 : 4}">Total</td><td class="num">${esc(fmtMoney(total))}</td></tr></tfoot></table></div></div>`
+        : `<div class="empty"><div class="ic">📭</div><p><b>Nada a gerar em ${monthLabel(m)}</b></p><p class="small">${geradas.length ? 'As cobranças deste mês já foram geradas.' : 'Nenhuma parcela em aberto neste mês nesta conta.'}</p></div>`}`,
     footer: `<button class="btn btn-secondary" onclick="closeModal()">Fechar</button>
-      ${prontas.length ? `<button class="btn btn-outline" onclick="simularCobrancas('${lot.id}','${m}')">🖨️ Simular</button><button class="btn btn-primary" onclick="gerarCobrancas('${lot.id}','${m}')">Gerar agora</button>` : pend.length ? `<button class="btn btn-primary" onclick="gerarRemessaPendente('${lot.id}')">Gerar remessa das alterações</button>` : ''}`
+      ${prontas.length ? `<button class="btn btn-outline" onclick="simularCobrancas('${conta.id}','${m}')">🖨️ Simular</button><button class="btn btn-primary" onclick="gerarCobrancas('${conta.id}','${m}')">Gerar agora</button>` : pend.length ? `<button class="btn btn-primary" onclick="gerarRemessaPendente('${conta.id}')">Gerar remessa das alterações</button>` : ''}`
   });
 }
 /* Simulação em PDF: o que sairia se você gerasse agora, agrupado por cliente, como o
    financeiro está acostumado a conferir antes de mandar ao banco. */
-function simularCobrancas(lotId, mes) {
-  const lot = getLoteamento(lotId); const conta = contaCobranca(lot.id);
-  const prontas = parcelasDoMes(lot.id, mes).filter(r => !registradaNoBanco(r) && !bloqueioRemessa(r));
+function simularCobrancas(contaId, mes) {
+  const conta = db.contasBanco.find(c => c.id === contaId); if (!conta) return;
+  const prontas = parcelasDoMes('', mes).filter(r => recDaConta(r, conta) && !registradaNoBanco(r) && !bloqueioRemessa(r));
   const porVenda = {};
   prontas.forEach(r => { (porVenda[r.vendaId] = porVenda[r.vendaId] || []).push(r); });
   const total = prontas.reduce((s, r) => s + recValor(r), 0);
   $('#printArea').innerHTML = `
-    <h1>${esc(db.config.empresa || lot.nome)}</h1>
+    <h1>${esc(db.config.empresa || '')}</h1>
     <h2>Simulação da geração de cobranças — ${monthLabel(mes)}</h2>
-    <p>${esc(lot.nome)} · ${prontas.length} cobrança(s) · ${esc(fmtMoney(total))} · ${conta ? 'Banco ' + esc(BANCOS[pad(conta.banco, 3)].nome) + ', convênio ' + esc(conta.convenio) : ''}</p>
-    ${Object.keys(porVenda).map(vid => { const v = getVenda(vid); const recs = porVenda[vid];
-      return `<h3 style="margin:14px 0 4px">${esc(v.cliente.nome || '')} — ${esc(imovelLabel(v))}</h3>
+    <p>${esc(contaLabel(conta))} · convênio ${esc(conta.convenio)} · ${prontas.length} cobrança(s) · ${esc(fmtMoney(total))}</p>
+    ${Object.keys(porVenda).map(vid => { const v = getVenda(vid); const recs = porVenda[vid]; const lt = getLoteamento(v.loteamentoId);
+      return `<h3 style="margin:14px 0 4px">${esc(v.cliente.nome || '')} — ${esc(imovelLabel(v))}${lt ? ' · ' + esc(lt.nome) : ''}</h3>
         <table class="tbl"><thead><tr><th>Parcela</th><th>Vencimento</th><th>Valor base</th><th>Correção</th><th>Total</th></tr></thead><tbody>
         ${recs.map(r => `<tr><td>${esc(r.descricao || '')}</td><td>${fmtDate(r.vencimento)}</td><td>${esc(fmtMoney(r.valor))}</td><td>${esc(fmtMoney(recCorrecao(r)))}</td><td><b>${esc(fmtMoney(recValor(r)))}</b></td></tr>`).join('')}
         </tbody></table><p style="text-align:right"><b>Total do cliente: ${esc(fmtMoney(recs.reduce((s, r) => s + recValor(r), 0)))}</b></p>`; }).join('')}
     <p style="margin-top:14px">Simulação emitida em ${fmtDate(todayStr())}. Nada foi gerado nem enviado ao banco.</p>`;
   window.print();
 }
-function gerarCobrancas(lotId, mes) {
-  const lot = getLoteamento(lotId); const conta = contaPronta(lot); if (!conta) return;
-  const prontas = parcelasDoMes(lot.id, mes).filter(r => !registradaNoBanco(r) && !bloqueioRemessa(r));
-  const pend = pendentesDeRemessa(lot.id);
+function gerarCobrancas(contaId, mes) {
+  const conta = db.contasBanco.find(c => c.id === contaId); if (!conta) return;
+  const prontas = parcelasDoMes('', mes).filter(r => recDaConta(r, conta) && !registradaNoBanco(r) && !bloqueioRemessa(r));
+  const pend = pendentesDeRemessa('').filter(x => recDaConta(x.r, conta));
   let texto;
-  try { texto = emitirRemessa(lot, conta, prontas, pend); }
+  try { texto = emitirRemessa(conta, prontas, pend); }
   catch (e) { toast('⚠️', 'Falha ao montar o arquivo', e.message, true); return; }
   if (!texto) { toast('⚠️', 'Nada a gerar', '', true); return; }
   closeModal(); renderCurrent();
   toast('✅', 'Cobranças geradas', `${prontas.length} título(s) em ${monthLabel(mes)}${pend.length ? ' + ' + pend.length + ' alteração(ões)' : ''}. Envie o arquivo ao banco.`);
 }
 /* Só as alterações e baixas pendentes, sem gerar cobrança nova. É o botão do aviso. */
-function gerarRemessaPendente(lotId) {
+function gerarRemessaPendente(contaId) {
   if (!pode('financeiro.baixar')) { toast('🔒', 'Sem permissão', '', true); return; }
-  if (!lotId) { comEmpreendimento('📤 Remessa de alterações', 'De qual empreendimento?', l => gerarRemessaPendente(l.id), l => pendentesDeRemessa(l.id).length); return; }
-  const lot = getLoteamento(lotId); const conta = contaPronta(lot); if (!conta) return;
-  const pend = pendentesDeRemessa(lot.id);
-  if (!pend.length) { toast('ℹ️', 'Nada pendente', '', true); return; }
+  const contas = contasComLayout();
+  if (!contas.length) { avisoSemConta(); return; }
+  const alvo = contaId ? db.contasBanco.find(c => c.id === contaId) : null;
+  if (!alvo) {
+    const comPend = contas.filter(c => pendentesDeRemessa('').some(x => recDaConta(x.r, c)));
+    if (!comPend.length) { toast('ℹ️', 'Nada pendente', '', true); return; }
+    if (comPend.length === 1) return gerarRemessaPendente(comPend[0].id);
+    openModal({ title: '📤 Remessa de alterações', body: `<p class="help mb">O banco aceita um arquivo por convênio. De qual conta é esta remessa?</p>
+      <div class="fg"><label>Conta</label><select id="rpConta">${comPend.map(c => `<option value="${esc(c.id)}">${esc(contaLabel(c))} — ${pendentesDeRemessa('').filter(x => recDaConta(x.r, c)).length} título(s)</option>`).join('')}</select></div>`,
+      footer: `<button class="btn btn-secondary" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" onclick="gerarRemessaPendente(val('rpConta'))">Gerar</button>` });
+    return;
+  }
+  const pend = pendentesDeRemessa('').filter(x => recDaConta(x.r, alvo));
+  if (!pend.length) { toast('ℹ️', 'Nada pendente nesta conta', '', true); return; }
   let texto;
-  try { texto = emitirRemessa(lot, conta, [], pend); }
+  try { texto = emitirRemessa(alvo, [], pend); }
   catch (e) { toast('⚠️', 'Falha ao montar o arquivo', e.message, true); return; }
   closeModal(); renderCurrent();
   toast('✅', 'Remessa de alterações gerada', `${pend.length} título(s). Envie o arquivo ao banco.`);
 }
 /* Aviso no topo da lista de recebíveis, igual ao ERP: enquanto houver alteração não enviada. */
 function avisoRemessaHtml(escopo) {
-  const pend = pendentesDeRemessa(escopo).filter(x => { const c = contaCobranca(x.r.loteamentoId); return c && layoutCnab(c.banco); });
+  const pend = pendentesDeRemessa(escopo).filter(x => { const c = contaDoRec(x.r); return c && layoutCnab(c.banco); });
   if (!pend.length) return '';
   const alt = pend.filter(x => x.acao === 'alterar').length, bx = pend.length - alt;
-  const emps = [...new Set(pend.map(x => x.r.loteamentoId))];
-  return `<div class="alert warn" onclick="gerarRemessaPendente(${emps.length === 1 ? `'${emps[0]}'` : ''})"><span><b>${pend.length} cobrança(s) marcada(s) para remessa</b> — ${alt ? alt + ' alterada(s) depois de registrada(s)' : ''}${alt && bx ? ' e ' : ''}${bx ? bx + ' para baixar no banco' : ''}${emps.length > 1 ? ` em ${emps.length} empreendimentos` : ''}. O banco ainda tem o boleto antigo. <u>Gerar remessa</u></span></div>`;
+  const contas = [...new Set(pend.map(x => contaDoRec(x.r).id))];
+  return `<div class="alert warn" onclick="gerarRemessaPendente(${contas.length === 1 ? `'${contas[0]}'` : ''})"><span><b>${pend.length} cobrança(s) marcada(s) para remessa</b> — ${alt ? alt + ' alterada(s) depois de registrada(s)' : ''}${alt && bx ? ' e ' : ''}${bx ? bx + ' para baixar no banco' : ''}${contas.length > 1 ? ` em ${contas.length} contas` : ''}. O banco ainda tem o boleto antigo. <u>Gerar remessa</u></span></div>`;
 }
 
 // ================================================================ TELA: LER RETORNO
 function abrirRetorno() {
   if (!pode('financeiro.baixar')) { toast('🔒', 'Sem permissão', 'Seu perfil não dá baixa.', true); return; }
-  if (!curLot() || !contaCobranca(curLot().id)) { comEmpreendimento('📥 Ler retorno', 'De qual conta de cobrança é este arquivo?', () => abrirRetorno(), l => !!contaCobranca(l.id)); return; }
+  if (!contasComLayout().length) { avisoSemConta(); return; }
   openModal({ title: '📥 Ler retorno do banco',
     body: `<p class="help mb">Escolha o arquivo de retorno que você baixou do internet banking. O sistema lê, mostra o que entendeu e só dá baixa depois que você confirmar.</p>
       <div class="fg"><input type="file" id="retArq" accept=".ret,.txt,.RET,.TXT" onchange="lerArquivoRetorno(this)"></div>`,
@@ -416,11 +444,15 @@ function abrirRetorno() {
 let _retornoLido = null;
 async function lerArquivoRetorno(input) {
   const f = input.files[0]; if (!f) return;
-  const lot = curLot(); const conta = lot && contaCobranca(lot.id);
-  if (!conta || !layoutCnab(conta.banco)) { toast('⚠️', 'Cadastre a conta de cobrança primeiro', '', true); return; }
+  const contas = contasComLayout();
+  if (!contas.length) { toast('⚠️', 'Cadastre a conta de cobrança primeiro', '', true); return; }
   try {
     const texto = await readFileAsText(f);
+    /* O próprio arquivo diz de qual conta é: agência, conta e convênio estão no cabeçalho. */
+    const cab = layoutCnab(contas[0].banco).retorno(texto).cabecalho;
+    const conta = contas.find(c => pad(c.agencia, 4) === pad(cab.agencia, 4) && pad(c.conta, 8) === pad(cab.conta, 8) && pad(c.convenio, 7) === pad(cab.convenio, 7)) || contas[0];
     _retornoLido = layoutCnab(conta.banco).retorno(texto);
+    _retornoLido.conta = conta;
     _retornoLido.nomeArquivo = f.name;
     mostrarRetorno();
   } catch (e) { toast('⚠️', 'Não consegui ler', e.message, true); }
@@ -487,9 +519,8 @@ function aplicarRetorno() {
 }
 
 // ================================================================ HISTÓRICO DE REMESSAS
-function cadRemessasHtml() {
-  const lot = curLot(); if (!lot) return '';
-  const lista = db.remessas.filter(r => r.loteamentoId === lot.id).sort((a, b) => String(b.data).localeCompare(String(a.data)));
+function cadRemessasHtml(contaId) {
+  const lista = db.remessas.filter(r => !contaId || r.contaId === contaId).sort((a, b) => String(b.data).localeCompare(String(a.data)));
   if (!lista.length) return '<p class="help">Nenhuma remessa gerada ainda.</p>';
   return `<div class="table-wrap"><table class="tbl"><thead><tr><th>Arquivo</th><th>Data</th><th>Registrados</th><th>Baixas</th><th class="num">Valor</th><th>Nosso número</th></tr></thead><tbody>
     ${lista.map(r => `<tr><td>${esc(r.arquivo)}</td><td>${fmtDate(r.data)}</td><td>${r.qtd}</td><td>${r.baixas || 0}</td><td class="num">${esc(fmtMoney(r.valor))}</td><td>${r.primeiroNn ? esc(r.primeiroNn) + ' a ' + esc(r.ultimoNn) : '—'}</td></tr>`).join('')}

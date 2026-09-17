@@ -121,13 +121,22 @@ function barrasSvg(cb, altura) {
 function contaCobranca(loteamentoId) {
   return db.contasBanco.find(c => c.loteamentoId === loteamentoId) || db.contasBanco.find(c => !c.loteamentoId) || null;
 }
+/* Uma empresa pode ter mais de uma conta de cobrança. A conta sem empreendimento vale para
+   todos; uma conta com empreendimento cobra só as vendas daquele. O banco exige um arquivo
+   de remessa por convênio, então é por conta que a cobrança se organiza. */
 function cadBancoHtml() {
   if (!pode('config.editar')) return semPermissaoHtml('cadastro bancário');
-  const lot = curLot();
-  const c = (lot && contaCobranca(lot.id)) || { banco: '001', carteira: '17', variacao: '019', nossoNumeroAtual: 1, remessaSeq: 1, protestoDias: 0, baixaDias: 0, multaPct: num(db.config.multaPct), jurosDia: num(db.config.jurosMesPct) / 30, descontoPct: 0, especie: 'DM', aceite: 'N', mensagem1: '', mensagem2: '' };
+  const editandoId = state.sub.contaEdit;
+  const lista = db.contasBanco;
+  if (!editandoId && lista.length) return listaContasHtml(lista);
+  const c = (editandoId && db.contasBanco.find(x => x.id === editandoId)) || { banco: '001', carteira: '17', variacao: '019', nossoNumeroAtual: 1, remessaSeq: 1, protestoDias: 0, baixaDias: 0, multaPct: num(db.config.multaPct), jurosDia: num(db.config.jurosMesPct) / 30, descontoPct: 0, especie: 'DM', aceite: 'N', mensagem1: '', mensagem2: '' };
   const perfil = BANCOS[pad(c.banco, 3)] || BANCOS['001'];
-  return `<div class="card"><h3>🏦 Conta de cobrança</h3>
+  return `<div class="card"><h3>🏦 ${c.id ? 'Editar conta de cobrança' : 'Nova conta de cobrança'} ${lista.length ? '<span class="h-actions"><button class="btn btn-secondary btn-sm" onclick="state.sub.contaEdit=null;renderCadastros()">‹ Voltar</button></span>' : ''}</h3>
     <p class="help">Dados do convênio de cobrança registrada da empresa. Eles vão no boleto e no arquivo de remessa. Cada empresa preenche os seus; o layout de cada banco é do sistema.</p>
+    <div class="fg"><label>Cobra quais vendas?</label><select id="bcEmp">
+      <option value="" ${!c.loteamentoId ? 'selected' : ''}>Todos os empreendimentos</option>
+      ${db.loteamentos.map(l => `<option value="${esc(l.id)}" ${c.loteamentoId === l.id ? 'selected' : ''}>Só ${esc(l.nome)}</option>`).join('')}
+    </select><div class="hint">Com uma conta só, tudo cai nela. Se um empreendimento tiver conta própria, as vendas dele vão para essa; o resto continua na conta geral.</div></div>
     <div class="frow"><div class="fg"><label>Banco</label><select id="bcBanco" onchange="renderCadastros()">${Object.entries(BANCOS).map(([k, v]) => `<option value="${k}" ${pad(c.banco, 3) === k ? 'selected' : ''}>${k} — ${esc(v.nome)}</option>`).join('')}</select></div>
       <div class="fg"><label>Carteira</label><select id="bcCarteira">${perfil.carteiras.map(x => `<option value="${x}" ${c.carteira === x ? 'selected' : ''}>${x}</option>`).join('')}</select></div></div>
     <div class="frow3"><div class="fg"><label>Agência (sem dígito)</label><input type="text" id="bcAgencia" value="${esc(c.agencia || '')}" placeholder="1234"></div>
@@ -152,19 +161,34 @@ function cadBancoHtml() {
       ${(num(c.protestoDias) > 0 && !c.instrucao1) ? '<div class="alert warn" style="cursor:default"><span>Você configurou protesto por dias, mas sem código de instrução o banco <b>não vai protestar</b> — o aviso sai só impresso no boleto.</span></div>' : ''}
       <div class="fg"><label>Mensagem 1 no boleto</label><input type="text" id="bcMsg1" value="${esc(c.mensagem1 || '')}" placeholder="Referente ao lote {{lote}} do {{loteamento}}"></div>
       <div class="fg"><label>Mensagem 2 no boleto</label><input type="text" id="bcMsg2" value="${esc(c.mensagem2 || '')}" placeholder="Não receber após 30 dias do vencimento"></div></div>
-    <div class="btn-row"><button class="btn btn-primary" onclick="salvarContaBanco('${c.id || ''}')">Salvar conta de cobrança</button>
-      ${c.id ? `<button class="btn btn-secondary" onclick="testarBoleto()">👁️ Ver um boleto de exemplo</button>` : ''}</div>
+    <div class="btn-row">${c.id ? `<button class="btn btn-outline-danger" onclick="excluirContaBanco('${c.id}')">Excluir</button>` : ''}<button class="btn btn-primary" onclick="salvarContaBanco('${c.id || ''}')">Salvar conta de cobrança</button>
+      ${c.id ? `<button class="btn btn-secondary" onclick="testarBoleto('${c.id}')">👁️ Ver um boleto de exemplo</button>` : ''}</div>
     ${!perfil.campoLivre ? `<div class="alert warn" style="cursor:default;margin-top:10px"><span>O layout do ${esc(perfil.nome)} ainda não está implementado. Hoje o sistema gera boleto do Banco do Brasil; os outros entram assim que eu tiver o manual de cada um.</span></div>` : ''}
     ${layoutCnab(c.banco) ? `<div class="fieldset"><span class="lg">📤 Remessa e retorno</span>
       <p class="help">A remessa sai da aba <b>Recebíveis</b>, no botão <b>📤 Remessa</b>: você escolhe as parcelas e o sistema monta o arquivo. O retorno entra pelo botão <b>📥 Retorno</b>, com tela de conferência antes de dar baixa.</p>
-      ${cadRemessasHtml()}</div>` : ''}</div>`;
+      ${cadRemessasHtml(c.id)}</div>` : ''}</div>`;
 }
 
+function listaContasHtml(lista) {
+  return `<div class="card"><h3>🏦 Contas de cobrança <span class="h-actions"><button class="btn btn-primary btn-sm" onclick="state.sub.contaEdit='nova';renderCadastros()">＋ Nova conta</button></span></h3>
+    <p class="help mb">O banco aceita um arquivo de remessa por convênio, então é por conta que a cobrança se organiza. Com uma conta só, todos os empreendimentos saem juntos.</p>
+    ${lista.map(c => { const b = BANCOS[pad(c.banco, 3)]; const emp = c.loteamentoId && getLoteamento(c.loteamentoId);
+      const n = db.recebiveis.filter(r => { const x = contaCobranca(r.loteamentoId); return x && x.id === c.id && recStatus(r) !== 'pago'; }).length;
+      return `<div class="item" onclick="state.sub.contaEdit='${c.id}';renderCadastros()"><div class="info">
+        <div class="title">${esc((b || {}).nome || c.banco)} · ag ${esc(c.agencia)}${c.agenciaDv ? '-' + esc(c.agenciaDv) : ''} / conta ${esc(c.conta)}${c.contaDv ? '-' + esc(c.contaDv) : ''} ${b && b.campoLivre ? '' : '<span class="badge neutral">sem layout</span>'}</div>
+        <div class="meta"><span>convênio ${esc(c.convenio)}</span><span>· carteira ${esc(c.carteira)}</span><span>· ${emp ? 'só ' + esc(emp.nome) : 'todos os empreendimentos'}</span><span>· ${n} parcela(s) em aberto</span></div>
+      </div><div class="side"><button class="btn-icon" onclick="event.stopPropagation();state.sub.contaEdit='${c.id}';renderCadastros()">✏️</button></div></div>`; }).join('')}</div>`;
+}
+function excluirContaBanco(id) {
+  const c = db.contasBanco.find(x => x.id === id); if (!c) return;
+  if (db.remessas.some(r => r.contaId === id)) { toast('⚠️', 'Conta com remessas geradas', 'Não dá para excluir uma conta que já mandou arquivo ao banco.', true); return; }
+  if (!confirm('Excluir esta conta de cobrança?')) return;
+  removeRec('contasBanco', id); state.sub.contaEdit = null; renderCadastros();
+}
 function salvarContaBanco(id) {
-  const lot = curLot(); if (!lot) return;
-  const prev = id ? db.contasBanco.find(x => x.id === id) : null;
+  const prev = id && id !== 'nova' ? db.contasBanco.find(x => x.id === id) : null;
   const rec = Object.assign({}, prev || { id: genId(), criadoEm: new Date().toISOString() }, {
-    loteamentoId: lot.id, banco: val('bcBanco'), carteira: val('bcCarteira'), variacao: val('bcVariacao'),
+    loteamentoId: val('bcEmp') || '', banco: val('bcBanco'), carteira: val('bcCarteira'), variacao: val('bcVariacao'),
     agencia: val('bcAgencia'), agenciaDv: val('bcAgenciaDv'), conta: val('bcConta'), contaDv: val('bcContaDv'),
     convenio: val('bcConvenio'), nossoNumeroAtual: Math.max(1, Math.round(num(val('bcNN')))), nnMax: prev ? num(prev.nnMax) : 0, remessaSeq: Math.max(1, Math.round(num(val('bcSeq')))),
     multaPct: num(val('bcMulta')), jurosDia: num(val('bcJuros')), descontoPct: num(val('bcDesc')),
@@ -182,14 +206,15 @@ function salvarContaBanco(id) {
   if (rec.nossoNumeroAtual > 9999999999) { toast('⚠️', 'Nosso número muito grande', 'O limite do Banco do Brasil é 10 dígitos.', true); return; }
   upsert('contasBanco', rec);
   logAct(`Conta de cobrança salva: ${(BANCOS[pad(rec.banco, 3)] || {}).nome || rec.banco}`);
+  state.sub.contaEdit = null;
   renderCadastros(); toast('✅', 'Conta salva', 'Já dá para gerar boletos.');
 }
 
 // ================================================================ BOLETO
 function dadosBoleto(rec) {
-  const v = getVenda(rec.vendaId); const l = v ? getLote(v.loteId) : null;
-  const lot = getLoteamento(rec.loteamentoId) || curLot();
-  const conta = contaCobranca(rec.loteamentoId || (lot && lot.id));
+  const v = getVenda(rec.vendaId);
+  const lot = getLoteamento(rec.loteamentoId);
+  const conta = contaCobranca(rec.loteamentoId);
   if (!conta) throw new Error('Cadastre a conta de cobrança em Cadastros › Banco.');
   const perfil = BANCOS[pad(conta.banco, 3)];
   if (!perfil || !perfil.campoLivre) throw new Error(`O layout do ${(perfil || {}).nome || 'banco'} ainda não está implementado.`);
@@ -199,7 +224,7 @@ function dadosBoleto(rec) {
   const ctx = { lote: v ? imovelLabel(v) : '', loteamento: lot ? lot.nome : '', cliente: v ? v.cliente.nome : '', parcela: rec.descricao };
   const msg = t => String(t || '').replace(/\{\{(\w+)\}\}/g, (m, k) => ctx[k] || '');
   return {
-    conta, perfil, nossoNumero: nn, valor, venda: v, lote: l, loteamento: lot, rec,
+    conta, perfil, nossoNumero: nn, valor, venda: v, imovel: v ? imovelLabel(v) : '', loteamento: lot, rec,
     codigoBarras: cb, linha: linhaDigitavel(cb),
     nossoNumeroImpresso: perfil.nossoNumeroImpresso ? perfil.nossoNumeroImpresso(conta, nn) : nn,
     mensagem1: msg(conta.mensagem1), mensagem2: msg(conta.mensagem2)
@@ -246,9 +271,10 @@ function imprimirBoleto(recId) {
   $('#printArea').innerHTML = boletoHtml(d);
   window.print();
 }
-function testarBoleto() {
-  const lot = curLot(); if (!lot) return;
-  const rec = recebiveisDo(lot.id).find(r => recStatus(r) !== 'pago') || recebiveisDo(lot.id)[0];
-  if (!rec) { toast('⚠️', 'Sem parcelas', 'Cadastre uma venda para ver um boleto.', true); return; }
+function testarBoleto(contaId) {
+  const daConta = r => { const c = contaCobranca(r.loteamentoId); return !contaId || (c && c.id === contaId); };
+  const todos = recebiveisDo('').filter(daConta);
+  const rec = todos.find(r => recStatus(r) !== 'pago') || todos[0];
+  if (!rec) { toast('⚠️', 'Sem parcelas', 'Registre uma venda que cobre por esta conta para ver um boleto.', true); return; }
   abrirBoleto(rec.id);
 }
