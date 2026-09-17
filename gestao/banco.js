@@ -14,10 +14,12 @@ const BANCOS = {
       if (conv.length >= 7) return '000000' + pad(conv, 7) + pad(soDigitos(nossoNumero).slice(-10), 10) + pad(c.carteira, 2);
       return pad(conv, 6) + pad(soDigitos(nossoNumero).slice(-5), 5) + pad(soDigitos(c.agencia), 4) + pad(soDigitos(c.conta), 8) + pad(c.carteira, 2);
     },
+    /* O BB imprime o nosso número com 20 posições, preenchido com zeros à esquerda, e o
+       dígito verificador em seguida. Conferido contra um boleto real: 00030264480000001819-0 */
     nossoNumeroImpresso(c, nossoNumero) {
       const conv = soDigitos(c.convenio);
       const base = conv.length >= 7 ? pad(conv, 7) + pad(soDigitos(nossoNumero).slice(-10), 10) : pad(conv, 6) + pad(soDigitos(nossoNumero).slice(-5), 5);
-      return base + '-' + dvModulo11Banco(base);
+      return pad(base, 20) + '-' + dvModulo11Banco(pad(base, 20));
     }
   },
   '104': { nome: 'Caixa Econômica Federal', carteiras: ['14', '24'], nossoNumeroDigitos: 17, campoLivre: null, nossoNumeroImpresso: null },
@@ -28,7 +30,10 @@ const BANCOS = {
 
 function soDigitos(s) { return String(s ?? '').replace(/\D/g, ''); }
 function pad(v, n) { return soDigitos(v).slice(-n).padStart(n, '0'); }
-function padTxt(s, n) { return String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().slice(0, n).padEnd(n, ' '); }
+/* Texto para arquivo de coluna fixa: sem acento, maiúsculo e só ASCII. Qualquer caractere
+   fora do ASCII vira espaço — em UTF-8 ele ocuparia dois bytes e o registro deixaria de
+   ter 400 posições, que é como o banco conta. */
+function padTxt(s, n) { return String(s ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\x20-\x7E]/g, ' ').toUpperCase().slice(0, n).padEnd(n, ' '); }
 
 /* Dígito verificador do código de barras (módulo 11, pesos 2 a 9, resto 0/1/10 vira 1). */
 function dvCodigoBarras(base43) {
@@ -145,7 +150,9 @@ function cadBancoHtml() {
     <div class="btn-row"><button class="btn btn-primary" onclick="salvarContaBanco('${c.id || ''}')">Salvar conta de cobrança</button>
       ${c.id ? `<button class="btn btn-secondary" onclick="testarBoleto()">👁️ Ver um boleto de exemplo</button>` : ''}</div>
     ${!perfil.campoLivre ? `<div class="alert warn" style="cursor:default;margin-top:10px"><span>O layout do ${esc(perfil.nome)} ainda não está implementado. Hoje o sistema gera boleto do Banco do Brasil; os outros entram assim que eu tiver o manual de cada um.</span></div>` : ''}
-    <p class="help mt">A geração do arquivo de remessa e a leitura do retorno entram na próxima etapa, quando eu tiver o manual de layout do banco.</p></div>`;
+    ${layoutCnab(c.banco) ? `<div class="fieldset"><span class="lg">📤 Remessa e retorno</span>
+      <p class="help">A remessa sai da aba <b>Recebíveis</b>, no botão <b>📤 Remessa</b>: você escolhe as parcelas e o sistema monta o arquivo. O retorno entra pelo botão <b>📥 Retorno</b>, com tela de conferência antes de dar baixa.</p>
+      ${cadRemessasHtml()}</div>` : ''}</div>`;
 }
 
 function salvarContaBanco(id) {

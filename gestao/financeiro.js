@@ -26,7 +26,9 @@ function renderRecebiveis() {
       <div class="kpi c-blue"><div class="lbl">Vence este mês</div><div class="val">${fmtMoneyShort(mes)}</div><div class="sub">${monthLabel(mesKey)}</div></div>
     </div>
     <div class="chips">${[['aberto', 'Em aberto'], ['atrasado', 'Atrasados'], ['pago', 'Pagos'], ['all', 'Todos']].map(([k, l]) => `<div class="chip ${f.status === k ? 'active' : ''}" onclick="state.filters.rec.status='${k}';renderRecebiveis()">${l}<span class="n">${all.filter(grupos[k]).length}</span></div>`).join('')}
-      <div class="chip" onclick="abrirPainelCobranca()">🔔 Cobrança<span class="n">${inadimplentes(lot.id).length}</span></div></div>
+      <div class="chip" onclick="abrirPainelCobranca()">🔔 Cobrança<span class="n">${inadimplentes(lot.id).length}</span></div>
+      ${contaCobranca(lot.id) && layoutCnab(contaCobranca(lot.id).banco) ? `<div class="chip" onclick="abrirGerarRemessa()">📤 Remessa<span class="n">${remessaElegiveis(lot.id).filter(r => !bloqueioRemessa(r)).length}</span></div>
+      <div class="chip" onclick="abrirRetorno()">📥 Retorno</div>` : ''}</div>
     <div class="filters">
       <select onchange="state.filters.rec.mes=this.value;renderRecebiveis()"><option value="all">Todos os meses</option>${meses.map(m => `<option value="${m}" ${f.mes === m ? 'selected' : ''}>${monthLabel(m)}</option>`).join('')}</select>
       <input type="text" placeholder="🔎 Cliente ou lote" value="${esc(f.busca)}" oninput="aSetFiltro('rec','busca',this.value,renderRecebiveis,this)">

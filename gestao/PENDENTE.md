@@ -181,45 +181,62 @@ as antigas recebe a divisão sozinho, e fica registrado no histórico.
 
 ---
 
-## 7d. Cobrança bancária: o que preciso de você
+## 7d. Cobrança bancária: remessa e retorno do Banco do Brasil
 
-Decidido: vamos de **arquivo CNAB**, com remessa e retorno, do jeito que o financeiro já
-trabalha. Bancos usados: BB, Caixa, Bradesco, Sicoob e C6.
+**Pronto e conferido contra os seus arquivos** (17/09). Você mandou a remessa real, o retorno,
+o boleto e o `.bbt` de configuração do BB. Com isso deu para fazer o layout inteiro sem chutar.
 
-**Já pronto:** cadastro da conta de cobrança em Cadastros › Banco, e o boleto com código de
-barras e linha digitável do Banco do Brasil, calculados no padrão Febraban. Falta conferir o
-campo livre do BB contra o manual, e fazer remessa e retorno.
+O que foi conferido campo a campo contra o arquivo do banco:
 
-**Amanhã você me manda:** o arquivo CNAB do Banco do Brasil. Quanto mais material, melhor:
+- Cabeçalho, registro de título, registro de multa e rodapé do CNAB 400, carteira 17,
+  variação 035, convênio de 7 dígitos.
+- Nosso número = convênio + sequencial de 10 dígitos, impresso com 20 posições mais o dígito.
+- Código de barras e linha digitável: saem idênticos ao boleto que você mandou
+  (`00190.00009 03026.448005 00001.819176 5 15950000140549`).
+- Juros ao dia em reais e multa em percentual, do jeito que o seu arquivo manda hoje.
 
-- [ ] Um **arquivo de retorno** de verdade, mesmo antigo.
-- [ ] Um **arquivo de remessa** gerado pelo outro sistema, se conseguir. Esse é o mais valioso,
-      porque mostra exatamente como o BB espera receber, já com o convênio da empresa.
-- [ ] Um **boleto** do BB em PDF ou foto, para eu conferir meu cálculo de código de barras e
-      nosso número contra um caso real.
+### Como usar
 
-Sobre o nosso número: cada boleto tem o seu, é um sequencial que o sistema controla, não o
-banco. Não existe faixa a pedir. Só preciso saber em que número começar, para não repetir
-nenhum já usado no outro sistema.
+1. **Cadastros › 🏦 Banco** — convênio, carteira, variação, agência, conta, próximo nosso
+   número, próxima remessa e as instruções padrão (multa, juros ao dia, desconto, protesto,
+   baixa, mensagens). É aqui que cada empresa cliente cadastra o banco dela.
+2. **Recebíveis › 📤 Remessa** — marca as parcelas e gera o arquivo. O sistema numera sozinho,
+   marca o que já foi enviado e guarda o histórico das remessas.
+3. **Recebíveis › 📥 Retorno** — escolhe o arquivo, o sistema mostra o que entendeu e só dá
+   baixa depois que você confirmar.
 
-Para cada banco que formos implementar, preciso de:
+### A regra do carnê
 
-- [ ] **Manual do layout** de remessa e retorno em PDF, o que o banco chama de "layout de
-      cobrança CNAB 240" ou "CNAB 400". Tem no internet banking de cada um.
-- [ ] **Dados do convênio** da empresa: agência, conta, código do cedente ou convênio,
-      carteira, variação da carteira, posto (no caso do Sicoob) e a faixa de nosso número
-      liberada.
-- [ ] Um **arquivo de retorno real**, mesmo antigo, para eu conferir a leitura contra dado de
-      verdade.
-- [ ] Definir as instruções padrão do boleto: dias para protesto ou baixa, multa, juros ao dia,
-      desconto e as mensagens que saem no corpo.
+Contrato **com** correção por índice não gera carnê. A parcela de outubro só tem valor
+definitivo quando o índice de setembro é lançado, então a tela mostra só as parcelas cujo
+índice já entrou, e explica por quê. Contrato **sem** índice tem valor fixo e sai inteiro de
+uma vez. Isso é automático, não depende de você lembrar.
 
-Combinado: começamos por um banco só, validamos com um arquivo de verdade, e depois eu
-replico para os outros. Cada empresa cliente do sistema preenche o próprio convênio; o layout
-é meu, feito uma vez por banco.
+- [ ] Gerar uma remessa de teste e mandar pelo Gerenciador Financeiro do BB, com poucos
+      títulos, para o banco validar antes de valer para tudo.
+- [ ] Conferir se a **multa** que sai bate com a que você quer. O seu arquivo de hoje carrega
+      **10%** — isso é multa de aluguel. Para venda de lote o limite do Código de Defesa do
+      Consumidor é **2%**. Ajuste em Cadastros › Banco antes de usar no loteamento.
+- [ ] Conferir o **próximo nosso número**: seu último usado foi 2636. Comece de 2637 para
+      frente, senão o banco recusa por número repetido.
+- [ ] **Me mandar um retorno com movimento.** O que você enviou não tinha nenhuma ocorrência,
+      só cabeçalho e rodapé (15 títulos, R$ 648.283,50 de saldo). A leitura do retorno foi
+      escrita pelo layout padrão do BB e ainda não foi conferida contra dado de verdade.
+      Um retorno de um dia com pagamento resolve.
 
-Para enviar por e-mail preciso ligar um serviço de envio, e o boleto em PDF vai para o Storage
-para poder ser mandado por WhatsApp.
+**A única coisa que copiei sem entender:** as posições 23 a 25 do registro de multa saem como
+`090`, igual às do seu arquivo. Sem o manual eu não sei o que significa. Como é igual em todos
+os títulos do seu arquivo, é constante da sua configuração e reproduzir é seguro.
+
+### Outros bancos
+
+Caixa, Bradesco, Sicoob e C6 seguem sem layout: o sistema recusa gerar em vez de gerar errado.
+Para cada um preciso do mesmo que você mandou do BB: uma remessa gerada pelo sistema atual, um
+retorno real e um boleto. Com esses três eu faço o layout; o manual é bom, mas os arquivos
+valem mais.
+
+Para mandar boleto por e-mail preciso ligar um serviço de envio. Por WhatsApp, o PDF vai para
+o Storage e o link segue na mensagem.
 
 ---
 
@@ -227,11 +244,11 @@ para poder ser mandado por WhatsApp.
 
 Em ordem de prioridade acordada:
 
-1. **Cobrança bancária** — remessa e retorno em CNAB, com baixa automática. Precisa saber com
-   qual banco você trabalha e pegar o manual de layout dele.
-3. **Portal do comprador** — segunda via e extrato para o cliente final.
-4. **Distrato e transferência de lote.**
-5. **Planos do SaaS** — definir o que entra em cada plano e travar por plano no sistema.
+1. ~~Cobrança bancária~~ — **feito para o Banco do Brasil.** Faltam Caixa, Bradesco, Sicoob e
+   C6, esperando os arquivos de cada um.
+2. **Portal do comprador** — segunda via e extrato para o cliente final.
+3. **Distrato e transferência de lote.**
+4. **Planos do SaaS** — definir o que entra em cada plano e travar por plano no sistema.
 
 Descartado por decisão sua: assinatura digital, que é serviço contratado à parte. Sem
 necessidade: anexar documentos do cliente no sistema e comissão fixa por corretor, já que a
