@@ -1,7 +1,7 @@
 # Pendências para testar no computador
 
 Lista do que foi construído e ainda não foi testado por você, mais as decisões que dependem da
-sua conferência. Atualizada em 17/09/2026, depois da revisão de segurança.
+sua conferência. Atualizada em 17/09/2026, depois da revisão de segurança e da separação do perfil financeiro.
 
 ---
 
@@ -9,7 +9,9 @@ sua conferência. Atualizada em 17/09/2026, depois da revisão de segurança.
 
 - [ ] **Rodar o `schema.sql` de novo** no SQL Editor do Supabase. Cole o arquivo inteiro de
       `gestao/supabase/schema.sql` e clique em Run. Ele é idempotente e não apaga nada.
-      Desde a última vez entraram: vitrine, leads, modelos de documento, índices e cobranças.
+      Desde a última vez entraram: vitrine, leads, modelos de documento, índices, cobranças,
+      conta bancária e a separação do perfil financeiro. **Este passo é obrigatório agora**,
+      porque as regras de permissão do banco mudaram.
 - [ ] Abrir o app e forçar a atualização (Ctrl+Shift+R no computador) para pegar a versão nova.
       Endereço: https://vinicauduro.github.io/agenda-corretor/gestao/
 - [ ] Conferir se aparecem as abas novas: **Leads** no topo, e em Cadastros as abas
@@ -119,8 +121,12 @@ antecipação ou limitar o desconto, é só dizer.
 ## 7b. Permissões por função
 
 - [ ] Em **Cadastros › 🔐 Permissões**, revisar o que cada papel pode.
-- [ ] Convidar alguém como financeiro e conferir que ele não vê vendas nem reservas.
+- [ ] Convidar alguém como financeiro e conferir que ele vê recebíveis, despesas, cobrança e
+      vendas, mas não vê reservas nem consegue editar lote.
+- [ ] Com o financeiro logado, tentar mudar o preço de um lote pela tela de lotes: tem que dar
+      recusa vinda do banco, não só sumir o botão.
 - [ ] Testar desmarcar uma permissão e ver a aba sumir para quem tem aquele papel.
+- [ ] Gerar um convite e conferir as novas opções de validade e de quantas pessoas podem usar.
 
 ---
 
@@ -231,16 +237,18 @@ Revisei o código e o banco em 17/09. Resumo honesto.
 
 **Três coisas que eu quero arrumar antes de cliente pagante:**
 
-- [ ] **Código de convite.** Hoje são 6 caracteres sorteados de um jeito previsível, sem prazo
-      de validade e com até 100 usos. Um link que vazou num grupo de WhatsApp continua valendo
-      para sempre. Quero trocar por código longo de sorteio criptográfico, validade padrão de
-      7 dias e opção de uso único.
-- [ ] **O financeiro tem poder de administrador dentro do banco.** Na tela ele é limitado pelas
-      permissões, mas no banco ele consegue editar lotes, vendas, configurações e até criar um
-      convite de administrador. Um financeiro mal-intencionado cria esse convite, abre outra
-      conta com outro e-mail e entra como administrador. **Preciso da sua decisão:** o
-      financeiro deve poder mexer em lote e venda, ou só no dinheiro? Conforme a resposta eu
-      separo isso no banco.
+- [x] **Código de convite** — feito. Agora são 10 caracteres sorteados pelo gerador
+      criptográfico, num alfabeto sem 0/O e 1/I/L. Ao criar você escolhe quantas pessoas podem
+      usar (padrão: uma só) e por quantos dias vale (padrão: 7 dias). Vencido ou esgotado, o
+      banco recusa e a lista mostra marcado.
+- [x] **Financeiro separado do administrador no banco** — feito, conforme você decidiu.
+      O financeiro mexe em recebíveis, despesas, contratos, vendas, índices, conta bancária e
+      cobrança. Não mexe na planta: um gatilho no banco compara a linha antiga com a nova e só
+      deixa passar a mudança de **situação** do lote (que é o que acontece ao registrar venda
+      ou distrato). Desenho, quadra, número, área, medidas, preço, tipo, matrícula e observação
+      ficam travados, e criar ou excluir lote é só do administrador. Ele também deixou de
+      convidar gente, publicar vitrine, trocar o modelo de contrato, mexer na configuração da
+      empresa e apagar dados — o que fecha o caminho de virar administrador sozinho.
 - [ ] **Bucket das plantas é de leitura pública.** É de propósito, a vitrine precisa. O endereço
       tem o identificador da empresa e é impossível de adivinhar, mas quem tiver o link abre o
       arquivo. Regra: ali só planta. Quando formos anexar documento de cliente, vai em pasta

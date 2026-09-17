@@ -179,9 +179,15 @@ Desmarcar **Vitrine no ar** derruba o link na hora.
 
 ## Permissões por função
 
-O **papel** define o que o banco libera: dono e administrador veem tudo da empresa, financeiro
-tem acesso administrativo, corretor só enxerga o que é dele. Isso é aplicado pelo próprio
-banco, então vale mesmo para quem tentar acessar por fora do aplicativo.
+O **papel** define o que o banco libera. Dono e administrador mandam em tudo. O financeiro
+cuida do dinheiro, das vendas e da cobrança, mas não mexe na planta. O corretor só enxerga o
+que é dele. Isso é aplicado pelo próprio banco, então vale mesmo para quem tentar acessar
+por fora do aplicativo.
+
+O financeiro pode mudar a **situação** de um lote (vendido, disponível), porque registrar uma
+venda ou um distrato faz isso. Um gatilho no banco compara a linha antiga com a nova e recusa
+qualquer mudança de desenho, quadra, número, área, medidas, preço, tipo, matrícula ou
+observação. Criar e excluir lote também é só do administrador.
 
 Dentro do papel, em **Cadastros › 🔐 Permissões**, o dono afina o que cada função vê e pode
 fazer no aplicativo: editar lotes e planta, aprovar reservas, registrar vendas, dar distrato,
@@ -194,17 +200,26 @@ volta com um clique.
 
 ## O que cada papel vê
 
-| Papel        | Planta e lotes | Reservas                | Vendas            | Recebíveis e custos | Equipe/config |
-|--------------|----------------|-------------------------|-------------------|---------------------|---------------|
-| Dono / Admin | tudo           | todas                   | todas             | sim                 | sim           |
-| Financeiro   | tudo           | todas                   | todas             | sim                 | sim           |
-| Corretor     | vê e reserva   | só as próprias          | só as próprias    | não                 | não           |
+| Papel        | Planta e lotes         | Reservas       | Vendas         | Recebíveis, despesas e cobrança | Equipe/config |
+|--------------|------------------------|----------------|----------------|---------------------------------|---------------|
+| Dono / Admin | tudo                   | todas          | todas          | sim                             | sim           |
+| Financeiro   | vê; só muda a situação | vê todas       | todas          | sim                             | não           |
+| Corretor     | vê e reserva           | só as próprias | só as próprias | não                             | não           |
+
+O financeiro também não convida ninguém, não publica vitrine, não troca o modelo de contrato
+e não apaga os dados da empresa. Convite é só do dono e do administrador — assim ninguém cria
+um convite de administrador para si mesmo com outro e-mail.
 
 Os leads da vitrine são visíveis para toda a equipe (o corretor precisa atender), mas só
 administradores alteram ou excluem.
 
 As regras valem no banco (RLS), não só na tela: mesmo alguém usando a API direto só
-enxerga o que o papel permite. O pedido de reserva do corretor passa por uma função do banco
+enxerga o que o papel permite.
+
+O **código de convite** tem 10 caracteres sorteados pelo gerador criptográfico do navegador,
+num alfabeto sem 0/O e 1/I/L para não errar na digitação. Ao criar, você escolhe quantas
+pessoas podem usar (o padrão é uma só) e por quantos dias vale (o padrão é 7). Convite vencido
+ou esgotado é recusado pelo banco e aparece marcado na lista. O pedido de reserva do corretor passa por uma função do banco
 que trava o lote, impedindo dois corretores de reservar o mesmo lote ao mesmo tempo.
 
 ## Claude Code + MCP do Supabase (opcional)
