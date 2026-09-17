@@ -183,6 +183,11 @@ function retornoBB(texto) {
     agencia: head.slice(26, 30), conta: head.slice(31, 39), empresa: head.slice(46, 76).trim(),
     data: isoDeDDMMAA(head.slice(94, 100)), convenio: head.slice(149, 156).trim(), sequencial: head.slice(100, 107)
   };
+  const fim = linhas[linhas.length - 1];
+  if (fim && fim[0] === '9') {            // rodapé: posição da carteira, não deste arquivo
+    cab.titulosEmSer = Math.round(num(fim.slice(17, 25)));
+    cab.valorEmSer = num(fim.slice(25, 39)) / 100;
+  }
   const itens = [], avisos = [];
   linhas.slice(1).forEach((l, i) => {
     if (l[0] !== '7') return;
@@ -200,7 +205,8 @@ function retornoBB(texto) {
       valorPago: num(l.slice(253, 266)) / 100,
       juros: num(l.slice(266, 279)) / 100,
       multa: num(l.slice(279, 292)) / 100,
-      motivo: l.slice(382, 392).trim()
+      bancoPagador: l.slice(165, 168),
+      motivo: oc[0] === 'recusada' ? l.slice(86, 88) : ''
     };
     const seq10 = pad(nossoNumero, 10);   // o banco devolve convênio + sequencial; comparamos o sequencial
     item.rec = db.recebiveis.find(r => r.nossoNumero && pad(r.nossoNumero, 10) === seq10) || null;
@@ -415,6 +421,7 @@ function mostrarRetorno() {
   const r = _retornoLido; if (!r) return;
   const baixar = r.itens.filter(x => x.efeito === 'liquidada' && x.rec && recStatus(x.rec) !== 'pago');
   const recusados = r.itens.filter(x => x.efeito === 'recusada' && x.rec);
+  const tarifas = r.itens.reduce((s, x) => s + num(x.tarifa), 0);
   const total = baixar.reduce((s, x) => s + (x.valorPago || 0), 0);
   const linha = x => {
     const v = x.rec && getVenda(x.rec.vendaId), l = v && getLote(v.loteId);
@@ -423,7 +430,8 @@ function mostrarRetorno() {
       <td class="num">${esc(fmtMoney(x.valorPago))}</td></tr>`;
   };
   openModal({ title: '📥 Retorno · ' + esc(r.nomeArquivo || ''), wide: true,
-    body: `<p class="help mb">Arquivo de <b>${esc(r.cabecalho.empresa)}</b>, agência ${esc(r.cabecalho.agencia)} conta ${esc(r.cabecalho.conta)}, gerado em ${r.cabecalho.data ? fmtDate(r.cabecalho.data) : '—'}. ${r.itens.length} ocorrência(s).</p>
+    body: `<p class="help mb">Arquivo de <b>${esc(r.cabecalho.empresa)}</b>, agência ${esc(r.cabecalho.agencia)} conta ${esc(r.cabecalho.conta)}, gerado em ${r.cabecalho.data ? fmtDate(r.cabecalho.data) : '—'}. ${r.itens.length} ocorrência(s).${r.cabecalho.titulosEmSer ? ` Segundo o banco, a carteira tem <b>${r.cabecalho.titulosEmSer} título(s) em ser</b>, somando ${esc(fmtMoney(r.cabecalho.valorEmSer))}.` : ''}</p>
+      ${tarifas > 0.005 ? `<div class="alert info" style="cursor:default"><span>O banco cobrou <b>${esc(fmtMoney(tarifas))}</b> de tarifa neste arquivo (${esc(fmtMoney(tarifas / Math.max(1, r.itens.filter(x => x.tarifa > 0).length)))} por título). Isso não sai das parcelas — lance como despesa bancária se quiser acompanhar.</span></div>` : ''}
       ${!r.itens.length ? '<div class="alert info" style="cursor:default"><span>Este arquivo não tem nenhuma ocorrência: só cabeçalho e rodapé. É o retorno de um dia sem movimento.</span></div>' : ''}
       ${baixar.length ? `<div class="card"><h3>Vão ser baixadas <span class="badge pago">${esc(fmtMoney(total))}</span></h3>
         <div class="table-wrap"><table class="tbl"><thead><tr><th>Parcela</th><th>Nosso número</th><th>Ocorrência</th><th>Data</th><th class="num">Pago</th></tr></thead><tbody>${baixar.map(linha).join('')}</tbody></table></div></div>` : ''}
@@ -452,6 +460,7 @@ function aplicarRetorno() {
   });
   r.itens.filter(x => x.efeito === 'liquidada' && x.rec && recStatus(x.rec) !== 'pago').forEach(x => {
     const rec = db.recebiveis.find(y => y.id === x.rec.id); if (!rec) return;
+    if (recStatus(rec) === 'pago') return;   // já baixada por outra linha do mesmo arquivo
     const pago = x.valorPago || recValor(rec);
     const devido = recValor(rec);
     upsert('recebiveis', Object.assign({}, rec, {
