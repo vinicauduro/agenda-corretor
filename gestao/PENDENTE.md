@@ -15,8 +15,10 @@ sua conferência. Atualizada em 17/09/2026, depois da revisão de segurança e d
       Nenhuma das duas é urgente — só afeta importar backup e empresa criada daqui pra frente.
 - [ ] Abrir o app e forçar a atualização (Ctrl+Shift+R no computador) para pegar a versão nova.
       Endereço: https://vinicauduro.github.io/agenda-corretor/gestao/
-- [ ] Conferir se aparecem as abas novas: **Leads** no topo, e em Cadastros as abas
-      **Documentos**, **Índices**, **Cobrança**, **Banco**, **Vitrine** e **Permissões**.
+- [ ] Conferir a barra nova: **Painel · 🏗️ Empreendimentos · Vendas · Recebíveis ·
+      Relatórios · Cadastros**. Planta, lotes, reservas, obra e leads agora ficam dentro do
+      empreendimento; em Cadastros estão Equipe, Permissões, Categorias, Documentos, Índices,
+      Cobrança, Banco, Vitrine, Configurações, Nuvem e Backup.
 
 ---
 
@@ -26,6 +28,7 @@ sua conferência. Atualizada em 17/09/2026, depois da revisão de segurança e d
 - [ ] Testar o botão **＋ Lote** para criar um lote que a detecção não pegou, desenhando o
       retângulo sobre a planta.
 - [ ] Testar o filtro **Só lotes sem posição** no seletor de lotes.
+      (Tudo isso agora fica em **Empreendimentos › abra o loteamento › Planta / Lotes**.)
 - [ ] Em "Rotação e camadas do desenho (avançado)", testar ligar e desligar camadas.
 
 **Decidido em 17/09: vale o PDF.** O DXF era outra revisão. Você vai mandar a planta nova
@@ -138,8 +141,8 @@ o cliente não usou. É o que já está implementado. Sem taxa de antecipação 
 - [ ] Em **Cadastros › 🔐 Permissões**, revisar o que cada papel pode.
 - [ ] Convidar alguém como financeiro e conferir que ele vê recebíveis, despesas, cobrança e
       vendas, mas não vê reservas nem consegue editar lote.
-- [ ] Com o financeiro logado, tentar mudar o preço de um lote pela tela de lotes: tem que dar
-      recusa vinda do banco, não só sumir o botão.
+- [ ] Com o financeiro logado, tentar mudar o preço de um lote (Empreendimentos › o
+      loteamento › Lotes): tem que dar recusa vinda do banco, não só sumir o botão.
 - [ ] Testar desmarcar uma permissão e ver a aba sumir para quem tem aquele papel.
 - [ ] Gerar um convite e conferir as novas opções de validade e de quantas pessoas podem usar.
 
@@ -316,8 +319,23 @@ O corretor não muda: continua vendo planta e reservando lote, e carteiras não 
 - [ ] Abrir um empreendimento e usar planta, lotes, reservas e obra por dentro dele.
 - [ ] Criar uma carteira e registrar uma venda de imóvel avulso.
 - [ ] Ver os recebíveis e os relatórios com todos os empreendimentos juntos, e depois filtrados.
-- [ ] Gerar cobranças e conferir que ele pergunta o empreendimento.
+- [ ] Gerar cobranças e conferir que, com uma conta bancária só, sai tudo junto sem perguntar nada.
 - [ ] Decidir se a carteira precisa de orçamento de custos (hoje a tela existe igual).
+
+---
+
+## 7f. Decisões que só dependem de você
+
+Nenhuma me trava hoje, mas todas mudam o produto:
+
+- [ ] **Carteira precisa de orçamento de custos?** Hoje a carteira de imóveis avulsos mostra a
+      mesma tela de orçamento do loteamento. Para incorporação faz sentido; para imóvel de
+      terceiro, provavelmente não.
+- [ ] **Multa e juros padrão do loteamento.** O arquivo do BB que você mandou é de locação:
+      multa 10% e juros 0,067% ao dia (~2% ao mês). Para venda de lote o teto do Código de
+      Defesa do Consumidor é 2% de multa. Defina o seu padrão em Cadastros › Banco.
+- [ ] **Divisão dos planos do SaaS** — você disse que ia mandar a sua.
+- [ ] **Nome do produto e domínio** — trava a página de vendas e a saída do GitHub.
 
 ---
 
