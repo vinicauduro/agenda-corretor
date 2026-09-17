@@ -129,20 +129,69 @@ function optionsHtml(list, selected, labelFn = x => x.nome, valueFn = x => x.id)
 // ---------------------------------------------------------------- dados
 function defaultCategorias() {
   return [
-    { id: 'terraplanagem', nome: 'Terraplanagem', cor: '#92400e' },
-    { id: 'pavimentacao', nome: 'Pavimentação e Drenagem', cor: '#0ea5e9' },
-    { id: 'rede-eletrica', nome: 'Rede Elétrica / Iluminação', cor: '#eab308' },
-    { id: 'agua-esgoto', nome: 'Água e Esgoto', cor: '#06b6d4' },
-    { id: 'documentacao', nome: 'Documentação e Cartório', cor: '#ef4444' },
-    { id: 'projetos', nome: 'Projetos e Licenças', cor: '#14b8a6' },
-    { id: 'mao-de-obra', nome: 'Mão de Obra', cor: '#8b5cf6' },
-    { id: 'materiais', nome: 'Materiais', cor: '#f97316' },
-    { id: 'impostos', nome: 'Impostos e Taxas', cor: '#64748b' },
-    { id: 'marketing', nome: 'Marketing e Vendas', cor: '#22c55e' },
-    { id: 'terreno', nome: 'Aquisição do Terreno', cor: '#a16207' },
     { id: 'administrativo', nome: 'Administrativo', cor: '#6366f1' },
-    { id: 'outros', nome: 'Outros', cor: '#94a3b8' }
+    { id: 'agua', nome: 'Água', cor: '#06b6d4' },
+    { id: 'cartorio', nome: 'Cartório', cor: '#b91c1c' },
+    { id: 'documentacao', nome: 'Documentação', cor: '#ef4444' },
+    { id: 'drenagem', nome: 'Drenagem', cor: '#0284c7' },
+    { id: 'esgoto', nome: 'Esgoto', cor: '#0e7490' },
+    { id: 'impostos', nome: 'Impostos', cor: '#64748b' },
+    { id: 'licencas', nome: 'Licenças', cor: '#0f766e' },
+    { id: 'mao-de-obra', nome: 'Mão de Obra', cor: '#8b5cf6' },
+    { id: 'marketing', nome: 'Marketing', cor: '#22c55e' },
+    { id: 'materiais', nome: 'Materiais', cor: '#f97316' },
+    { id: 'outros', nome: 'Outros', cor: '#94a3b8' },
+    { id: 'pavimentacao', nome: 'Pavimentação', cor: '#0ea5e9' },
+    { id: 'projetos', nome: 'Projetos', cor: '#14b8a6' },
+    { id: 'rede-eletrica', nome: 'Rede Elétrica / Iluminação', cor: '#eab308' },
+    { id: 'taxas', nome: 'Taxas', cor: '#475569' },
+    { id: 'terraplanagem', nome: 'Terraplanagem', cor: '#92400e' },
+    { id: 'terreno', nome: 'Aquisição do Terreno', cor: '#a16207' },
+    { id: 'vendas', nome: 'Vendas', cor: '#15803d' }
   ];
+}
+
+/* As categorias padrão antigas juntavam dois assuntos numa linha só. Quem já usa o sistema
+   recebe a divisão sozinho: [id antigo, nome antigo, categoria que fica com o histórico,
+   categoria nova]. Rede Elétrica / Iluminação fica junta, por decisão de uso. */
+const CATEGORIAS_DIVIDIDAS = [
+  ['pavimentacao', 'Pavimentação e Drenagem', ['pavimentacao', 'Pavimentação', '#0ea5e9'], ['drenagem', 'Drenagem', '#0284c7']],
+  ['agua-esgoto', 'Água e Esgoto', ['agua', 'Água', '#06b6d4'], ['esgoto', 'Esgoto', '#0e7490']],
+  ['documentacao', 'Documentação e Cartório', ['documentacao', 'Documentação', '#ef4444'], ['cartorio', 'Cartório', '#b91c1c']],
+  ['projetos', 'Projetos e Licenças', ['projetos', 'Projetos', '#14b8a6'], ['licencas', 'Licenças', '#0f766e']],
+  ['impostos', 'Impostos e Taxas', ['impostos', 'Impostos', '#64748b'], ['taxas', 'Taxas', '#475569']],
+  ['marketing', 'Marketing e Vendas', ['marketing', 'Marketing', '#22c55e'], ['vendas', 'Vendas', '#15803d']]
+];
+
+/* Divide as categorias padrão antigas em duas. Só mexe na categoria que ainda tem o id e o
+   nome de fábrica — quem já renomeou fica como está. Lançamentos e orçamento continuam na
+   primeira das duas, para não inventar rateio; quem divide o valor é você. */
+function migrarCategorias() {
+  if (Cloud.active && Cloud.papel !== 'dono' && Cloud.papel !== 'admin') return 0;
+  let n = 0;
+  CATEGORIAS_DIVIDIDAS.forEach(([idAntigo, nomeAntigo, fica, nova]) => {
+    const velha = db.categorias.find(c => c.id === idAntigo && c.nome === nomeAntigo);
+    if (!velha || db.categorias.some(c => c.id === nova[0])) return;
+    if (fica[0] !== idAntigo) {
+      db.custos.filter(x => x.categoriaId === idAntigo).forEach(x => upsert('custos', Object.assign({}, x, { categoriaId: fica[0] })));
+      db.loteamentos.forEach(l => {
+        const orc = l.orcamento || {};
+        if (orc[idAntigo] === undefined) return;
+        const novoOrc = Object.assign({}, orc);
+        novoOrc[fica[0]] = novoOrc[idAntigo]; delete novoOrc[idAntigo];
+        upsert('loteamentos', Object.assign({}, l, { orcamento: novoOrc }));
+      });
+      removeRec('categorias', idAntigo);
+    }
+    upsert('categorias', { id: fica[0], nome: fica[1], cor: fica[2] });
+    upsert('categorias', { id: nova[0], nome: nova[1], cor: nova[2] });
+    n++;
+  });
+  if (n) {
+    db.categorias.sort((a, b) => naturalCmp(a.nome, b.nome));
+    logAct(`Categorias de custo divididas em temas separados (${n})`);
+  }
+  return n;
 }
 function defaultConfig() {
   return {
@@ -371,6 +420,7 @@ const Cloud = {
     const results = await Promise.all(tabs.map(t => this.client.from(tabelaDe(t)).select('*').eq('org_id', org).limit(t === 'log' ? 400 : 20000).order(t === 'log' ? 'ts' : 'id', { ascending: true })));
     tabs.forEach((t, i) => { if (results[i].error) throw new Error(t + ': ' + results[i].error.message); db[t] = (results[i].data || []).map(r => fromRow(t, r)); });
     if (!db.categorias.length) db.categorias = defaultCategorias();
+    migrarCategorias();
     await this.loadEquipe();
     if (this.admin) await this.carregarVitrines();
     saveLocal();
@@ -727,7 +777,7 @@ async function carregarDemo() {
   const d = defaultDB();
   d.config = Cloud.active ? Object.assign({}, db.config, { comissaoPct: 5 }) : Object.assign(d.config, { empresa: 'Sua Incorporadora', comissaoPct: 5 });
   const lot = { id: 'demo-lot', nome: 'Residencial Vista Verde', cidade: 'Rio do Sul / SC', endereco: 'Rod. BR-470, km 140', descricao: 'Loteamento residencial com 32 lotes, infraestrutura completa: asfalto, água, energia, iluminação em LED e área de lazer.',
-    cond: { entradaMinPct: 10, maxParcelas: 120, jurosMes: 0.8, descontoVistaPct: 6 }, orcamento: { terraplanagem: 380000, pavimentacao: 620000, 'rede-eletrica': 210000, 'agua-esgoto': 260000, documentacao: 60000, projetos: 90000, marketing: 80000, terreno: 1500000 }, criadoEm: new Date().toISOString() };
+    cond: { entradaMinPct: 10, maxParcelas: 120, jurosMes: 0.8, descontoVistaPct: 6 }, orcamento: { terraplanagem: 380000, pavimentacao: 480000, drenagem: 140000, 'rede-eletrica': 210000, agua: 150000, esgoto: 110000, documentacao: 40000, cartorio: 20000, projetos: 60000, licencas: 30000, marketing: 80000, terreno: 1500000 }, criadoEm: new Date().toISOString() };
   d.loteamentos.push(lot);
   const t = todayStr();
   const quadras = { A: 10, B: 12, C: 10 };
@@ -790,14 +840,17 @@ async function carregarDemo() {
     ['Terraplanagem quadra C', 'terraplanagem', 'Terraplanagem Silva Ltda', 95000, -1, 'pago'],
     ['Pavimentação asfáltica — 1ª medição', 'pavimentacao', 'Pavisul Engenharia', 280000, -2, 'pago'],
     ['Pavimentação asfáltica — 2ª medição', 'pavimentacao', 'Pavisul Engenharia', 190000, 0, 'pendente'],
-    ['Rede de água e esgoto', 'agua-esgoto', 'Hidro Obras', 175000, -3, 'pago'],
+    ['Rede de água tratada', 'agua', 'Hidro Obras', 98000, -3, 'pago'],
+    ['Rede coletora de esgoto', 'esgoto', 'Hidro Obras', 77000, -3, 'pago'],
     ['Rede elétrica e postes', 'rede-eletrica', 'Celesc / Eletro Vale', 120000, -1, 'pago'],
     ['Iluminação LED', 'rede-eletrica', 'Eletro Vale', 48000, 2, 'pendente'],
-    ['Projeto urbanístico e aprovação', 'projetos', 'Arq. Helena Prado', 45000, -7, 'pago'],
-    ['Registro do loteamento (cartório)', 'documentacao', 'Cartório RI', 22000, -6, 'pago'],
+    ['Projeto urbanístico', 'projetos', 'Arq. Helena Prado', 45000, -7, 'pago'],
+    ['Licença ambiental prévia', 'licencas', 'Consultoria Ambiental Verde', 16000, -7, 'pago'],
+    ['Registro do loteamento', 'cartorio', 'Cartório RI', 22000, -6, 'pago'],
     ['Placas, site e anúncios', 'marketing', 'Agência Vale Digital', 18500, -1, 'pago'],
     ['Impulsionamento mídias (mês)', 'marketing', 'Agência Vale Digital', 3500, 0, 'pendente'],
-    ['ITBI e taxas municipais', 'impostos', 'Prefeitura', 12800, -4, 'pago'],
+    ['ITBI', 'impostos', 'Prefeitura', 9800, -4, 'pago'],
+    ['Taxas municipais de aprovação', 'taxas', 'Prefeitura', 3000, -4, 'pago'],
     ['Contabilidade (trimestre)', 'administrativo', 'Contábil Rio', 4200, -1, 'atrasado']
   ];
   custos.forEach(([desc, cat, forn, valor, meses, st], i) => {
@@ -822,6 +875,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   state.role = 'landing';
   showScreen('landing');
   if (Cloud.enabled) { Cloud.init(); await Cloud.boot(); return; }
+  migrarCategorias();
   renderLanding();
   const modo = new URLSearchParams(location.search).get('modo');
   if (modo === 'corretor') enterCorretor();
