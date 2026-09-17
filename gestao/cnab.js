@@ -123,8 +123,12 @@ function remessaBB(conta, itens, opc) {
       '001', '0000', ' ',                           // 140-146 banco e agência cobradora
       ESPECIE_BB[conta.especie] || '01', conta.aceite === 'S' ? 'A' : 'N',
       dataDDMMAA(it.emissao || hoje),
-      pad(o.instrucao1 || (num(conta.protestoDias) > 0 ? '06' : '00'), 2),   // 157-158 protestar
-      pad(o.instrucao2 || (num(conta.baixaDias) > 0 ? '09' : '00'), 2),      // 159-160 baixar/devolver
+      /* 157-160: instruções de cobrança. Os códigos mudam por banco e eu não tenho o manual
+         para conferir os do BB; a remessa real da empresa vem com 00/00. Mandar um código
+         errado pode fazer o banco protestar um comprador por engano, então só sai o que o
+         usuário digitou do manual do banco dele. Sem isso, 00 = nenhuma instrução. */
+      pad(o.instrucao1 || conta.instrucao1 || '00', 2),
+      pad(o.instrucao2 || conta.instrucao2 || '00', 2),
       dinheiro(num(it.valor) * num(conta.jurosDia) / 100, 13),              // 161-173 juros por dia, em reais
       num(conta.descontoPct) > 0 ? dataDDMMAA(it.vencimento) : '000000',
       dinheiro(num(it.valor) * num(conta.descontoPct) / 100, 13),

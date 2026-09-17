@@ -146,6 +146,10 @@ function cadBancoHtml() {
       <div class="frow3"><div class="fg"><label>Protestar após (dias)</label><input type="number" id="bcProtesto" value="${c.protestoDias ?? 0}"><div class="hint">0 = não protestar</div></div>
         <div class="fg"><label>Baixar após vencimento (dias)</label><input type="number" id="bcBaixa" value="${c.baixaDias ?? 0}"></div>
         <div class="fg"><label>Espécie / aceite</label><select id="bcEspecie"><option value="DM" ${c.especie === 'DM' ? 'selected' : ''}>Duplicata mercantil</option><option value="DS" ${c.especie === 'DS' ? 'selected' : ''}>Duplicata de serviço</option><option value="OU" ${c.especie === 'OU' ? 'selected' : ''}>Outros</option></select></div></div>
+      <div class="frow"><div class="fg"><label>Código de instrução 1 (remessa)</label><input type="text" id="bcInstr1" maxlength="2" value="${esc(c.instrucao1 || '')}" placeholder="em branco"></div>
+        <div class="fg"><label>Código de instrução 2 (remessa)</label><input type="text" id="bcInstr2" maxlength="2" value="${esc(c.instrucao2 || '')}" placeholder="em branco"></div></div>
+      <p class="help">Os dias acima valem para o <b>texto do boleto</b>. Para o banco <b>agir sozinho</b> — protestar ou baixar — ele precisa do código de instrução, que muda de banco para banco. Não preencha por conta própria: pegue no manual de cobrança do seu banco. Em branco, o banco não protesta nem baixa nada por conta.</p>
+      ${(num(c.protestoDias) > 0 && !c.instrucao1) ? '<div class="alert warn" style="cursor:default"><span>Você configurou protesto por dias, mas sem código de instrução o banco <b>não vai protestar</b> — o aviso sai só impresso no boleto.</span></div>' : ''}
       <div class="fg"><label>Mensagem 1 no boleto</label><input type="text" id="bcMsg1" value="${esc(c.mensagem1 || '')}" placeholder="Referente ao lote {{lote}} do {{loteamento}}"></div>
       <div class="fg"><label>Mensagem 2 no boleto</label><input type="text" id="bcMsg2" value="${esc(c.mensagem2 || '')}" placeholder="Não receber após 30 dias do vencimento"></div></div>
     <div class="btn-row"><button class="btn btn-primary" onclick="salvarContaBanco('${c.id || ''}')">Salvar conta de cobrança</button>
@@ -165,7 +169,8 @@ function salvarContaBanco(id) {
     convenio: val('bcConvenio'), nossoNumeroAtual: Math.max(1, Math.round(num(val('bcNN')))), nnMax: prev ? num(prev.nnMax) : 0, remessaSeq: Math.max(1, Math.round(num(val('bcSeq')))),
     multaPct: num(val('bcMulta')), jurosDia: num(val('bcJuros')), descontoPct: num(val('bcDesc')),
     protestoDias: Math.round(num(val('bcProtesto'))), baixaDias: Math.round(num(val('bcBaixa'))),
-    especie: val('bcEspecie'), aceite: 'N', mensagem1: val('bcMsg1'), mensagem2: val('bcMsg2')
+    especie: val('bcEspecie'), aceite: 'N', instrucao1: soDigitos(val('bcInstr1')).slice(0, 2), instrucao2: soDigitos(val('bcInstr2')).slice(0, 2),
+    mensagem1: val('bcMsg1'), mensagem2: val('bcMsg2')
   });
   if (!rec.agencia || !rec.conta || !rec.convenio) { toast('⚠️', 'Faltam dados', 'Agência, conta e convênio são obrigatórios.', true); return; }
   /* O nosso número não pode andar para trás: repetir número é recusa certa no banco. */
