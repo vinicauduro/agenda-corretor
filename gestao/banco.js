@@ -136,8 +136,9 @@ function cadBancoHtml() {
     <div class="frow3"><div class="fg"><label>Conta corrente</label><input type="text" id="bcConta" value="${esc(c.conta || '')}"></div>
       <div class="fg"><label>Dígito da conta</label><input type="text" id="bcContaDv" value="${esc(c.contaDv || '')}" maxlength="1"></div>
       <div class="fg"><label>Convênio / código do cedente</label><input type="text" id="bcConvenio" value="${esc(c.convenio || '')}" placeholder="1234567"></div></div>
-    <div class="frow"><div class="fg"><label>Próximo nosso número</label><input type="number" id="bcNN" value="${c.nossoNumeroAtual || 1}"><div class="hint">O sistema numera sozinho a partir daqui.</div></div>
+    <div class="frow"><div class="fg"><label>Próximo nosso número</label><input type="number" id="bcNN" value="${c.id ? proximoNossoNumero(c) : (c.nossoNumeroAtual || 1)}"><div class="hint">${c.id && maiorNossoNumeroUsado(c) ? 'Maior já usado neste sistema: ' + maiorNossoNumeroUsado(c) + '. O sistema nunca repete nem volta atrás.' : 'O sistema numera sozinho a partir daqui.'}</div></div>
       <div class="fg"><label>Próxima remessa (sequencial)</label><input type="number" id="bcSeq" value="${c.remessaSeq || 1}"></div></div>
+    <div class="alert info" style="cursor:default"><span><b>Vindo de outro sistema?</b> O banco recusa título cujo nosso número já foi usado neste convênio, e não existe jeito de descobrir onde o outro sistema parou — ele continua consumindo números enquanto os dois rodam. Em vez de tentar continuar a contagem, comece numa <b>faixa separada e bem alta</b>, por exemplo <b>1000000</b>. São 10 dígitos disponíveis, quase 10 bilhões de números: não há risco de um alcançar o outro.</span></div>
     <div class="fieldset"><span class="lg">📄 Instruções do boleto</span>
       <div class="frow3"><div class="fg"><label>Multa por atraso (%)</label><input type="number" id="bcMulta" step="0.01" value="${c.multaPct ?? 2}"></div>
         <div class="fg"><label>Juros ao dia (%)</label><input type="number" id="bcJuros" step="0.001" value="${c.jurosDia ?? 0.033}"></div>
@@ -161,12 +162,19 @@ function salvarContaBanco(id) {
   const rec = Object.assign({}, prev || { id: genId(), criadoEm: new Date().toISOString() }, {
     loteamentoId: lot.id, banco: val('bcBanco'), carteira: val('bcCarteira'), variacao: val('bcVariacao'),
     agencia: val('bcAgencia'), agenciaDv: val('bcAgenciaDv'), conta: val('bcConta'), contaDv: val('bcContaDv'),
-    convenio: val('bcConvenio'), nossoNumeroAtual: Math.max(1, Math.round(num(val('bcNN')))), remessaSeq: Math.max(1, Math.round(num(val('bcSeq')))),
+    convenio: val('bcConvenio'), nossoNumeroAtual: Math.max(1, Math.round(num(val('bcNN')))), nnMax: prev ? num(prev.nnMax) : 0, remessaSeq: Math.max(1, Math.round(num(val('bcSeq')))),
     multaPct: num(val('bcMulta')), jurosDia: num(val('bcJuros')), descontoPct: num(val('bcDesc')),
     protestoDias: Math.round(num(val('bcProtesto'))), baixaDias: Math.round(num(val('bcBaixa'))),
     especie: val('bcEspecie'), aceite: 'N', mensagem1: val('bcMsg1'), mensagem2: val('bcMsg2')
   });
   if (!rec.agencia || !rec.conta || !rec.convenio) { toast('⚠️', 'Faltam dados', 'Agência, conta e convênio são obrigatórios.', true); return; }
+  /* O nosso número não pode andar para trás: repetir número é recusa certa no banco. */
+  const maiorUsado = prev ? maiorNossoNumeroUsado(prev) : 0;
+  if (maiorUsado && rec.nossoNumeroAtual <= maiorUsado) {
+    toast('⚠️', 'Nosso número já usado', `O ${rec.nossoNumeroAtual} já saiu em boleto. Informe um número acima de ${maiorUsado}.`, true);
+    return;
+  }
+  if (rec.nossoNumeroAtual > 9999999999) { toast('⚠️', 'Nosso número muito grande', 'O limite do Banco do Brasil é 10 dígitos.', true); return; }
   upsert('contasBanco', rec);
   logAct(`Conta de cobrança salva: ${(BANCOS[pad(rec.banco, 3)] || {}).nome || rec.banco}`);
   renderCadastros(); toast('✅', 'Conta salva', 'Já dá para gerar boletos.');
