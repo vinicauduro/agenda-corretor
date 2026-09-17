@@ -370,19 +370,25 @@ begin
   insert into public.membros (org_id, user_id, papel, nome, telefone, email)
     values (v_org, auth.uid(), 'dono', coalesce(p_usuario_nome, ''), coalesce(p_telefone, ''), coalesce(v_email, ''));
   insert into public.categorias (org_id, id, nome, cor) values
-    (v_org, 'terraplanagem', 'Terraplanagem', '#92400e'),
-    (v_org, 'pavimentacao', 'Pavimentação e Drenagem', '#0ea5e9'),
-    (v_org, 'rede-eletrica', 'Rede Elétrica / Iluminação', '#eab308'),
-    (v_org, 'agua-esgoto', 'Água e Esgoto', '#06b6d4'),
-    (v_org, 'documentacao', 'Documentação e Cartório', '#ef4444'),
-    (v_org, 'projetos', 'Projetos e Licenças', '#14b8a6'),
-    (v_org, 'mao-de-obra', 'Mão de Obra', '#8b5cf6'),
-    (v_org, 'materiais', 'Materiais', '#f97316'),
-    (v_org, 'impostos', 'Impostos e Taxas', '#64748b'),
-    (v_org, 'marketing', 'Marketing e Vendas', '#22c55e'),
-    (v_org, 'terreno', 'Aquisição do Terreno', '#a16207'),
     (v_org, 'administrativo', 'Administrativo', '#6366f1'),
-    (v_org, 'outros', 'Outros', '#94a3b8');
+    (v_org, 'agua', 'Água', '#06b6d4'),
+    (v_org, 'cartorio', 'Cartório', '#b91c1c'),
+    (v_org, 'documentacao', 'Documentação', '#ef4444'),
+    (v_org, 'drenagem', 'Drenagem', '#0284c7'),
+    (v_org, 'esgoto', 'Esgoto', '#0e7490'),
+    (v_org, 'impostos', 'Impostos', '#64748b'),
+    (v_org, 'licencas', 'Licenças', '#0f766e'),
+    (v_org, 'mao-de-obra', 'Mão de Obra', '#8b5cf6'),
+    (v_org, 'marketing', 'Marketing', '#22c55e'),
+    (v_org, 'materiais', 'Materiais', '#f97316'),
+    (v_org, 'outros', 'Outros', '#94a3b8'),
+    (v_org, 'pavimentacao', 'Pavimentação', '#0ea5e9'),
+    (v_org, 'projetos', 'Projetos', '#14b8a6'),
+    (v_org, 'rede-eletrica', 'Rede Elétrica / Iluminação', '#eab308'),
+    (v_org, 'taxas', 'Taxas', '#475569'),
+    (v_org, 'terraplanagem', 'Terraplanagem', '#92400e'),
+    (v_org, 'terreno', 'Aquisição do Terreno', '#a16207'),
+    (v_org, 'vendas', 'Vendas', '#15803d');
   insert into public.log (org_id, id, who, msg) values (v_org, public.gl_novo_id(), coalesce(p_usuario_nome, 'Dono'), 'Empresa criada: ' || trim(p_nome));
   return v_org;
 end $$;

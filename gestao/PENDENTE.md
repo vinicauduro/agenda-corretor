@@ -134,6 +134,30 @@ antecipação ou limitar o desconto, é só dizer.
 
 ---
 
+## 7b2. Categorias de custo divididas
+
+As categorias padrão que juntavam dois assuntos foram separadas. Ao abrir o app, quem já tinha
+as antigas recebe a divisão sozinho, e fica registrado no histórico.
+
+| Antes | Agora |
+|---|---|
+| Água e Esgoto | Água · Esgoto |
+| Pavimentação e Drenagem | Pavimentação · Drenagem |
+| Documentação e Cartório | Documentação · Cartório |
+| Projetos e Licenças | Projetos · Licenças |
+| Impostos e Taxas | Impostos · Taxas |
+| Marketing e Vendas | Marketing · Vendas |
+| Rede Elétrica / Iluminação | continua junta, como você pediu |
+
+- [ ] **Redistribuir o orçamento.** O valor orçado ficou inteiro na primeira das duas: os
+      R$ 1.065.418,00 de Água e Esgoto estão todos em **Água**, e Esgoto está zerado. O sistema
+      não chuta rateio. Abra Custos › ✏️ e divida do seu jeito. Vale o mesmo para as outras.
+- [ ] Conferir se algum lançamento antigo precisa trocar de categoria (o que estava em Água e
+      Esgoto foi todo para Água).
+- [ ] Categoria que você mesmo criou ou renomeou não foi tocada.
+
+---
+
 ## 7c. Relatórios
 
 - [ ] Abrir a aba **📊 Relatórios** e passar pelos sete: resumo gerencial, espelho de vendas,
