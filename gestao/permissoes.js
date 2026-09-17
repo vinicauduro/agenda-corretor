@@ -42,7 +42,7 @@ const PERM_PADRAO = {
   admin: { todas: true },
   financeiro: {
     'lotes.editar': false, 'planta.editar': false, 'lotes.preco': false,
-    'reservas.aprovar': false, 'vendas.criar': false, 'vendas.editar': false, 'vendas.distrato': false,
+    'reservas.aprovar': false, 'vendas.criar': true, 'vendas.editar': true, 'vendas.distrato': false,
     'comissao.gerenciar': true,
     'financeiro.ver': true, 'financeiro.baixar': true, 'financeiro.antecipar': true,
     'cobranca.ver': true, 'cobranca.registrar': true, 'custos.ver': true, 'custos.editar': true,
@@ -116,7 +116,7 @@ function cadPermissoesHtml() {
     <p class="help">${sub === 'corretor'
       ? 'O corretor usa a área dele: planta, lotes, as próprias reservas e as próprias comissões. Marque abaixo só o que ele também poderá fazer na administração.'
       : sub === 'financeiro'
-        ? 'Perfil pensado para quem cuida do dinheiro: recebíveis, cobrança e custos, sem mexer em lotes e vendas.'
+        ? 'Perfil pensado para quem cuida do dinheiro: recebíveis, despesas, cobrança, índices e vendas. O banco de dados impede que ele mexa na planta, no preço e nas medidas dos lotes, mesmo que você marque abaixo.'
         : 'Perfil de administrador: por padrão pode tudo, menos o que você desmarcar aqui.'}</p>
     ${PERMISSOES.map(([grupo, itens]) => `<div class="fieldset"><span class="lg">${esc(grupo)}</span>
       ${itens.map(([k, rot]) => `<label class="check" style="margin-bottom:6px"><input type="checkbox" id="pm_${k.replace(/\W/g, '_')}" ${perms[k] ? 'checked' : ''}> ${esc(rot)}</label>`).join('')}

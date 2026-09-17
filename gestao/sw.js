@@ -1,4 +1,4 @@
-const CACHE = 'gestao-loteamento-v12';
+const CACHE = 'gestao-loteamento-v13';
 const FILES = ['./', './index.html', './style.css', './config.js', './vendor/supabase.js', './core.js', './permissoes.js', './planta.js', './planta-pdf.js', './planta-dxf.js', './admin-pdf.js', './corretor.js', './admin.js', './indices.js', './antecipacao.js', './cobranca.js', './financeiro.js', './banco.js', './relatorios.js', './docs.js', './auth.js', './vitrine.html', './vitrine.js', './manifest.json'];
 
 self.addEventListener('install', e => {

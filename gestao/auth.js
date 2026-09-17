@@ -145,27 +145,36 @@ function traduzErro(e) {
 }
 
 // ---------------------------------------------------------------- equipe e convites (admin, modo nuvem)
+function conviteVencido(c) {
+  if (c.expiraEm && new Date(c.expiraEm) < new Date()) return true;
+  return c.usos >= (c.maxUsos || 1);
+}
 function cadEquipeHtml() {
   const link = c => location.origin + location.pathname + '?convite=' + c.codigo;
   const eu = Cloud.user.id;
   return `<div class="card"><h3>👥 Equipe <span class="h-actions"><button class="btn btn-primary btn-sm" onclick="abrirConviteForm()">＋ Convite</button></span></h3>
-    <p class="help mb">Quem tem acesso a <b>${esc(Cloud.org.nome)}</b>. Corretores veem a planta, os preços e só as próprias reservas. Administradores e financeiro veem tudo.</p>
+    <p class="help mb">Quem tem acesso a <b>${esc(Cloud.org.nome)}</b>. Corretores veem a planta, os preços e só as próprias reservas. O financeiro cuida do dinheiro, dos contratos e das vendas, mas não mexe na planta.</p>
     ${Cloud.membros.map(m => `<div class="item ${m.ativo ? '' : 'bloqueado'}" onclick="abrirMembroForm('${m.id}')"><div class="info"><div class="title">${esc(m.nome || m.email || '(sem nome)')} ${m.userId === eu ? '<span class="badge aprovada">você</span>' : ''} ${!m.ativo ? '<span class="badge neutral">inativo</span>' : ''}</div>
       <div class="meta"><span class="badge ${m.papel === 'corretor' ? 'neutral' : 'convertida'}">${statusLabel(m.papel)}</span><span>${esc(m.email)}</span>${m.telefone ? `<span>· ${esc(fmtPhone(m.telefone))}</span>` : ''}${m.creci ? `<span>· ${esc(m.creci)}</span>` : ''}${m.imobiliaria ? `<span>· ${esc(m.imobiliaria)}</span>` : ''}</div></div>
       <div class="side">${m.telefone ? `<a class="btn-icon" style="background:#dcfce7;color:#166534;text-decoration:none" target="_blank" href="${waLink(m.telefone, '')}" onclick="event.stopPropagation()">💬</a>` : ''}</div></div>`).join('')}</div>
     <div class="card"><h3>🔗 Convites</h3>
     <p class="help mb">Envie o link ao corretor: ele cria a conta (ou entra) e já fica vinculado à sua empresa com o papel do convite.</p>
-    ${Cloud.convites.length ? Cloud.convites.map(c => `<div class="item"><div class="info"><div class="title">${esc(c.codigo)} <span class="badge ${c.papel === 'corretor' ? 'neutral' : 'convertida'}">${statusLabel(c.papel)}</span> ${c.descricao ? `<span class="small muted">· ${esc(c.descricao)}</span>` : ''}</div><div class="meta"><span>${c.usos} uso(s)</span><span>· criado em ${fmtDateTime(c.criadoEm)}</span></div><div class="code-box mt" style="font-size:0.7rem">${esc(link(c))}</div></div>
+    ${Cloud.convites.length ? Cloud.convites.map(c => `<div class="item ${conviteVencido(c) ? 'bloqueado' : ''}"><div class="info"><div class="title">${esc(c.codigo)} <span class="badge ${c.papel === 'corretor' ? 'neutral' : 'convertida'}">${statusLabel(c.papel)}</span> ${conviteVencido(c) ? '<span class="badge neutral">expirado</span>' : ''} ${c.descricao ? `<span class="small muted">· ${esc(c.descricao)}</span>` : ''}</div><div class="meta"><span>${c.usos} de ${c.maxUsos || 1} uso(s)</span><span>· ${c.expiraEm ? 'vale até ' + fmtDateTime(c.expiraEm) : 'sem prazo'}</span><span>· criado em ${fmtDateTime(c.criadoEm)}</span></div><div class="code-box mt" style="font-size:0.7rem">${esc(link(c))}</div></div>
       <div class="side"><div class="btns"><button class="btn-icon" title="Copiar link" onclick="copiarTexto('${esc(link(c))}')">📋</button><a class="btn-icon" style="background:#dcfce7;color:#166534;text-decoration:none" title="Enviar por WhatsApp" target="_blank" href="${'https://wa.me/?text=' + encodeURIComponent('Acesse a planta de ' + Cloud.org.nome + ' e faça suas reservas por aqui: ' + link(c) + ' (código ' + c.codigo + ')')}">💬</a><button class="btn-icon del" title="Excluir convite" onclick="apagarConvite('${c.id}')">🗑️</button></div></div></div>`).join('') : '<p class="help">Nenhum convite ativo. Crie um para chamar corretores.</p>'}
     </div>`;
 }
 function abrirConviteForm() {
-  openModal({ title: '🔗 Novo convite', body: `<div class="fg"><label>Papel de quem entrar com este convite</label><select id="cvPapel"><option value="corretor">Corretor (vê planta, preços e faz reservas)</option><option value="financeiro">Financeiro (vê tudo, inclusive recebíveis e custos)</option><option value="admin">Administrador (acesso total)</option></select></div>
-    <div class="fg"><label>Descrição (opcional)</label><input type="text" id="cvDesc" placeholder="Ex.: corretores da Mendes Imóveis"></div>`,
+  openModal({ title: '🔗 Novo convite', body: `<div class="fg"><label>Papel de quem entrar com este convite</label><select id="cvPapel"><option value="corretor">Corretor (vê planta, preços e faz reservas)</option><option value="financeiro">Financeiro (recebíveis, despesas, cobrança e vendas)</option><option value="admin">Administrador (acesso total)</option></select></div>
+    <div class="fg"><label>Descrição (opcional)</label><input type="text" id="cvDesc" placeholder="Ex.: corretores da Mendes Imóveis"></div>
+    <div class="grid2">
+      <div class="fg"><label>Quem pode usar</label><select id="cvUsos"><option value="1">Uma pessoa só (recomendado)</option><option value="10">Até 10 pessoas</option><option value="100">Até 100 pessoas</option></select></div>
+      <div class="fg"><label>Validade</label><select id="cvDias"><option value="7">7 dias (recomendado)</option><option value="30">30 dias</option><option value="0">Sem prazo</option></select></div>
+    </div>
+    <p class="help">Um link de convite dá entrada na sua empresa. Prefira um link por pessoa e com prazo curto: assim, se ele for parar num grupo de WhatsApp, não serve mais para ninguém.</p>`,
     footer: `<button class="btn btn-secondary" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" onclick="criarConvite()">Gerar link</button>` });
 }
 async function criarConvite() {
-  try { const cod = await Cloud.criarConvite(val('cvPapel'), val('cvDesc')); closeModal(); renderCadastros(); toast('✅', 'Convite criado', 'Código ' + cod); }
+  try { const cod = await Cloud.criarConvite(val('cvPapel'), val('cvDesc'), { maxUsos: val('cvUsos'), dias: val('cvDias') }); closeModal(); renderCadastros(); toast('✅', 'Convite criado', 'Código ' + cod); }
   catch (e) { toast('⚠️', 'Falha', e.message, true); }
 }
 async function apagarConvite(id) { if (!confirm('Excluir este convite? Quem já entrou continua na equipe.')) return; try { await Cloud.apagarConvite(id); renderCadastros(); } catch (e) { toast('⚠️', 'Falha', e.message, true); } }

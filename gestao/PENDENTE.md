@@ -1,7 +1,7 @@
 # Pendências para testar no computador
 
 Lista do que foi construído e ainda não foi testado por você, mais as decisões que dependem da
-sua conferência. Atualizada em 16/09/2026, depois da entrega das permissões por função.
+sua conferência. Atualizada em 17/09/2026, depois da revisão de segurança e da separação do perfil financeiro.
 
 ---
 
@@ -9,7 +9,9 @@ sua conferência. Atualizada em 16/09/2026, depois da entrega das permissões po
 
 - [ ] **Rodar o `schema.sql` de novo** no SQL Editor do Supabase. Cole o arquivo inteiro de
       `gestao/supabase/schema.sql` e clique em Run. Ele é idempotente e não apaga nada.
-      Desde a última vez entraram: vitrine, leads, modelos de documento, índices e cobranças.
+      Desde a última vez entraram: vitrine, leads, modelos de documento, índices, cobranças,
+      conta bancária e a separação do perfil financeiro. **Este passo é obrigatório agora**,
+      porque as regras de permissão do banco mudaram.
 - [ ] Abrir o app e forçar a atualização (Ctrl+Shift+R no computador) para pegar a versão nova.
       Endereço: https://vinicauduro.github.io/agenda-corretor/gestao/
 - [ ] Conferir se aparecem as abas novas: **Leads** no topo, e em Cadastros as abas
@@ -119,8 +121,12 @@ antecipação ou limitar o desconto, é só dizer.
 ## 7b. Permissões por função
 
 - [ ] Em **Cadastros › 🔐 Permissões**, revisar o que cada papel pode.
-- [ ] Convidar alguém como financeiro e conferir que ele não vê vendas nem reservas.
+- [ ] Convidar alguém como financeiro e conferir que ele vê recebíveis, despesas, cobrança e
+      vendas, mas não vê reservas nem consegue editar lote.
+- [ ] Com o financeiro logado, tentar mudar o preço de um lote pela tela de lotes: tem que dar
+      recusa vinda do banco, não só sumir o botão.
 - [ ] Testar desmarcar uma permissão e ver a aba sumir para quem tem aquele papel.
+- [ ] Gerar um convite e conferir as novas opções de validade e de quantas pessoas podem usar.
 
 ---
 
@@ -144,6 +150,18 @@ trabalha. Bancos usados: BB, Caixa, Bradesco, Sicoob e C6.
 **Já pronto:** cadastro da conta de cobrança em Cadastros › Banco, e o boleto com código de
 barras e linha digitável do Banco do Brasil, calculados no padrão Febraban. Falta conferir o
 campo livre do BB contra o manual, e fazer remessa e retorno.
+
+**Amanhã você me manda:** o arquivo CNAB do Banco do Brasil. Quanto mais material, melhor:
+
+- [ ] Um **arquivo de retorno** de verdade, mesmo antigo.
+- [ ] Um **arquivo de remessa** gerado pelo outro sistema, se conseguir. Esse é o mais valioso,
+      porque mostra exatamente como o BB espera receber, já com o convênio da empresa.
+- [ ] Um **boleto** do BB em PDF ou foto, para eu conferir meu cálculo de código de barras e
+      nosso número contra um caso real.
+
+Sobre o nosso número: cada boleto tem o seu, é um sequencial que o sistema controla, não o
+banco. Não existe faixa a pedir. Só preciso saber em que número começar, para não repetir
+nenhum já usado no outro sistema.
 
 Para cada banco que formos implementar, preciso de:
 
@@ -179,6 +197,79 @@ Em ordem de prioridade acordada:
 Descartado por decisão sua: assinatura digital, que é serviço contratado à parte. Sem
 necessidade: anexar documentos do cliente no sistema e comissão fixa por corretor, já que a
 comissão é definida em cada venda.
+
+---
+
+## 8b. Site próprio e SaaS
+
+Decidido em conversa: sair do endereço do GitHub e ir para domínio próprio, com página de
+vendas e área de login.
+
+- [ ] Escolher o **nome do produto** e o domínio.
+- [ ] Registrar o domínio (registro.br para .com.br).
+- [ ] Definir se o e-mail profissional será Zoho gratuito ou Google Workspace.
+
+Depois disso eu faço a página de vendas e movo o aplicativo para o domínio novo. O Supabase
+continua o mesmo, só mudam os endereços autorizados no painel dele e os links de vitrine já
+divulgados, que dá para manter funcionando em paralelo.
+
+---
+
+## 8c. Segurança: revisão feita e o que falta fechar
+
+Revisei o código e o banco em 17/09. Resumo honesto.
+
+**O que está certo (conferido agora):**
+
+- Todas as 17 tabelas do banco estão com RLS ligado, inclusive as novas (índices, cobranças,
+  contas_banco, modelos, vitrines e leads). A proteção está no banco, não na tela: mesmo que
+  alguém chame o Supabase por fora do app, só enxerga a própria empresa.
+- O visitante sem login não tem acesso a tabela nenhuma, só a duas funções: a da vitrine e a
+  de registrar interesse. A da vitrine devolve quadra, número, área, medidas, situação e preço
+  (se você mandar mostrar). Nunca CPF, matrícula, observação interna, reserva, venda ou
+  recebível.
+- O envio de interesse tem freio: no máximo 120 por hora por empresa e bloqueio de telefone
+  repetido em 2 minutos.
+- Não existe `eval` nem execução de texto no código, e tudo que vai para a tela passa pelo
+  escape. Um nome de cliente ou um lead não consegue injetar script.
+- Nenhuma senha ou chave secreta no repositório. A chave que está no `config.js` é a pública,
+  feita para ficar exposta.
+
+**Três coisas que eu quero arrumar antes de cliente pagante:**
+
+- [x] **Código de convite** — feito. Agora são 10 caracteres sorteados pelo gerador
+      criptográfico, num alfabeto sem 0/O e 1/I/L. Ao criar você escolhe quantas pessoas podem
+      usar (padrão: uma só) e por quantos dias vale (padrão: 7 dias). Vencido ou esgotado, o
+      banco recusa e a lista mostra marcado.
+- [x] **Financeiro separado do administrador no banco** — feito, conforme você decidiu.
+      O financeiro mexe em recebíveis, despesas, contratos, vendas, índices, conta bancária e
+      cobrança. Não mexe na planta: um gatilho no banco compara a linha antiga com a nova e só
+      deixa passar a mudança de **situação** do lote (que é o que acontece ao registrar venda
+      ou distrato). Desenho, quadra, número, área, medidas, preço, tipo, matrícula e observação
+      ficam travados, e criar ou excluir lote é só do administrador. Ele também deixou de
+      convidar gente, publicar vitrine, trocar o modelo de contrato, mexer na configuração da
+      empresa e apagar dados — o que fecha o caminho de virar administrador sozinho.
+- [ ] **Bucket das plantas é de leitura pública.** É de propósito, a vitrine precisa. O endereço
+      tem o identificador da empresa e é impossível de adivinhar, mas quem tiver o link abre o
+      arquivo. Regra: ali só planta. Quando formos anexar documento de cliente, vai em pasta
+      privada com link que expira.
+
+**Riscos que não são de código e dependem de nós:**
+
+- [ ] Ligar **verificação em dois passos** para o dono e os administradores.
+- [ ] Assinar o **Supabase Pro** antes do primeiro cliente pagante: o plano gratuito não tem
+      backup diário. Perder dado é o risco mais real, bem mais que roubo.
+- [ ] Exportar o **backup em JSON** de vez em quando por Cadastros, enquanto estivermos no free.
+- [ ] Senha forte e não repetida de outro site, para você e para cada pessoa da equipe. A porta
+      mais fácil de arrombar é sempre a senha de alguém, não o sistema.
+- [ ] Quando sairmos do GitHub: travar no painel do Supabase os endereços autorizados só para o
+      nosso domínio.
+- [ ] **Termos de uso e política de privacidade** (LGPD). Guardamos CPF e telefone de comprador,
+      que é dado pessoal, e como SaaS você passa a ser operador dos dados dos seus clientes.
+
+Sobre "sequestro de informação": não existe servidor nosso para alguém criptografar. O
+aplicativo é arquivo estático e o banco é gerenciado pelo Supabase, com backup deles. O cenário
+realista não é ransomware, é alguém entrar com a senha de um usuário seu.
 
 ---
 

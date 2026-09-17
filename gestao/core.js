@@ -240,6 +240,19 @@ function logAct(msg, who) {
 }
 
 // ---------------------------------------------------------------- nuvem (Supabase)
+/* Código de convite: 10 caracteres sorteados pelo gerador criptográfico do navegador.
+   Alfabeto sem 0/O e 1/I/L, que a pessoa erra ao digitar. São 32^10 combinações:
+   não dá para adivinhar nem para prever o próximo a partir dos anteriores. */
+function codigoConvite(n) {
+  const alfabeto = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+  const tam = n || 10;
+  const bytes = new Uint8Array(tam);
+  (window.crypto || window.msCrypto).getRandomValues(bytes);
+  let out = '';
+  for (let i = 0; i < tam; i++) out += alfabeto[bytes[i] % alfabeto.length];
+  return out;
+}
+
 const TABLE_COLS = {
   loteamentos: ['id', 'nome', 'cidade', 'endereco', 'descricao', 'cond', 'orcamento', 'planta', 'criadoEm'],
   categorias: ['id', 'nome', 'cor'],
@@ -453,9 +466,13 @@ const Cloud = {
   atualizarMeuPerfil(d) { return this.rpc('atualizar_meu_perfil', { p_org: this.org.id, p_nome: d.nome, p_telefone: d.telefone, p_creci: d.creci, p_imobiliaria: d.imobiliaria }); },
   limparDados() { return this.rpc('limpar_dados_org', { p_org: this.org.id }); },
   async salvarMembro(m) { const { error } = await this.client.from('membros').update({ papel: m.papel, ativo: m.ativo, nome: m.nome, telefone: m.telefone, creci: m.creci, imobiliaria: m.imobiliaria }).eq('id', m.id); if (error) throw new Error(error.message); await this.loadEquipe(); },
-  async criarConvite(papel, descricao) {
-    const codigo = Math.random().toString(36).slice(2, 8).toUpperCase();
-    const { error } = await this.client.from('convites').insert({ org_id: this.org.id, codigo, papel, descricao: descricao || '', criado_por: this.user.id });
+  async criarConvite(papel, descricao, opc) {
+    const o = opc || {};
+    const codigo = codigoConvite();
+    const linha = { org_id: this.org.id, codigo, papel, descricao: descricao || '', criado_por: this.user.id, max_usos: Math.max(1, parseInt(o.maxUsos, 10) || 1) };
+    const dias = parseInt(o.dias, 10);
+    if (dias > 0) linha.expira_em = new Date(Date.now() + dias * 86400000).toISOString();
+    const { error } = await this.client.from('convites').insert(linha);
     if (error) throw new Error(error.message); await this.loadEquipe(); return codigo;
   },
   async apagarConvite(id) { const { error } = await this.client.from('convites').delete().eq('id', id); if (error) throw new Error(error.message); await this.loadEquipe(); }

@@ -208,7 +208,15 @@ returns boolean language sql stable security definer set search_path = public as
   select exists (select 1 from public.membros where org_id = p_org and user_id = auth.uid() and ativo)
 $$;
 
+-- Dono e administrador: mandam em tudo, inclusive planta, equipe e configuração.
 create or replace function public.eh_admin(p_org uuid)
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (select 1 from public.membros where org_id = p_org and user_id = auth.uid() and ativo and papel in ('dono','admin'))
+$$;
+
+-- Financeiro entra junto onde o assunto é dinheiro, venda e cobrança.
+-- Não cria nem edita lote, não mexe na planta, não convida ninguém.
+create or replace function public.eh_financeiro(p_org uuid)
 returns boolean language sql stable security definer set search_path = public as $$
   select exists (select 1 from public.membros where org_id = p_org and user_id = auth.uid() and ativo and papel in ('dono','admin','financeiro'))
 $$;
@@ -262,37 +270,86 @@ create policy membros_delete on public.membros for delete to authenticated using
 drop policy if exists convites_all on public.convites;
 create policy convites_all on public.convites for all to authenticated using (public.eh_admin(org_id)) with check (public.eh_admin(org_id));
 
--- tabelas que todo membro lê e só admin escreve
+-- tabelas que todo membro lê; a escrita muda conforme o assunto
 do $$
 declare t text;
 begin
-  foreach t in array array['loteamentos','categorias','lotes'] loop
+  -- loteamento e planta: só dono e administrador
+  foreach t in array array['loteamentos'] loop
     execute format('drop policy if exists %I_select on public.%I', t, t);
     execute format('drop policy if exists %I_write on public.%I', t, t);
     execute format('create policy %I_select on public.%I for select to authenticated using (public.eh_membro(org_id))', t, t);
     execute format('create policy %I_write on public.%I for all to authenticated using (public.eh_admin(org_id)) with check (public.eh_admin(org_id))', t, t);
   end loop;
-  -- tabelas só do admin/financeiro
+  -- categorias de despesa e lotes: o financeiro também escreve.
+  -- No caso dos lotes, o gatilho logo abaixo só deixa ele mexer na situação do lote
+  -- (vendido, reservado, disponível), nunca na planta, no preço ou nas medidas.
+  foreach t in array array['categorias','lotes'] loop
+    execute format('drop policy if exists %I_select on public.%I', t, t);
+    execute format('drop policy if exists %I_write on public.%I', t, t);
+    execute format('create policy %I_select on public.%I for select to authenticated using (public.eh_membro(org_id))', t, t);
+    execute format('create policy %I_write on public.%I for all to authenticated using (public.eh_financeiro(org_id)) with check (public.eh_financeiro(org_id))', t, t);
+  end loop;
+  -- dinheiro: administração e financeiro
   foreach t in array array['recebiveis','custos'] loop
     execute format('drop policy if exists %I_all on public.%I', t, t);
-    execute format('create policy %I_all on public.%I for all to authenticated using (public.eh_admin(org_id)) with check (public.eh_admin(org_id))', t, t);
+    execute format('create policy %I_all on public.%I for all to authenticated using (public.eh_financeiro(org_id)) with check (public.eh_financeiro(org_id))', t, t);
   end loop;
 end $$;
+
+-- O financeiro registra venda e distrato, e isso muda a situação do lote.
+-- Mas ele não desenha, não renomeia, não mexe em preço, área nem matrícula.
+create or replace function public.lotes_protege_planta()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if tg_op = 'DELETE' then
+    if not public.eh_admin(old.org_id) then raise exception 'Somente o administrador pode excluir lotes'; end if;
+    return old;
+  end if;
+  if tg_op = 'INSERT' then
+    -- o aplicativo grava com upsert: quando a linha já existe é edição, não criação
+    if not public.eh_admin(new.org_id)
+       and not exists (select 1 from public.lotes where org_id = new.org_id and id = new.id) then
+      raise exception 'Somente o administrador pode criar lotes';
+    end if;
+    return new;
+  end if;
+  if not public.eh_admin(new.org_id) then
+    if new.loteamento_id is distinct from old.loteamento_id
+       or new.quadra    is distinct from old.quadra
+       or new.numero    is distinct from old.numero
+       or new.area      is distinct from old.area
+       or new.frente    is distinct from old.frente
+       or new.fundos    is distinct from old.fundos
+       or new.preco     is distinct from old.preco
+       or new.tipo      is distinct from old.tipo
+       or new.matricula is distinct from old.matricula
+       or new.obs       is distinct from old.obs
+       or new.pts::text is distinct from old.pts::text then
+      raise exception 'Seu perfil pode mudar a situação do lote, mas não a planta, o preço nem as medidas';
+    end if;
+  end if;
+  return new;
+end $$;
+
+drop trigger if exists lotes_protege_planta on public.lotes;
+create trigger lotes_protege_planta before insert or update or delete on public.lotes
+  for each row execute function public.lotes_protege_planta();
 
 -- reservas e vendas: admin vê tudo; corretor vê só as suas
 drop policy if exists reservas_select on public.reservas;
 drop policy if exists reservas_write on public.reservas;
-create policy reservas_select on public.reservas for select to authenticated using (public.eh_admin(org_id) or corretor_user_id = auth.uid());
+create policy reservas_select on public.reservas for select to authenticated using (public.eh_financeiro(org_id) or corretor_user_id = auth.uid());
 create policy reservas_write on public.reservas for all to authenticated using (public.eh_admin(org_id)) with check (public.eh_admin(org_id));
 
 drop policy if exists vendas_select on public.vendas;
 drop policy if exists vendas_write on public.vendas;
-create policy vendas_select on public.vendas for select to authenticated using (public.eh_admin(org_id) or corretor_user_id = auth.uid());
-create policy vendas_write on public.vendas for all to authenticated using (public.eh_admin(org_id)) with check (public.eh_admin(org_id));
+create policy vendas_select on public.vendas for select to authenticated using (public.eh_financeiro(org_id) or corretor_user_id = auth.uid());
+create policy vendas_write on public.vendas for all to authenticated using (public.eh_financeiro(org_id)) with check (public.eh_financeiro(org_id));
 
 drop policy if exists log_select on public.log;
 drop policy if exists log_insert on public.log;
-create policy log_select on public.log for select to authenticated using (public.eh_admin(org_id));
+create policy log_select on public.log for select to authenticated using (public.eh_financeiro(org_id));
 create policy log_insert on public.log for insert to authenticated with check (public.eh_membro(org_id));
 
 -- ---------------------------------------------------------------------
@@ -437,7 +494,7 @@ alter table public.indices enable row level security;
 drop policy if exists indices_select on public.indices;
 drop policy if exists indices_write on public.indices;
 create policy indices_select on public.indices for select to authenticated using (public.eh_membro(org_id));
-create policy indices_write on public.indices for all to authenticated using (public.eh_admin(org_id)) with check (public.eh_admin(org_id));
+create policy indices_write on public.indices for all to authenticated using (public.eh_financeiro(org_id)) with check (public.eh_financeiro(org_id));
 
 alter table public.vendas add column if not exists indice_id text;
 alter table public.vendas add column if not exists indice_base text;
@@ -475,8 +532,8 @@ create table if not exists public.contas_banco (
 alter table public.contas_banco enable row level security;
 drop policy if exists contas_banco_select on public.contas_banco;
 drop policy if exists contas_banco_write on public.contas_banco;
-create policy contas_banco_select on public.contas_banco for select to authenticated using (public.eh_admin(org_id));
-create policy contas_banco_write on public.contas_banco for all to authenticated using (public.eh_admin(org_id)) with check (public.eh_admin(org_id));
+create policy contas_banco_select on public.contas_banco for select to authenticated using (public.eh_financeiro(org_id));
+create policy contas_banco_write on public.contas_banco for all to authenticated using (public.eh_financeiro(org_id)) with check (public.eh_financeiro(org_id));
 
 alter table public.recebiveis add column if not exists nosso_numero text;
 alter table public.recebiveis add column if not exists remessa_em date;
@@ -503,8 +560,8 @@ create index if not exists cobrancas_venda_idx on public.cobrancas (org_id, vend
 alter table public.cobrancas enable row level security;
 drop policy if exists cobrancas_select on public.cobrancas;
 drop policy if exists cobrancas_write on public.cobrancas;
-create policy cobrancas_select on public.cobrancas for select to authenticated using (public.eh_admin(org_id));
-create policy cobrancas_write on public.cobrancas for all to authenticated using (public.eh_admin(org_id)) with check (public.eh_admin(org_id));
+create policy cobrancas_select on public.cobrancas for select to authenticated using (public.eh_financeiro(org_id));
+create policy cobrancas_write on public.cobrancas for all to authenticated using (public.eh_financeiro(org_id)) with check (public.eh_financeiro(org_id));
 
 -- ---------------------------------------------------------------------
 -- 5a. Modelos de documento (proposta e contrato da própria empresa)
