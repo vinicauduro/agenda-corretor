@@ -472,6 +472,8 @@ begin
   delete from public.indices where org_id = p_org;
   delete from public.cobrancas where org_id = p_org;
   delete from public.contas_banco where org_id = p_org;
+  delete from public.modelos where org_id = p_org;
+  delete from public.categorias where org_id = p_org;
   delete from public.vitrines where org_id = p_org;
   delete from public.loteamentos where org_id = p_org;
   delete from public.log where org_id = p_org;
