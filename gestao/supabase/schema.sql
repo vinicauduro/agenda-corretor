@@ -551,6 +551,9 @@ alter table public.recebiveis add column if not exists banco_valor double precis
 alter table public.recebiveis add column if not exists banco_venc date;
 -- marca d'água do nosso número: o maior que já saiu para o banco, para nunca repetir
 alter table public.contas_banco add column if not exists nn_max bigint not null default 0;
+-- códigos de instrução da remessa: só o que o usuário copiar do manual do banco dele
+alter table public.contas_banco add column if not exists instrucao1 text not null default '';
+alter table public.contas_banco add column if not exists instrucao2 text not null default '';
 
 -- ---------------------------------------------------------------------
 -- 4c. Cobranças registradas (régua de inadimplência)

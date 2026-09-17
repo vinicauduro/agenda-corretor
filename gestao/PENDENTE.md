@@ -247,6 +247,20 @@ escrito de memória com erro de uma posição em alguns campos.
       - Um título pode ser **registrado e pago no mesmo arquivo** (aconteceu com o 2640 em
         09/09). O sistema trata e não baixa duas vezes.
 
+### O que ainda NÃO foi exercitado contra arquivo real
+
+Tudo que aparece nos seus arquivos está conferido. O que nunca apareceu neles segue sem
+conferência, e o sistema agora se recusa a chutar:
+
+- **Códigos de instrução (protestar, baixar automaticamente).** Sua remessa vem com `00 00`,
+  ou seja, sem instrução. Eu estava emitindo códigos que deduzi — e um código errado pode
+  fazer o banco **protestar um comprador por engano**. Agora só sai o código que você digitar
+  em Cadastros › Banco, copiado do manual do seu banco. Em branco, o banco não age sozinho.
+  Os campos "protestar após N dias" continuam valendo para o texto impresso no boleto.
+- **Desconto e abatimento**: os seus arquivos vêm zerados nesses campos.
+- **Ocorrência 03 (recusa)**: nenhum dos quatro retornos tinha recusa. A leitura segue a
+  indicação do BB (motivo em 087/088) e está testada com arquivo sintético.
+
 ### Outros bancos
 
 Caixa, Bradesco, Sicoob e C6 seguem sem layout: o sistema recusa gerar em vez de gerar errado.
