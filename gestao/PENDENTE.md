@@ -15,8 +15,10 @@ sua conferência. Atualizada em 17/09/2026, depois da revisão de segurança e d
       Nenhuma das duas é urgente — só afeta importar backup e empresa criada daqui pra frente.
 - [ ] Abrir o app e forçar a atualização (Ctrl+Shift+R no computador) para pegar a versão nova.
       Endereço: https://vinicauduro.github.io/agenda-corretor/gestao/
-- [ ] Conferir se aparecem as abas novas: **Leads** no topo, e em Cadastros as abas
-      **Documentos**, **Índices**, **Cobrança**, **Banco**, **Vitrine** e **Permissões**.
+- [ ] Conferir a barra nova: **Painel · 🏗️ Empreendimentos · Vendas · Recebíveis ·
+      Relatórios · Cadastros**. Planta, lotes, reservas, obra e leads agora ficam dentro do
+      empreendimento; em Cadastros estão Equipe, Permissões, Categorias, Documentos, Índices,
+      Cobrança, Banco, Vitrine, Configurações, Nuvem e Backup.
 
 ---
 
@@ -26,6 +28,7 @@ sua conferência. Atualizada em 17/09/2026, depois da revisão de segurança e d
 - [ ] Testar o botão **＋ Lote** para criar um lote que a detecção não pegou, desenhando o
       retângulo sobre a planta.
 - [ ] Testar o filtro **Só lotes sem posição** no seletor de lotes.
+      (Tudo isso agora fica em **Empreendimentos › abra o loteamento › Planta / Lotes**.)
 - [ ] Em "Rotação e camadas do desenho (avançado)", testar ligar e desligar camadas.
 
 **Decidido em 17/09: vale o PDF.** O DXF era outra revisão. Você vai mandar a planta nova
@@ -138,8 +141,8 @@ o cliente não usou. É o que já está implementado. Sem taxa de antecipação 
 - [ ] Em **Cadastros › 🔐 Permissões**, revisar o que cada papel pode.
 - [ ] Convidar alguém como financeiro e conferir que ele vê recebíveis, despesas, cobrança e
       vendas, mas não vê reservas nem consegue editar lote.
-- [ ] Com o financeiro logado, tentar mudar o preço de um lote pela tela de lotes: tem que dar
-      recusa vinda do banco, não só sumir o botão.
+- [ ] Com o financeiro logado, tentar mudar o preço de um lote (Empreendimentos › o
+      loteamento › Lotes): tem que dar recusa vinda do banco, não só sumir o botão.
 - [ ] Testar desmarcar uma permissão e ver a aba sumir para quem tem aquele papel.
 - [ ] Gerar um convite e conferir as novas opções de validade e de quantas pessoas podem usar.
 
@@ -316,8 +319,24 @@ O corretor não muda: continua vendo planta e reservando lote, e carteiras não 
 - [ ] Abrir um empreendimento e usar planta, lotes, reservas e obra por dentro dele.
 - [ ] Criar uma carteira e registrar uma venda de imóvel avulso.
 - [ ] Ver os recebíveis e os relatórios com todos os empreendimentos juntos, e depois filtrados.
-- [ ] Gerar cobranças e conferir que ele pergunta o empreendimento.
+- [ ] Gerar cobranças e conferir que, com uma conta bancária só, sai tudo junto sem perguntar nada.
 - [ ] Decidir se a carteira precisa de orçamento de custos (hoje a tela existe igual).
+
+---
+
+## 7f. Decisões que só dependem de você
+
+Nenhuma me trava hoje, mas todas mudam o produto:
+
+- [x] ~~Carteira precisa de orçamento de custos?~~ — **não.** Imóvel de terceiros não tem obra:
+      a carteira perdeu a aba de obra e o orçamento no resumo. Se uma carteira já tiver custo
+      lançado, a aba reaparece, para não esconder dado que alguém registrou.
+- [x] ~~Multa e juros padrão~~ — **multa 2% e juros 1% ao mês**, já pré-preenchidos em toda
+      conta nova. O cliente muda como quiser em Cadastros › Banco. O campo de juros agora é em
+      **% ao mês**, do jeito que o contrato fala; o sistema converte para o valor por dia que o
+      banco pede.
+- [ ] **Divisão dos planos do SaaS** — ainda não definida.
+- [x] ~~Nome do produto~~ — **Lotifly**, provável. Falta confirmar e registrar o domínio.
 
 ---
 
@@ -342,7 +361,9 @@ comissão é definida em cada venda.
 Decidido em conversa: sair do endereço do GitHub e ir para domínio próprio, com página de
 vendas e área de login.
 
-- [ ] Escolher o **nome do produto** e o domínio.
+- [ ] Confirmar o nome: **Lotifly**. Conferir se `lotifly.com.br` e `lotifly.com` estão livres
+      (registro.br e qualquer registrador internacional) e se não há marca registrada no INPI
+      em classe parecida. Se estiver livre, registrar antes de falar do nome por aí.
 - [ ] Registrar o domínio (registro.br para .com.br).
 - [ ] Definir se o e-mail profissional será Zoho gratuito ou Google Workspace.
 

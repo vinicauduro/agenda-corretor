@@ -554,6 +554,8 @@ alter table public.contas_banco add column if not exists nn_max bigint not null 
 -- códigos de instrução da remessa: só o que o usuário copiar do manual do banco dele
 alter table public.contas_banco add column if not exists instrucao1 text not null default '';
 alter table public.contas_banco add column if not exists instrucao2 text not null default '';
+-- juros do contrato em % ao mês; o arquivo do banco recebe o equivalente ao dia
+alter table public.contas_banco add column if not exists juros_mes_pct double precision;
 
 -- Empreendimento: 'loteamento' (planta e lotes) ou 'carteira' (só agrupa vendas avulsas)
 alter table public.loteamentos add column if not exists tipo text not null default 'loteamento';
