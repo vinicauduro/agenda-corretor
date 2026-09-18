@@ -425,3 +425,15 @@ details.qualif[open] > summary { margin-bottom: 10px; }
 
 /* Cada pessoa a mais na venda ganha o seu bloco, separado do anterior */
 .pessoa-bloco + .pessoa-bloco { border-top: 1px dashed var(--border); padding-top: 10px; margin-top: 10px; }
+
+/* Lançamento de índices: navegação de ano e a coluna de doze meses */
+.ix-ano-nav { display: flex; align-items: center; justify-content: center; gap: 14px; margin-bottom: 12px; font-size: 1.05rem; }
+.ix-tab td { padding: 7px 10px; }
+.ix-tab th:last-child, .ix-tab td:last-child { width: 28px; }
+.ix-tab tr.ix-futuro td:first-child { color: var(--muted); }
+.ix-val { text-align: right; padding: 6px 8px; }
+.ix-resumo-grid { display: flex; flex-wrap: wrap; gap: 10px; }
+.ix-resumo-grid > div { flex: 1 1 120px; text-align: center; padding: 10px; border-right: 1px solid var(--border); cursor: pointer; }
+.ix-resumo-grid > div:last-child { border-right: none; }
+.ix-resumo-grid .v { font-size: 1.5rem; font-weight: 800; }
+.ix-resumo-grid .k { font-size: 0.78rem; color: var(--muted); }

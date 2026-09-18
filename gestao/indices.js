@@ -158,7 +158,14 @@ function cadIndicesHtml() {
   const list = db.indices.slice().sort((a, b) => a.nome.localeCompare(b.nome));
   const usados = {};
   db.vendas.forEach(v => { if (v.indiceId) usados[v.indiceId] = (usados[v.indiceId] || 0) + 1; });
-  return `<div class="card"><h3>📈 Índices de correção</h3>
+  const resumo = list.length ? `<div class="card ix-resumo"><h3>📈 Índices de reajuste</h3>
+    <div class="ix-resumo-grid">${list.map(ind => {
+      const ac = acumuladoIndice(ind, 12);
+      return `<div onclick="abrirIndiceAno('${ind.id}')"><div class="v">${ac == null ? '—' : fmtNum(ac, 4)}</div><div class="k">${esc(ind.codigo)}</div></div>`;
+    }).join('')}</div>
+    <p class="help mt">Acumulado dos últimos 12 meses lançados. Os índices não são atualizados sozinhos: lance o mês novo assim que ele for divulgado.</p>
+    ${list.some(ind => ind.tipo === 'percentual' && !indiceValores(ind)[mesAnterior(mesAtual())]) ? `<div class="alert warn" style="cursor:default"><span>Falta lançar ${monthLabel(mesAnterior(mesAtual()))} em ${esc(list.filter(ind => ind.tipo === 'percentual' && !indiceValores(ind)[mesAnterior(mesAtual())]).map(i => i.codigo).join(', '))}. Sem esse lançamento as parcelas do mês que vem ficam sem correção.</span></div>` : ''}</div>` : '';
+  return `${resumo}<div class="card"><h3>📈 Índices de correção</h3>
     <p class="help">Cadastre aqui a variação de cada mês. A correção é mensal: o índice de um mês corrige as parcelas que vencem no mês seguinte, já que ele só é divulgado depois. Vale para todas as parcelas do mês, não importa o dia do vencimento. Cada contrato escolhe qual índice usa, na tela da venda.</p>
     <div class="btn-row mt"><button class="btn btn-primary" onclick="abrirIndiceForm()">＋ Novo índice</button>
     ${db.indices.length < INDICES_PADRAO.length ? `<button class="btn btn-secondary" onclick="criarIndicesPadrao()">📈 Criar IGP-M, INPC, IPCA e CUB</button>` : ''}</div></div>
@@ -175,11 +182,11 @@ function indiceCardHtml(ind, nContratos) {
   const unidade = ind.tipo === 'pontos' ? '' : '%';
   return `<div class="card"><div class="row-between">
       <div><b>${esc(ind.nome)}</b> <span class="badge neutral">${esc(ind.codigo)}</span> <span class="tiny muted">${ind.tipo === 'pontos' ? 'valor em pontos (R$/m²)' : 'variação % ao mês'}</span></div>
-      <div class="btn-row" style="margin:0"><button class="btn btn-primary btn-sm" onclick="abrirLancarIndice('${ind.id}')">＋ Lançar mês</button><button class="btn btn-secondary btn-sm" onclick="abrirIndiceValores('${ind.id}')">📋 Todos os meses</button><button class="btn btn-secondary btn-sm" onclick="abrirIndiceForm('${ind.id}')">✏️</button>${nContratos ? '' : `<button class="btn btn-outline-danger btn-sm" onclick="excluirIndice('${ind.id}')">🗑️</button>`}</div></div>
+      <div class="btn-row" style="margin:0"><button class="btn btn-primary btn-sm" onclick="abrirIndiceAno('${ind.id}')">📅 Lançar índices</button><button class="btn btn-secondary btn-sm" onclick="abrirIndiceForm('${ind.id}')">✏️</button>${nContratos ? '' : `<button class="btn btn-outline-danger btn-sm" onclick="excluirIndice('${ind.id}')">🗑️</button>`}</div></div>
     <div class="small mt">${ms.length} mês(es) lançado(s)${ac12 != null ? ` · acumulado dos últimos 12: <b>${fmtNum(ac12, 2)}%</b>${ac12ap != null && Math.abs(ac12ap - ac12) > 0.005 ? ` · aplicado nos contratos: <b>${fmtNum(ac12ap, 2)}%</b>` : ''}` : ''}${nContratos ? ` · usado em ${nContratos} contrato(s)` : ''}</div>
     ${temNegativo ? '<p class="help mt">Meses negativos ficam registrados, mas entram como 0% nos contratos: a correção não reduz o valor das parcelas.</p>' : ''}
     ${faltaMes ? `<div class="alert warn" style="cursor:default;margin-top:8px"><span>Falta lançar ${monthLabel(mesAtual())}. Sem o lançamento, as parcelas deste mês ficam sem correção.</span></div>` : ''}
-    ${ultimos.length ? `<div class="chips mt">${ultimos.map(m => `<div class="chip" onclick="abrirLancarIndice('${ind.id}','${m}')" ${Number(vals[m]) < 0 ? 'title="Deflação: entra como 0% nos contratos"' : ''}>${monthLabel(m)}<span class="n">${fmtNum(vals[m], 2)}${unidade}</span>${Number(vals[m]) < 0 ? ' ⤵' : ''}</div>`).join('')}</div>` : '<p class="help mt">Nenhum valor lançado ainda.</p>'}</div>`;
+    ${ultimos.length ? `<div class="chips mt">${ultimos.map(m => `<div class="chip" onclick="abrirIndiceAno('${ind.id}','${m.slice(0, 4)}')" ${Number(vals[m]) < 0 ? 'title="Deflação: entra como 0% nos contratos"' : ''}>${monthLabel(m)}<span class="n">${fmtNum(vals[m], 2)}${unidade}</span>${Number(vals[m]) < 0 ? ' ⤵' : ''}</div>`).join('')}</div>` : '<p class="help mt">Nenhum valor lançado ainda.</p>'}</div>`;
 }
 
 function criarIndicesPadrao() {
@@ -229,6 +236,81 @@ function abrirLancarIndice(id, mes) {
   });
   setTimeout(() => { const el = $('#lxValor'); if (el) el.focus(); }, 60);
 }
+/* ---------------------------------------------------------------- lançamento por ano
+   Lançar mês a mês, cada um num modal, é lento e não deixa conferir o ano inteiro. Aqui os
+   doze meses ficam numa tabela só, com navegação de ano, do jeito que o usuário já conhece
+   do sistema que ele usa hoje. O que é digitado fica num rascunho enquanto ele troca de
+   ano, e só vai para o índice quando ele salva. */
+function abrirIndiceAno(id, ano) {
+  const ind = getIndice(id); if (!ind) return;
+  window.__ixBuf = Object.assign({}, indiceValores(ind));
+  window.__ixAno = Number(ano) || Number(mesAtual().slice(0, 4));
+  openModal({
+    title: `📈 ${esc(ind.nome)}`,
+    wide: true,
+    body: ixAnoHtml(id),
+    footer: `<button class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
+      <button class="btn btn-outline" onclick="ixCapturar();abrirIndiceValores('${id}')">📋 Colar de uma planilha</button>
+      <button class="btn btn-primary" onclick="salvarIndiceAno('${id}')">Salvar</button>`
+  });
+  setTimeout(() => { const el = document.getElementById('ix0'); if (el) el.focus(); }, 60);
+}
+function ixAnoHtml(id) {
+  const ind = getIndice(id); const ano = window.__ixAno; const buf = window.__ixBuf || {};
+  const unidade = ind.tipo === 'pontos' ? '' : '%';
+  const lancados = Object.keys(buf).filter(m => m.slice(0, 4) === String(ano) && buf[m] !== '' && buf[m] != null).length;
+  const linhas = MESES_EXT.map((nome, i) => {
+    const m = `${ano}-${pad2(i + 1)}`;
+    const v = buf[m];
+    const futuro = m > mesAtual();
+    return `<tr class="${futuro ? 'ix-futuro' : ''}">
+      <td>${nome.charAt(0).toUpperCase() + nome.slice(1)}/${ano}</td>
+      <td style="text-align:right;width:180px"><input type="text" inputmode="decimal" id="ix${i}" data-mes="${m}" class="ix-val"
+        value="${v == null || v === '' ? '' : String(v).replace('.', ',')}" placeholder="—" onkeydown="ixTecla(event,${i})"></td>
+      <td style="width:28px" class="tiny muted">${unidade}</td></tr>`;
+  }).join('');
+  return `<div class="ix-ano-nav">
+      <button type="button" class="btn btn-secondary btn-sm" onclick="ixTrocarAno('${id}',-1)">‹ ${ano - 1}</button>
+      <b>${ano}</b>
+      <button type="button" class="btn btn-secondary btn-sm" onclick="ixTrocarAno('${id}',1)">${ano + 1} ›</button>
+    </div>
+    <table class="tbl ix-tab" oninput="ixContar()"><thead><tr><th>Mês/Ano</th><th style="text-align:right">Índice</th><th></th></tr></thead><tbody>${linhas}</tbody></table>
+    <p class="help mt"><span id="ixContagem">${lancados}</span> de 12 meses lançados em ${ano}. ${ind.tipo === 'pontos' ? 'Valor publicado do índice no mês.' : 'Variação do mês, em %. Pode ser negativa: fica registrada, mas entra como 0% nos contratos, porque a correção não reduz parcela.'} Mês em branco não é zero — é mês sem lançamento, e as parcelas que dependem dele ficam sem correção até você lançar.</p>
+    <p class="help">Trocar de ano não perde o que você digitou: tudo é salvo junto no botão Salvar.</p>`;
+}
+/* A contagem acompanha a digitação: contador parado enquanto se preenche engana. */
+function ixContar() {
+  const el = document.getElementById('ixContagem'); if (!el) return;
+  el.textContent = [...document.querySelectorAll('.ix-val')].filter(i => i.value.trim() !== '').length;
+}
+/* Enter desce para o mês seguinte, que é como se preenche uma coluna de doze valores. */
+function ixTecla(ev, i) {
+  if (ev.key !== 'Enter') return;
+  ev.preventDefault();
+  const prox = document.getElementById('ix' + (i + 1));
+  if (prox) prox.focus(); else document.getElementById('ix' + i).blur();
+}
+function ixCapturar() {
+  const buf = window.__ixBuf || (window.__ixBuf = {});
+  document.querySelectorAll('.ix-val').forEach(el => {
+    const m = el.dataset.mes, t = el.value.trim();
+    if (t === '') delete buf[m]; else buf[m] = num(t);
+  });
+}
+function ixTrocarAno(id, d) {
+  ixCapturar();
+  window.__ixAno += d;
+  $('#modalBody').innerHTML = ixAnoHtml(id);
+}
+function salvarIndiceAno(id) {
+  if (!pode('indices.editar')) { toast('🔒', 'Sem permissão', 'Seu perfil não lança índices.', true); return; }
+  const ind = getIndice(id); if (!ind) return;
+  ixCapturar();
+  const valores = {};
+  Object.keys(window.__ixBuf).forEach(m => { const v = window.__ixBuf[m]; if (v !== '' && v != null && isFinite(Number(v))) valores[m] = Number(v); });
+  confirmarIndice(ind, valores, `Índice ${ind.codigo}: ${Object.keys(valores).length} mês(es) lançado(s)`);
+}
+
 function salvarValorIndice(id) {
   if (!pode('indices.editar')) { toast('🔒', 'Sem permissão', 'Seu perfil não lança índices.', true); return; }
   const ind = getIndice(id); if (!ind) return;

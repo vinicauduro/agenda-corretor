@@ -6,11 +6,17 @@ function aSetFiltroRec(st) { state.filters.rec = Object.assign(state.filters.rec
 function abrirPainelCobranca() { state.sub.rec = 'cobranca'; switchTab('recebiveis'); }
 function renderRecebiveis() {
   const esc0 = escopoAtual(); const v = $('#av-recebiveis');
-  const f = state.filters.rec = state.filters.rec || { status: 'aberto', mes: 'all', busca: '' };
+  /* A tela abre no mês corrente, não na carteira inteira: um loteamento com trezentas
+     parcelas vira uma lista que ninguém lê. O extrato completo de um contrato fica na tela
+     da venda, e quem quiser tudo aqui escolhe "Todos os meses". */
+  const f = state.filters.rec = state.filters.rec || { status: 'aberto', mes: mesAtual(), busca: '' };
   const all = recebiveisDo(esc0);
   const grupos = { aberto: r => recStatus(r) !== 'pago', atrasado: r => recStatus(r) === 'atrasado', pago: r => recStatus(r) === 'pago', all: () => true };
-  const meses = [...new Set(all.map(r => monthKey(r.vencimento)))].sort();
-  const list = all.filter(r => grupos[f.status](r) && (f.mes === 'all' || monthKey(r.vencimento) === f.mes) && (!f.busca || clienteDe(r).toLowerCase().includes(f.busca.toLowerCase())))
+  const meses = [...new Set(all.map(r => monthKey(r.vencimento)).concat([mesAtual()]))].sort();
+  /* Atraso não é do mês: parcela vencida em julho continua atrasada em setembro. Nesse
+     filtro o mês é ignorado, senão o que a empresa mais precisa ver ficaria escondido. */
+  const porMes = r => f.status === 'atrasado' || f.mes === 'all' || monthKey(r.vencimento) === f.mes;
+  const list = all.filter(r => grupos[f.status](r) && porMes(r) && (!f.busca || clienteDe(r).toLowerCase().includes(f.busca.toLowerCase())))
     .sort((a, b) => a.vencimento.localeCompare(b.vencimento) || a.numero - b.numero);
   const tot = all.reduce((s, r) => s + recValor(r), 0), pago = all.reduce((s, r) => s + num(r.valorPago), 0);
   const atr = all.filter(r => recStatus(r) === 'atrasado').reduce((s, r) => s + recRestante(r), 0);
@@ -32,11 +38,11 @@ function renderRecebiveis() {
       <div class="chip" onclick="abrirRetorno()">📥 Retorno</div>` : ''}</div>
     <div class="filters">
       ${escopoSelectHtml('renderRecebiveis()')}
-      <select onchange="state.filters.rec.mes=this.value;renderRecebiveis()"><option value="all">Todos os meses</option>${meses.map(m => `<option value="${m}" ${f.mes === m ? 'selected' : ''}>${monthLabel(m)}</option>`).join('')}</select>
+      <select onchange="state.filters.rec.mes=this.value;renderRecebiveis()"><option value="all">Todos os meses</option>${meses.map(m => `<option value="${m}" ${f.mes === m ? 'selected' : ''}>${monthLabel(m)}${m === mesAtual() ? ' (mês atual)' : ''}</option>`).join('')}</select>
       <input type="text" placeholder="🔎 Cliente ou lote" value="${esc(f.busca)}" oninput="aSetFiltro('rec','busca',this.value,renderRecebiveis,this)">
       <button class="btn btn-secondary btn-sm" onclick="exportarRecebiveisCSV()">⬇️ CSV</button>
     </div>
-    <p class="small muted mb">${list.length} parcela(s) · ${fmtMoney(somaLista)}</p>
+    <p class="small muted mb">${list.length} parcela(s) · ${fmtMoney(somaLista)}${f.status === 'atrasado' ? ' · atrasos de todos os meses' : f.mes !== 'all' ? ` · ${monthLabel(f.mes)}. O extrato completo de um contrato fica na tela da venda.` : ''}</p>
     ${list.length ? list.map(r => recRowHtml(r)).join('') : `<div class="empty"><div class="ic">📆</div><p>Nenhuma parcela nesta lista.</p></div>`}`;
 }
 function clienteDe(r) { const v = getVenda(r.vendaId); if (!v) return ''; return v.cliente.nome + ' ' + imovelLabel(v); }

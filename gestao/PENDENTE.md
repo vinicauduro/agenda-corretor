@@ -390,6 +390,101 @@ mas só imprimem a primeira parte de cada lado.
 
 ---
 
+## 7h. Primeira rodada de testes seus (18/09) — o que mudou
+
+Vinte apontamentos seus. Todos atendidos; três eu resolvi diferente do pedido literal e
+explico por quê.
+
+**Venda**
+
+- [ ] A qualificação **abria recolhida** e você não viu que os campos existiam — parecia que
+      o sistema presumia brasileiro e casado. Agora abre visível. Nacionalidade sempre foi
+      campo digitável (vem sugerido "brasileiro") e estado civil sempre foi lista com
+      solteiro, casado, união estável, divorciado, separado e viúvo.
+- [ ] **Nome, CPF, RG, profissão, estado civil, nacionalidade, endereço e cidade viraram
+      obrigatórios.** Salvar sem eles é recusado, dizendo qual falta e levando a tela até o
+      comprador certo. Vale para cada comprador da lista.
+- [ ] **Corretor**: o sistema pergunta *"O negócio foi intermediado por corretor de
+      imóveis?"*. Só no "Sim" aparecem os campos, agora com a qualificação inteira mais
+      CRECI, que é obrigatório. No "Não" a comissão vai a zero.
+- [ ] **Pagamento à vista**: nova opção. Escolhendo, somem entrada, parcelas, juros, índice e
+      reforços, e o valor inteiro entra como uma parcela só.
+- [ ] **Número de parcelas**: virou campo de texto com teclado numérico, sem as setinhas.
+      Aqui eu não consegui reproduzir o travamento que você viu — digitando no meu teste o
+      campo aceitava normalmente. Mudei o tipo do campo, que é de onde esse tipo de
+      comportamento costuma vir. **Confirme se resolveu.**
+- [ ] **Salva a venda, o sistema pergunta se emite o contrato** e abre a tela para conferir.
+- [ ] **Sem índice cadastrado**, a venda avisa e leva ao cadastro, em vez de mostrar um
+      seletor vazio.
+
+**Cadastros**
+
+- [ ] A aba **Vendedores virou 🏢 Dados da empresa** e reúne três coisas: a empresa (razão
+      social, CNPJ, inscrição estadual, telefone, e-mail e endereço em campos separados),
+      **quem assina** e os outros CNPJs do grupo. O cartão que ficava em Configurações saiu
+      de lá.
+- [ ] **Quem assina virou lista**, porque contrato social costuma exigir duas assinaturas.
+      Cada signatário tem qualificação completa, com RG, endereço e cargo.
+- [ ] **O editor de modelo abre em tela cheia**, com a paleta de campos numa coluna ao lado.
+
+**Banco — dois pedidos que eu resolvi diferente, e o porquê**
+
+- [ ] **Nosso número saiu do cadastro**: o sistema numera sozinho. Você pediu número
+      *aleatório*; não fiz sorteio de propósito. Número sorteado pode repetir, e nosso número
+      repetido no mesmo convênio é **recusa certa** no banco. O que eu fiz atende ao que você
+      quis — você não digita nada — sem esse risco: uma faixa alta e separada, começando em
+      **1000000**, que nunca anda para trás. Conta que já vinha numerando continua de onde
+      estava.
+- [ ] **Códigos de instrução saíram da tela.** Você perguntou o que fazem: são o comando para
+      o banco **agir sozinho** depois do vencimento — protestar em cartório, baixar o título,
+      negativar. Cada banco tem os seus códigos. **Zerados, o banco não faz nada por conta
+      própria**: o boleto fica registrado, o cliente pode pagar depois do vencimento com
+      multa e juros, e ninguém é protestado. É exatamente como a remessa que a sua empresa
+      manda hoje já vem (`00 00`), e é o comportamento seguro — código errado protesta um
+      comprador por engano. Os dias de protesto continuam saindo **impressos no boleto**,
+      como aviso. Se um dia você quiser protesto automático de verdade, isso se liga junto
+      com o seu gerente, com o manual na mão.
+
+**Índices**
+
+- [ ] **Tela nova, no formato que você mandou**: navegação por ano (‹ 2025 · 2026 · 2027 ›) e
+      os doze meses numa tabela só, com o valor ao lado. Aceita vírgula. Enter desce para o
+      mês seguinte. Trocar de ano não perde o que você digitou — tudo salva junto.
+- [ ] **No topo da tela de índices** entrou o painel de **acumulado dos últimos 12 meses** por
+      índice, como no sistema que você usa hoje, com aviso de qual mês falta lançar.
+
+**Painel e recebíveis**
+
+- [ ] Saíram do painel os **próximos vencimentos** e a **atividade recente**.
+- [ ] **Recebíveis abre no mês corrente.** Para ver tudo, o seletor de mês tem "Todos os
+      meses"; o extrato completo de um contrato fica na tela da venda. **Atenção:** no filtro
+      **Atrasados** o mês é ignorado de propósito — parcela vencida em julho continua
+      atrasada em setembro, e esconder isso seria pior.
+
+**Antecipação e quitação**
+
+- [ ] "Juros não usados" virou **Desconto**.
+- [ ] Saiu a projeção de quitação dos próximos meses: fica só **o valor do mês vigente**,
+      válido até o último dia do mês, que é como o cálculo é feito.
+- [ ] A mensagem de WhatsApp diz **"para quitar até o último dia do mês"**.
+- [ ] **Amortização parcial**: no modo "reduzir prazo" o cliente pode pagar qualquer valor —
+      10, 100, 1000. O sistema quita as parcelas inteiras que o dinheiro fecha e **amortiza em
+      parte a parcela seguinte, que continua em aberto com o saldo**. O pedaço pago adiantado
+      ganha o mesmo desconto que a parcela inteira ganharia. No extrato aparecem duas linhas:
+      a amortização, quitada na data do pagamento, e a parcela original com o saldo — que
+      continua sujeita à correção do índice, como qualquer saldo devedor. **Confira esse
+      cálculo contra a sua planilha**, é o ponto mais delicado desta rodada.
+
+**Distrato**
+
+- [ ] Como combinado, o distrato saiu e virou **🗑️ Excluir contrato**, em duas etapas: a
+      primeira tela mostra quantas parcelas somem, quanto já foi recebido e que o lote volta a
+      ficar disponível; a segunda pede que você escreva **EXCLUIR**. Se o contrato tiver
+      pagamento registrado, o aviso é explícito: esse dinheiro some dos relatórios. Tire um
+      backup antes, em Cadastros › Backup.
+
+---
+
 ## 7f. Decisões que só dependem de você
 
 Nenhuma me trava hoje, mas todas mudam o produto:

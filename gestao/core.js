@@ -10,6 +10,13 @@ const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 
 function genId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
 function pad2(n) { return String(n).padStart(2, '0'); }
+/* Último dia do mês de uma data ISO. O cálculo de juros e de quitação é por mês fechado,
+   então é até esta data que um valor apurado no mês continua valendo. */
+function ultimoDiaDoMes(iso) {
+  const [y, m] = String(iso || '').split('-').map(Number);
+  if (!y || !m) return iso;
+  return `${y}-${pad2(m)}-${pad2(new Date(y, m, 0).getDate())}`;
+}
 function ymd(dt) { return dt.getFullYear() + '-' + pad2(dt.getMonth() + 1) + '-' + pad2(dt.getDate()); }
 function todayStr() { return ymd(new Date()); }
 function parseDate(s) { if (!s) return null; const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); }

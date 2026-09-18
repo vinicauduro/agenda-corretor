@@ -150,10 +150,7 @@ function renderPainel() {
       <div class="card"><h3>📈 Fluxo previsto (12 meses)</h3><canvas class="chart" id="chartFluxo" height="200"></canvas><div class="legend-list" style="flex-direction:row;gap:14px"><div><span class="dot" style="background:#2563eb"></span>Recebimentos previstos</div><div><span class="dot" style="background:#f97316"></span>Custos previstos</div></div></div>
       <div class="card"><h3>🥧 Situação dos lotes</h3><canvas class="chart" id="chartLotes" height="200"></canvas><div class="legend-list" id="chartLotesLegend"></div></div>
     </div>
-    <div class="grid2">
-      <div class="card"><h3>📅 Próximos vencimentos (a receber)</h3>${recs.filter(r => recStatus(r) !== 'pago').sort((a, b) => a.vencimento.localeCompare(b.vencimento)).slice(0, 6).map(r => recRowHtml(r)).join('') || '<p class="help">Nenhum recebível pendente.</p>'}</div>
-      <div class="card"><h3>🕒 Atividade recente</h3><div class="act-log">${db.log.slice(-10).reverse().map(e => `<div><span class="when">${fmtDateTime(e.ts)}</span><span>${esc(e.msg)}</span></div>`).join('') || '<p class="help">Sem atividades.</p>'}</div></div>
-    </div>`;
+`;
   drawFluxoChart($('#chartFluxo'), recs, cs);
   drawDonut($('#chartLotes'), $('#chartLotesLegend'), [
     { label: 'Disponíveis', value: cnt('disponivel'), color: '#22c55e' }, { label: 'Reservados', value: cnt('reservado'), color: '#f59e0b' },
@@ -647,7 +644,7 @@ function abrirVendaAdmin(id) {
     <tfoot><tr><td colspan="2">Total</td><td class="num">${fmtMoney(r.total)}</td><td class="num">${fmtMoney(r.pago)}</td><td colspan="2"></td></tr></tfoot></table></div>`;
   let footer = `${pode('vendas.editar') ? `<button class="btn btn-secondary" onclick="abrirVendaForm('${x.id}')">✏️ Editar</button>` : ''}<button class="btn btn-outline" onclick="imprimirExtrato('${x.id}')">🖨️ Extrato</button><button class="btn btn-outline" onclick="gerarContratoVenda('${x.id}')">📄 Contrato</button>${x.status !== 'distrato' && vendaResumo(x).restante > 0.005 && pode('financeiro.antecipar') ? `<button class="btn btn-success" onclick="abrirAntecipacao('${x.id}')">💸 Antecipar / quitar</button>` : ''}`;
   if (c.telefone) footer += `<a class="btn btn-wa" target="_blank" href="${waLink(c.telefone, extratoTexto(x))}">💬 Enviar resumo</a>`;
-  if (x.status !== 'distrato' && pode('vendas.distrato')) footer += `<button class="btn btn-outline-danger" onclick="distratoVenda('${x.id}')">Distrato</button>`;
+  if (pode('vendas.distrato')) footer += `<button class="btn btn-outline-danger" onclick="excluirVenda('${x.id}')">🗑️ Excluir contrato</button>`;
   openModal({ title: `💰 Venda · ${esc(imovelShort(x))}`, body, footer, wide: true });
 }
 /* Venda nova a partir da aba global: primeiro o empreendimento, depois o formulário. */
@@ -854,14 +851,40 @@ function perguntarContrato(vendaId) {
     footer: `<button class="btn btn-secondary" onclick="closeModal()">Agora não</button><button class="btn btn-primary" onclick="closeModal();gerarContratoVenda('${v.id}')">📄 Gerar contrato</button>`
   });
 }
-function distratoVenda(id) {
+/* Exclusão do contrato, no lugar do distrato — que ficou mal resolvido e a gente ainda não
+   sabe como quer. Apagar é destrutivo e leva junto o histórico de pagamentos, então são duas
+   etapas: primeiro o que vai embora, depois escrever EXCLUIR. */
+function excluirVenda(id) {
   const x = getVenda(id); if (!x) return;
-  const motivo = prompt('Confirmar DISTRATO desta venda? O lote volta a ficar disponível e as parcelas em aberto são canceladas. Motivo:', '');
-  if (motivo === null) return;
-  upsert('vendas', Object.assign({}, x, { status: 'distrato', distratoEm: todayStr(), motivo }));
-  const l = x.loteId ? getLote(x.loteId) : null; if (l && l.vendaId === x.id) upsert('lotes', Object.assign({}, l, { status: 'disponivel', vendaId: null }));
-  logAct(`Distrato: ${imovelLabel(x)} — ${x.cliente.nome}${motivo ? ' (' + motivo + ')' : ''}`);
-  closeModal(); renderCurrent(); toast('↩️', 'Distrato registrado', '');
+  const recs = recebiveisDe(x.id);
+  const pagos = recs.filter(r => num(r.valorPago) > 0);
+  const totalPago = pagos.reduce((s, r) => s + num(r.valorPago), 0);
+  const l = x.loteId ? getLote(x.loteId) : null;
+  openModal({
+    title: '🗑️ Excluir contrato',
+    body: `<p class="help mb">Isto apaga a venda de <b>${esc(imovelLabel(x))}</b> para <b>${esc(x.cliente.nome)}</b>. Não dá para desfazer.</p>
+      <div class="detail-grid">
+        <div><div class="k">Parcelas</div><div class="v">${recs.length} serão apagadas</div></div>
+        <div><div class="k">Já recebido</div><div class="v">${pagos.length ? `<b style="color:var(--danger)">${fmtMoney(totalPago)}</b> em ${pagos.length} pagamento(s)` : 'nada'}</div></div>
+        ${l ? `<div class="full"><div class="k">Lote</div><div class="v">${esc(loteLabel(l))} volta a ficar disponível</div></div>` : ''}
+      </div>
+      ${pagos.length ? `<div class="alert warn" style="cursor:default"><span>Este contrato tem <b>${fmtMoney(totalPago)}</b> já recebido. Apagando, esse dinheiro some dos relatórios e do caixa. Se o negócio foi desfeito e você precisa do histórico, guarde um backup antes em Cadastros › Backup.</span></div>` : ''}
+      <div class="fg mt"><label>Para confirmar, escreva <b>EXCLUIR</b></label><input type="text" id="exVenda" placeholder="EXCLUIR" autocomplete="off"></div>`,
+    footer: `<button class="btn btn-secondary" onclick="closeModal()">Cancelar</button><button class="btn btn-outline-danger" onclick="confirmarExclusaoVenda('${x.id}')">Excluir contrato</button>`
+  });
+  setTimeout(() => { const el = $('#exVenda'); if (el) el.focus(); }, 60);
+}
+function confirmarExclusaoVenda(id) {
+  const x = getVenda(id); if (!x) return;
+  if (val('exVenda').trim().toUpperCase() !== 'EXCLUIR') { toast('⚠️', 'Escreva EXCLUIR', 'A palavra confirma que você quer mesmo apagar.', true); return; }
+  const nome = x.cliente.nome, imovel = imovelLabel(x);
+  recebiveisDe(x.id).forEach(r => removeRec('recebiveis', r.id));
+  db.cobrancas.filter(c => c.vendaId === x.id).forEach(c => removeRec('cobrancas', c.id));
+  const l = x.loteId ? getLote(x.loteId) : null;
+  if (l && l.vendaId === x.id) upsert('lotes', Object.assign({}, l, { status: 'disponivel', vendaId: null, reservaId: null }));
+  removeRec('vendas', x.id);
+  logAct(`Contrato excluído: ${imovel} — ${nome}`);
+  closeModal(); renderCurrent(); toast('🗑️', 'Contrato excluído', `${imovel} — ${nome}`);
 }
 
 // ================================================================ CADASTROS
