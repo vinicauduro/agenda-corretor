@@ -405,3 +405,12 @@ canvas.chart { width: 100%; display: block; }
 .auth-card h2 { font-size: 1.15rem; font-weight: 800; margin-bottom: 12px; }
 .auth-links { display: flex; justify-content: space-between; gap: 10px; margin-top: 12px; font-size: 0.82rem; }
 .auth-card .item { cursor: pointer; }
+
+/* Bloco recolhível da qualificação: o essencial fica à vista e o resto abre quando precisa */
+details.qualif { border: 1px dashed var(--border); border-radius: 8px; padding: 8px 10px; margin: 4px 0 10px; background: #fff; }
+details.qualif > summary { cursor: pointer; font-size: 0.82rem; font-weight: 700; color: var(--primary); list-style: none; }
+details.qualif > summary::-webkit-details-marker { display: none; }
+details.qualif > summary::before { content: '▸ '; }
+details.qualif[open] > summary::before { content: '▾ '; }
+details.qualif[open] > summary { margin-bottom: 10px; }
+.tiny.ok { color: #15803d; }

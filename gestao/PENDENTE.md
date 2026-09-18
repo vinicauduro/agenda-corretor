@@ -9,16 +9,18 @@ sua conferência. Atualizada em 17/09/2026, depois da revisão de segurança e d
 
 - [x] ~~Rodar o `schema.sql`~~ — feito por você em 17/09, já com a separação do perfil
       financeiro e os convites novos.
-- [ ] **Rodar o `schema.sql` uma última vez.** Depois daquela execução entraram duas coisas
-      pequenas: a limpeza de dados passou a apagar também categorias e modelos (antes sobrava
-      resto ao importar backup) e a semente de categorias de novas empresas já vem dividida.
-      Nenhuma das duas é urgente — só afeta importar backup e empresa criada daqui pra frente.
+- [ ] **Rodar o `schema.sql` de novo.** Acumulou o seguinte desde aquela execução: a limpeza
+      de dados passou a apagar também categorias e modelos (antes sobrava resto ao importar
+      backup), a semente de categorias já vem dividida, os juros da conta bancária ganharam
+      coluna em % ao mês, e agora entrou a **tabela de vendedores** e as colunas de
+      qualificação do imóvel (descrição da matrícula, endereço do lote, cartório, código
+      IBGE). Esta última é necessária: sem rodar, o cadastro de vendedores não sincroniza.
 - [ ] Abrir o app e forçar a atualização (Ctrl+Shift+R no computador) para pegar a versão nova.
       Endereço: https://vinicauduro.github.io/agenda-corretor/gestao/
 - [ ] Conferir a barra nova: **Painel · 🏗️ Empreendimentos · Vendas · Recebíveis ·
       Relatórios · Cadastros**. Planta, lotes, reservas, obra e leads agora ficam dentro do
       empreendimento; em Cadastros estão Equipe, Permissões, Categorias, Documentos, Índices,
-      Cobrança, Banco, Vitrine, Configurações, Nuvem e Backup.
+      Cobrança, Banco, Vitrine, Configurações, Nuvem e Backup — mais **Vendedores**, novo.
 
 ---
 
@@ -324,6 +326,55 @@ O corretor não muda: continua vendo planta e reservando lote, e carteiras não 
 
 ---
 
+## 7g. Qualificação das partes e do imóvel (novo)
+
+Sem isto não sai contrato, e é também a base da declaração fiscal mais adiante. O motor de
+contrato já citava `{{cliente.rg}}`, `{{cliente.nacionalidade}}` e `{{cliente.estadoCivil}}`,
+mas o formulário nunca coletou esses campos — saía tudo em branco e ninguém percebia.
+
+**O que testar:**
+
+- [ ] Abra uma venda. O bloco do comprador agora tem, além de nome, CPF, telefone e e-mail,
+      um **📋 Qualificação completa** que abre: nacionalidade, profissão, estado civil,
+      regime de bens, RG com órgão expedidor e endereço em campos separados (CEP,
+      logradouro, número, complemento, bairro, cidade, UF).
+- [ ] O resumo desse bloco diz o que ainda falta — "falta profissão, RG, cidade". É a mesma
+      conferência que a declaração fiscal vai exigir depois, então vale preencher já.
+- [ ] Escolha **estado civil casado** ou **união estável**: aparece sozinho o bloco do
+      **cônjuge**, com os mesmos campos e a opção "mora no mesmo endereço" já marcada.
+- [ ] **Confira a concordância.** Cada pessoa tem um seletor masculino/feminino que controla
+      só o texto do contrato: brasileiro/brasileira, casado/casada, portador/portadora.
+      Ao trocar a do comprador, a do cônjuge vira sozinha para a oposta — se o casal for do
+      mesmo sexo, troque à mão e o sistema não mexe mais nela.
+- [ ] Em **Cadastros › Vendedores**, cadastre outro CNPJ do grupo. A empresa das
+      Configurações continua sendo o vendedor padrão; a venda pergunta qual deles assina.
+      Era o seu caso de incorporadora com vários CNPJs.
+- [ ] No lote, abra **📋 Qualificação do imóvel**: descrição conforme a matrícula (copie do
+      registro, com as confrontações), e o endereço próprio do lote. Em branco, o contrato
+      usa o endereço do empreendimento.
+- [ ] No empreendimento, **📋 Endereço e registro**: CEP, logradouro, bairro, UF, cartório de
+      registro, matrícula mãe e código do município no IBGE (este só a declaração fiscal usa;
+      pode ficar para depois).
+- [ ] Gere um contrato de uma venda já qualificada e leia o parágrafo das partes. Ele sai
+      assim: *"FULANO, brasileiro, casado sob o regime da comunhão parcial de bens, corretor
+      de imóveis, portador da cédula de identidade RG nº X SSP/SC, inscrito no CPF sob o nº
+      Y, residente e domiciliado na Rua Z, nº 10, Centro, CEP 88800-000, Criciúma/SC, e sua
+      esposa BELTRANA, brasileira, professora, …, residente e domiciliada no mesmo endereço"*.
+- [ ] O contrato agora tem linha de assinatura do cônjuge quando existe cônjuge.
+
+**Atenção, uma coisa que eu não faço sozinho:** o modelo padrão de contrato mudou para usar
+`{{vendedor.qualificacao}}`, `{{comprador.qualificacao}}` e `{{imovel.descricao}}`. **Se você
+já editou o seu modelo em Cadastros › Documentos, o seu texto não é tocado** — ele continua
+com os campos antigos, que seguem funcionando. Para aproveitar os novos, entre no modelo e
+troque os parágrafos das partes por esses três campos; a lista de campos à direita já os
+mostra.
+
+**O que eu deixei de fora de propósito:** mais de um comprador sem ser o cônjuge (dois irmãos,
+dois sócios comprando juntos). Cabe, mas muda a tela e eu preferi não inventar antes de você
+dizer se acontece na sua rotina.
+
+---
+
 ## 7f. Decisões que só dependem de você
 
 Nenhuma me trava hoje, mas todas mudam o produto:
@@ -346,9 +397,17 @@ Em ordem de prioridade acordada:
 
 1. ~~Cobrança bancária~~ — **feito para o Banco do Brasil.** Faltam Caixa, Bradesco, Sicoob e
    C6, esperando os arquivos de cada um.
-2. **Portal do comprador** — segunda via e extrato para o cliente final.
-3. **Distrato e transferência de lote.**
-4. **Planos do SaaS** — definir o que entra em cada plano e travar por plano no sistema.
+2. **DIMOB** — a qualificação das partes e do imóvel já está pronta (seção 7g), que era a
+   parte difícil. Falta o leiaute oficial do arquivo de importação e um `.txt` de um ano que
+   você já entregou, para eu conferir campo por campo em vez de adivinhar. O sistema gera o
+   arquivo; quem transmite é o programa da Receita, com o certificado digital. Perguntas
+   pendentes para o seu contador: o valor declarado no ano inclui juros, multa e correção?
+   Venda distratada no meio do ano, como entra? Venda parcelada declara a alienação inteira
+   no ano do contrato? Você é obrigado pela loteadora, pela imobiliária, ou pelas duas?
+   Decidido: locação fica fora, não é o que você busca.
+3. **Portal do comprador** — segunda via e extrato para o cliente final.
+4. **Distrato e transferência de lote.**
+5. **Planos do SaaS** — definir o que entra em cada plano e travar por plano no sistema.
 
 Descartado por decisão sua: assinatura digital, que é serviço contratado à parte. Sem
 necessidade: anexar documentos do cliente no sistema e comissão fixa por corretor, já que a

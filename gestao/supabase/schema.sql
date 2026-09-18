@@ -480,6 +480,7 @@ begin
   delete from public.remessas where org_id = p_org;
   delete from public.contas_banco where org_id = p_org;
   delete from public.modelos where org_id = p_org;
+  delete from public.vendedores where org_id = p_org;
   delete from public.categorias where org_id = p_org;
   delete from public.vitrines where org_id = p_org;
   delete from public.loteamentos where org_id = p_org;
@@ -561,6 +562,23 @@ alter table public.contas_banco add column if not exists juros_mes_pct double pr
 alter table public.loteamentos add column if not exists tipo text not null default 'loteamento';
 -- Venda sem lote: o imóvel é descrito na própria venda
 alter table public.vendas add column if not exists imovel jsonb;
+
+-- Qualificação das partes e do imóvel: sem estes campos não sai contrato nem escritura.
+alter table public.vendas add column if not exists vendedor_id text;
+alter table public.vendas add column if not exists vendedor jsonb;
+alter table public.lotes add column if not exists descricao_matricula text not null default '';
+alter table public.lotes add column if not exists logradouro text not null default '';
+alter table public.lotes add column if not exists numero_end text not null default '';
+alter table public.lotes add column if not exists bairro text not null default '';
+alter table public.lotes add column if not exists cep text not null default '';
+alter table public.loteamentos add column if not exists logradouro text not null default '';
+alter table public.loteamentos add column if not exists numero_end text not null default '';
+alter table public.loteamentos add column if not exists bairro text not null default '';
+alter table public.loteamentos add column if not exists cep text not null default '';
+alter table public.loteamentos add column if not exists uf text not null default '';
+alter table public.loteamentos add column if not exists codigo_ibge text not null default '';
+alter table public.loteamentos add column if not exists cartorio text not null default '';
+alter table public.loteamentos add column if not exists matricula_mae text not null default '';
 -- numa carteira a venda não aponta para lote
 alter table public.vendas alter column lote_id drop not null;
 
@@ -632,6 +650,40 @@ drop policy if exists modelos_select on public.modelos;
 drop policy if exists modelos_write on public.modelos;
 create policy modelos_select on public.modelos for select to authenticated using (public.eh_membro(org_id));
 create policy modelos_write on public.modelos for all to authenticated using (public.eh_admin(org_id)) with check (public.eh_admin(org_id));
+
+-- ---------------------------------------------------------------------
+-- 5a2. Vendedores (outorgantes): quem assina a venda no contrato
+--      A incorporadora costuma ter um CNPJ por empreendimento e às vezes vende
+--      imóvel que está no nome de outra empresa do grupo, então quem vende não é
+--      sempre a empresa do cadastro.
+-- ---------------------------------------------------------------------
+create table if not exists public.vendedores (
+  org_id             uuid not null references public.organizacoes(id) on delete cascade,
+  id                 text not null,
+  tipo               text not null default 'pj' check (tipo in ('pf','pj')),
+  nome               text not null,
+  cpf                text not null default '',
+  inscricao_estadual text not null default '',
+  representante      jsonb,
+  telefone           text not null default '',
+  email              text not null default '',
+  cep                text not null default '',
+  logradouro         text not null default '',
+  numero_end         text not null default '',
+  complemento        text not null default '',
+  bairro             text not null default '',
+  cidade             text not null default '',
+  uf                 text not null default '',
+  endereco           text not null default '',
+  obs                text not null default '',
+  criado_em          timestamptz not null default now(),
+  primary key (org_id, id)
+);
+alter table public.vendedores enable row level security;
+drop policy if exists vendedores_select on public.vendedores;
+drop policy if exists vendedores_write on public.vendedores;
+create policy vendedores_select on public.vendedores for select to authenticated using (public.eh_membro(org_id));
+create policy vendedores_write on public.vendedores for all to authenticated using (public.eh_admin(org_id)) with check (public.eh_admin(org_id));
 
 -- ---------------------------------------------------------------------
 -- 5b. Vitrine pública (link do loteamento para o cliente final) e leads
@@ -757,7 +809,7 @@ do $$
 declare t text;
 begin
   if exists (select 1 from pg_publication where pubname = 'supabase_realtime') then
-    foreach t in array array['organizacoes','membros','loteamentos','categorias','lotes','reservas','vendas','recebiveis','custos','log','vitrines','leads','modelos','indices','cobrancas','contas_banco','remessas'] loop
+    foreach t in array array['organizacoes','membros','loteamentos','categorias','lotes','reservas','vendas','recebiveis','custos','log','vitrines','leads','modelos','indices','cobrancas','contas_banco','remessas','vendedores'] loop
       if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = t) then
         execute format('alter publication supabase_realtime add table public.%I', t);
       end if;
