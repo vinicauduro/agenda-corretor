@@ -550,6 +550,9 @@ alter table public.recebiveis add column if not exists remessa_em date;
 -- o que foi registrado no banco; se a parcela mudar depois, a remessa precisa avisar o banco
 alter table public.recebiveis add column if not exists banco_valor double precision;
 alter table public.recebiveis add column if not exists banco_venc date;
+-- Qual conta bancária numerou este título: o nosso número é único por convênio, e trocar a
+-- conta de um empreendimento não pode reatribuir números já emitidos.
+alter table public.recebiveis add column if not exists conta_id text;
 -- marca d'água do nosso número: o maior que já saiu para o banco, para nunca repetir
 alter table public.contas_banco add column if not exists nn_max bigint not null default 0;
 -- códigos de instrução da remessa: só o que o usuário copiar do manual do banco dele
