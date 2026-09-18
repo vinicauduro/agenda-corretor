@@ -869,7 +869,7 @@ function renderCadastros() {
   const v = $('#av-cadastros');
   state.sub.cad = state.sub.cad || 'corretores';
   const todasTabs = [['corretores', Cloud.active ? '👥 Equipe' : '🧑‍💼 Corretores', 'equipe.gerenciar'],
-    ['vendedores', '✍️ Vendedores', 'config.editar'], ['permissoes', '🔐 Permissões', 'equipe.gerenciar'], ['categorias', '🏷️ Categorias', 'custos.editar'], ['documentos', '📄 Documentos', 'documentos.editar'],
+    ['empresa', '🏢 Dados da empresa', 'config.editar'], ['permissoes', '🔐 Permissões', 'equipe.gerenciar'], ['categorias', '🏷️ Categorias', 'custos.editar'], ['documentos', '📄 Documentos', 'documentos.editar'],
     ['indices', '📈 Índices', 'indices.editar'], ['cobranca', '🔔 Cobrança', 'cobranca.registrar'], ['banco', '🏦 Banco', 'config.editar'], ['vitrine', '🌐 Vitrine', 'vitrine.gerenciar'],
     ['config', '⚙️ Configurações', 'config.editar'], ['nuvem', Cloud.active ? '☁️ Conta' : '☁️ Nuvem', null], ['backup', '💾 Backup', 'backup.usar']];
   const tabs = todasTabs.filter(t => !t[2] || pode(t[2])).map(t => [t[0], t[1]]);
@@ -877,7 +877,7 @@ function renderCadastros() {
   const sub = state.sub.cad;
   let html = `<div class="subtabs">${tabs.map(([k, l]) => `<div class="chip ${sub === k ? 'active' : ''}" onclick="state.sub.cad='${k}';renderCadastros()">${l}</div>`).join('')}</div>`;
   if (sub === 'corretores') html += Cloud.active ? cadEquipeHtml() : cadCorretoresHtml();
-  else if (sub === 'vendedores') html += cadVendedoresHtml();
+  else if (sub === 'empresa') html += cadEmpresaHtml();
   else if (sub === 'categorias') html += cadCategoriasHtml();
   else if (sub === 'documentos') html += cadDocumentosHtml();
   else if (sub === 'indices') html += cadIndicesHtml();
@@ -973,19 +973,51 @@ function cadCorretoresHtml() {
    Quem vende no contrato nem sempre é a empresa do cadastro: incorporadora costuma ter um
    CNPJ por empreendimento, e às vezes vende imóvel que está no nome de outra do grupo. Por
    isso a venda pergunta sempre, tendo a empresa como padrão. */
-function cadVendedoresHtml() {
-  const pad = vendedorPadrao();
-  return `<div class="card"><h3>✍️ Quem assina como vendedor <span class="h-actions"><button class="btn btn-primary btn-sm" onclick="abrirVendedorForm()">＋ Novo</button></span></h3>
-    <p class="help mb">A empresa do cadastro já entra como vendedora padrão. Cadastre aqui os outros CNPJs do grupo — a cada venda o sistema pergunta qual deles assina o contrato.</p>
-    <div class="item" onclick="state.sub.cad='config';renderCadastros()"><div class="info"><div class="title">${esc(pad.nome || 'Empresa sem nome')} <span class="badge neutral">padrão</span></div>
-      <div class="meta"><span>${esc(pad.cpf ? fmtCPF(pad.cpf) : 'sem CNPJ')}</span>${pad.cidade ? `<span>· ${esc(pad.cidade)}</span>` : ''}<span>· editar em Configurações</span></div></div></div>
+/* Dados da empresa: quem ela é, quem assina por ela e os outros CNPJs do grupo. Tudo o que
+   o contrato precisa do lado de quem vende mora aqui. */
+function cadEmpresaHtml() {
+  const emp = vendedorPadrao();
+  const reps = (db.config.representantes || []).filter(r => r && r.nome);
+  return `<div class="card"><h3>🏢 A sua empresa</h3>
+    <p class="help mb">É com estes dados que a empresa é qualificada no contrato, no boleto e nos documentos.</p>
+    ${pessoaFormHtml('emp', Object.assign({}, emp, { tipo: 'pj' }), { semTipo: true, semRepresentante: true })}
+    <button class="btn btn-primary" onclick="salvarEmpresa()">Salvar dados da empresa</button></div>
+
+    <div class="card"><h3>✍️ Quem assina pela empresa</h3>
+    <p class="help mb">Contrato social costuma exigir mais de uma assinatura. Cadastre aqui cada pessoa que assina, com a qualificação completa — é ela que sai no contrato.</p>
+    ${pessoasListaHtml('sig', reps.length ? reps : [null], { rotulo: 'Signatário', rotuloBotao: 'Adicionar quem assina', soGenero: true, comCargo: true })}
+    <button class="btn btn-primary mt" onclick="salvarSignatarios()">Salvar quem assina</button></div>
+
+    <div class="card"><h3>🏘️ Outras empresas do grupo <span class="h-actions"><button class="btn btn-primary btn-sm" onclick="abrirVendedorForm()">＋ Nova</button></span></h3>
+    <p class="help mb">Incorporadora costuma ter um CNPJ por empreendimento. Cadastre os outros aqui e, a cada venda, o sistema pergunta qual deles assina o contrato. A empresa acima é sempre a padrão.</p>
     ${db.vendedores.slice().sort((a, b) => naturalCmp(a.nome, b.nome)).map(v => {
       const falta = faltaQualificacao(v);
       return `<div class="item" onclick="abrirVendedorForm('${v.id}')"><div class="info"><div class="title">${esc(v.nome)}</div>
         <div class="meta"><span>${esc(v.cpf ? fmtCPF(v.cpf) : 'sem documento')}</span>${v.cidade ? `<span>· ${esc(v.cidade)}</span>` : ''}
         ${falta.length ? `<span class="warn">· falta ${esc(falta.join(', '))}</span>` : '<span>· qualificação completa</span>'}</div></div>
         <div class="side"><span class="muted">${db.vendas.filter(x => x.vendedorId === v.id).length} venda(s)</span></div></div>`;
-    }).join('')}</div>`;
+    }).join('') || '<p class="help">Nenhuma outra empresa cadastrada.</p>'}</div>`;
+}
+function salvarEmpresa() {
+  const p = pessoaDoForm('emp', {});
+  if (!p.nome) { toast('⚠️', 'Informe a razão social', '', true); return; }
+  setConfig({
+    empresa: p.nome, cnpj: p.cpf, inscricaoEstadual: p.inscricaoEstadual || '',
+    cep: p.cep || '', logradouro: p.logradouro || '', numeroEnd: p.numeroEnd || '', bairro: p.bairro || '',
+    endereco: p.endereco || '', cidade: p.cidade || '', uf: p.uf || '', telefone: p.telefone || '', email: p.email || ''
+  });
+  toast('✅', 'Dados da empresa salvos', 'Já valem para os próximos documentos.'); renderCadastros();
+}
+function salvarSignatarios() {
+  const reps = pessoasDoFormLista('sig', db.config.representantes || []);
+  const p1 = reps[0] || {};
+  setConfig({
+    representantes: reps,
+    /* Os campos antigos continuam preenchidos com o primeiro: modelo de contrato que já
+       usava {{empresa.representante}} segue funcionando. */
+    representante: p1.nome || '', repCpf: p1.cpf || '', repCargo: p1.cargo || '', repGenero: p1.genero || 'm'
+  });
+  toast('✅', reps.length > 1 ? 'Signatários salvos' : 'Signatário salvo', reps.map(r => r.nome).join(', ')); renderCadastros();
 }
 function abrirVendedorForm(id) {
   const v = id ? db.vendedores.find(x => x.id === id) : null;
@@ -1046,25 +1078,13 @@ function cadConfigHtml() {
     <div class="frow3"><div class="fg"><label>Validade da reserva (dias)</label><input type="number" id="cgDias" value="${c.reservaDias}"></div><div class="fg"><label>Comissão padrão (%)</label><input type="number" id="cgCom" step="0.1" value="${c.comissaoPct}"></div><div class="fg"><label>Multa por atraso (%)</label><input type="number" id="cgMulta" step="0.1" value="${c.multaPct}"></div></div>
     <div class="frow"><div class="fg"><label>Juros de mora (% ao mês)</label><input type="number" id="cgJuros" step="0.01" value="${c.jurosMesPct}"></div><div class="fg"><label>Corretor vê preço de lotes vendidos?</label><select id="cgMostra"><option value="1" ${c.mostrarPrecoVendido ? 'selected' : ''}>Sim</option><option value="0" ${!c.mostrarPrecoVendido ? 'selected' : ''}>Não</option></select></div></div>
     <button class="btn btn-primary" onclick="salvarConfig()">Salvar configurações</button></div>
-    <div class="card"><h3>🏢 Dados da empresa para documentos</h3>
-    <p class="help">Usados para preencher propostas e contratos automaticamente.</p>
-    <div class="frow3"><div class="fg"><label>CNPJ</label><input type="text" id="cgCnpj" value="${esc(c.cnpj || '')}"></div><div class="fg"><label>Cidade (foro)</label><input type="text" id="cgCidade" value="${esc(c.cidade || '')}"></div>
-      <div class="fg"><label>UF</label><select id="cgUf"><option value="">—</option>${UFS.map(u => `<option value="${u}" ${c.uf === u ? 'selected' : ''}>${u}</option>`).join('')}</select></div></div>
-    <div class="fg"><label>Endereço completo</label><input type="text" id="cgEnd" value="${esc(c.endereco || '')}" placeholder="Rua, número, bairro, cidade/UF"></div>
-    <div class="frow"><div class="fg"><label>Telefone</label><input type="tel" id="cgTel" value="${esc(c.telefone || '')}"></div><div class="fg"><label>E-mail</label><input type="email" id="cgEmail" value="${esc(c.email || '')}"></div></div>
-    <div class="frow3"><div class="fg"><label>Quem assina pela empresa</label><input type="text" id="cgRep" value="${esc(c.representante || '')}"></div><div class="fg"><label>CPF de quem assina</label><input type="text" id="cgRepCpf" value="${esc(c.repCpf || '')}"></div>
-      <div class="fg"><label>Cargo de quem assina</label><input type="text" id="cgRepCargo" value="${esc(c.repCargo || '')}" placeholder="sócio administrador"></div></div>
-    <div class="fg"><label>Concordância de quem assina</label><select id="cgRepGenero"><option value="m" ${c.repGenero === 'f' ? '' : 'selected'}>Masculino — brasileiro, casado</option><option value="f" ${c.repGenero === 'f' ? 'selected' : ''}>Feminino — brasileira, casada</option></select></div>
-    <button class="btn btn-primary" onclick="salvarEmpresaDocs()">Salvar dados da empresa</button></div>
+    <div class="card"><h3>🏢 Dados da empresa</h3>
+    <p class="help">CNPJ, endereço, quem assina e os outros CNPJs do grupo ficam em <b><a href="#" onclick="state.sub.cad='empresa';renderCadastros();return false">Cadastros › Dados da empresa</a></b>.</p></div>
     ${Cloud.active ? '' : `<div class="card"><h3>🔐 Acesso</h3>
     <div class="frow"><div class="fg"><label>Novo PIN do administrador</label><input type="password" inputmode="numeric" id="cgPin" placeholder="mín. 4 dígitos" autocomplete="new-password"><div class="hint">${c.pinPadrao ? '<b style="color:#b45309">Você ainda usa o PIN padrão 1234. Troque agora.</b>' : 'PIN personalizado ativo.'}</div></div>
       <div class="fg"><label>Código de acesso dos corretores</label><input type="text" id="cgCod" value="${esc(c.codigoCorretor)}" placeholder="vazio = acesso livre"><div class="hint">Se definido, o corretor precisa digitar este código na primeira vez que abrir o app.</div></div></div>
     <button class="btn btn-primary" onclick="salvarAcesso()">Salvar acesso</button>
     <p class="help mt">⚠️ Este controle de acesso é simples (sem servidor). Serve para organizar o uso, não para proteger dados sigilosos.</p></div>`}`;
-}
-function salvarEmpresaDocs() {
-  setConfig({ cnpj: val('cgCnpj'), cidade: val('cgCidade'), uf: val('cgUf'), endereco: val('cgEnd'), telefone: val('cgTel'), email: val('cgEmail'), representante: val('cgRep'), repCpf: val('cgRepCpf'), repCargo: val('cgRepCargo'), repGenero: val('cgRepGenero') });
-  toast('✅', 'Dados da empresa salvos', 'Já valem para os próximos documentos.'); renderCadastros();
 }
 function salvarConfig() {
   setConfig({ empresa: val('cgEmpresa'), adminWhatsapp: val('cgWa'), reservaDias: Math.max(1, Math.round(num(val('cgDias')) || 7)), comissaoPct: num(val('cgCom')), multaPct: num(val('cgMulta')), jurosMesPct: num(val('cgJuros')), mostrarPrecoVendido: val('cgMostra') === '1' });

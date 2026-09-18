@@ -102,12 +102,13 @@ function toast(icon, title, body, isErr) {
 }
 
 // ---------------------------------------------------------------- modal
-function openModal({ title, body, footer = '', wide = false, onClose = null }) {
+function openModal({ title, body, footer = '', wide = false, full = false, onClose = null }) {
   $('#modalTitle').innerHTML = title;
   $('#modalBody').innerHTML = body;
   $('#modalFoot').innerHTML = footer;
   $('#modalFoot').style.display = footer ? 'flex' : 'none';
-  $('#modalBox').classList.toggle('wide', wide);
+  $('#modalBox').classList.toggle('wide', wide && !full);
+  $('#modalBox').classList.toggle('full', !!full);
   $('#modalBody').scrollTop = 0;
   $('#modalOverlay').classList.add('open');
   state.modalOnClose = onClose;
@@ -210,6 +211,12 @@ function defaultConfig() {
     telefone: '',
     email: '',
     uf: '',
+    cep: '',
+    logradouro: '',
+    numeroEnd: '',
+    bairro: '',
+    inscricaoEstadual: '',
+    representantes: [],
     representante: '',
     repCpf: '',
     repCargo: '',
@@ -735,8 +742,12 @@ function qualificacaoPessoa(p, opc) {
     if (p.inscricaoEstadual) t.push(`inscrição estadual nº ${p.inscricaoEstadual}`);
     const end = enderecoLinha(p);
     if (end) t.push(`com sede ${prepLogradouro(p.logradouro || p.endereco)} ${end}`);
-    const rep = p.representante && p.representante.nome ? qualificacaoPessoa(p.representante, { semEndereco: false }) : '';
-    if (rep) t.push(`neste ato representada por ${rep}`);
+    /* Pode haver mais de um signatário: contrato social costuma exigir duas assinaturas. */
+    const reps = (p.representantes && p.representantes.length ? p.representantes : (p.representante ? [p.representante] : [])).filter(r => r && r.nome);
+    if (reps.length) {
+      const qs = reps.map(r => qualificacaoPessoa(r));
+      t.push(`neste ato ${reps.length > 1 ? 'representada por' : 'representada por'} ${qs.length > 1 ? qs.slice(0, -1).join('; ') + '; e ' + qs[qs.length - 1] : qs[0]}`);
+    }
     return `${nome}, ${t.join(', ')}`;
   }
   if (p.nacionalidade) t.push(palavraFlex(p, p.nacionalidade));
@@ -854,10 +865,13 @@ function pessoasDoFormLista(base, antigas) {
    empresa, em Cadastros › Configurações. */
 function vendedorPadrao() {
   const c = db.config || {};
+  const reps = (c.representantes || []).filter(r => r && r.nome);
   return {
-    id: '', tipo: 'pj', nome: c.empresa || '', cpf: c.cnpj || '', endereco: c.endereco || '', cidade: c.cidade || '',
-    uf: c.uf || '', telefone: c.telefone || '', email: c.email || '',
-    representante: c.representante ? { tipo: 'pf', genero: c.repGenero || 'm', nome: c.representante, cpf: c.repCpf || '', cargo: c.repCargo || '' } : null
+    id: '', tipo: 'pj', nome: c.empresa || '', cpf: c.cnpj || '', inscricaoEstadual: c.inscricaoEstadual || '',
+    cep: c.cep || '', logradouro: c.logradouro || '', numeroEnd: c.numeroEnd || '', bairro: c.bairro || '',
+    endereco: c.endereco || '', cidade: c.cidade || '', uf: c.uf || '', telefone: c.telefone || '', email: c.email || '',
+    representantes: reps,
+    representante: reps[0] || (c.representante ? { tipo: 'pf', genero: c.repGenero || 'm', nome: c.representante, cpf: c.repCpf || '', cargo: c.repCargo || '' } : null)
   };
 }
 function vendedorDaVenda(v) {
@@ -938,10 +952,11 @@ function pessoaFormHtml(pre, p, opc) {
       <div class="${opc.semEstadoCivil ? 'frow' : 'frow3'}">${inp('Nac', 'Nacionalidade' + ob, p.nacionalidade || 'brasileiro')}${inp('Prof', 'Profissão' + ob, p.profissao)}${civil}</div>
       ${opc.semEstadoCivil ? '' : `<div class="fg" id="${idt('RegimeBox')}" style="${temConjuge(p) ? '' : 'display:none'}"><label>Regime de bens</label><select id="${idt('Regime')}"><option value="">—</option>${REGIMES_BENS.map(r => `<option value="${r}" ${p.regimeBens === r ? 'selected' : ''}>${r.charAt(0).toUpperCase() + r.slice(1)}</option>`).join('')}</select></div>`}
       <div class="frow">${inp('Rg', 'RG' + ob, p.rg)}${inp('RgOrgao', 'Órgão expedidor', p.rgOrgao)}</div>
+      ${opc.comCargo ? `<div class="fg"><label>Cargo na empresa</label><input type="text" id="${idt('Cargo')}" value="${esc(p.cargo || '')}" placeholder="sócio administrador, diretor…"></div>` : ''}
     </div>
     <div id="${idt('PjBox')}" style="${pj ? '' : 'display:none'}">
-      <div class="frow">${inp('Ie', 'Inscrição estadual', p.inscricaoEstadual)}${inp('RepCargo', 'Cargo de quem assina', (p.representante || {}).cargo)}</div>
-      <div class="frow">${inp('RepNome', 'Quem assina pela empresa', (p.representante || {}).nome)}${inp('RepCpf', 'CPF de quem assina', (p.representante || {}).cpf)}</div>
+      <div class="frow">${inp('Ie', 'Inscrição estadual', p.inscricaoEstadual)}${opc.semRepresentante ? '<div class="fg"></div>' : inp('RepCargo', 'Cargo de quem assina', (p.representante || {}).cargo)}</div>
+      ${opc.semRepresentante ? '' : `<div class="frow">${inp('RepNome', 'Quem assina pela empresa', (p.representante || {}).nome)}${inp('RepCpf', 'CPF de quem assina', (p.representante || {}).cpf)}</div>`}
     </div>
     ${opc.semEndereco ? '' : `<div id="${idt('EndBox')}">
       <div class="frow3">${inp('Cep', 'CEP', p.cep)}<div class="fg" style="grid-column:span 2"><label>Logradouro</label><input type="text" id="${idt('Logr')}" value="${esc(p.logradouro || p.endereco || '')}" placeholder="Rua, avenida, servidão…"></div></div>
@@ -1020,9 +1035,10 @@ function pessoaDoForm(pre, antiga) {
       p.regimeBens = temConjuge(p) ? val(pre + 'Regime') : '';
     }
     p.rg = val(pre + 'Rg'); p.rgOrgao = val(pre + 'RgOrgao');
+    if (tem('Cargo')) p.cargo = val(pre + 'Cargo');
   }
-  if (tem('Ie')) {
-    p.inscricaoEstadual = val(pre + 'Ie');
+  if (tem('Ie')) p.inscricaoEstadual = val(pre + 'Ie');
+  if (tem('RepNome')) {
     const rn = val(pre + 'RepNome');
     p.representante = rn ? { tipo: 'pf', genero: 'm', nome: rn, cpf: val(pre + 'RepCpf'), cargo: val(pre + 'RepCargo') } : null;
   }

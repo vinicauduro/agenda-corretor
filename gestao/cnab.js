@@ -239,8 +239,15 @@ function maiorNossoNumeroUsado(conta) {
   db.remessas.forEach(r => { if (r.contaId === conta.id && r.ultimoNn) maior = Math.max(maior, num(soDigitos(r.ultimoNn).slice(-10))); });
   return maior;
 }
+/* Onde a numeração começa numa conta nova. Não é sorteado: sorteio repete, e número
+   repetido no mesmo convênio é recusa certa no banco. É uma faixa alta e separada, bem
+   acima da que um sistema antigo estaria usando, para que os dois nunca se cruzem
+   enquanto rodam juntos. São 10 dígitos, quase 10 bilhões de números pela frente. */
+const NN_INICIAL = 1000000;
 function proximoNossoNumero(conta) {
-  return Math.max(1, Math.round(num(conta.nossoNumeroAtual) || 1), maiorNossoNumeroUsado(conta) + 1);
+  /* Conta que já vem numerando continua de onde está; conta nova começa na faixa alta. */
+  const atual = Math.round(num(conta.nossoNumeroAtual) || 0);
+  return Math.max(atual || NN_INICIAL, maiorNossoNumeroUsado(conta) + 1);
 }
 function nossoNumeroEmUso(conta, n) {
   if (n <= maiorNossoNumeroUsado(conta)) return true;
