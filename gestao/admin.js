@@ -631,11 +631,13 @@ function abrirVendaAdmin(id) {
     <div class="progress mb"><div style="width:${r.total ? Math.round(r.pago / r.total * 100) : 0}%"></div></div>
     <div class="detail-grid">
       <div><div class="k">Imóvel</div><div class="v">${esc(imovelLabel(x))}</div></div><div><div class="k">Data da venda</div><div class="v">${fmtDate(x.dataVenda)}</div></div>
-      <div><div class="k">Cliente</div><div class="v">${esc(c.nome)}</div></div><div><div class="k">CPF/CNPJ</div><div class="v">${esc(fmtCPF(c.cpf)) || '—'}</div></div>
+      <div><div class="k">Cliente</div><div class="v">${esc(c.nome)}${(x.compradoresExtras || []).length ? ` <span class="tiny muted">e mais ${(x.compradoresExtras || []).length}</span>` : ''}${temConjuge(c) && (c.conjuge || {}).nome ? `<div class="tiny muted">com ${esc(c.conjuge.nome)}</div>` : ''}</div></div><div><div class="k">CPF/CNPJ</div><div class="v">${esc(fmtCPF(c.cpf)) || '—'}</div></div>
       <div><div class="k">Telefone</div><div class="v"><a href="${waLink(c.telefone, '')}" target="_blank">${esc(fmtPhone(c.telefone))}</a></div></div><div><div class="k">E-mail</div><div class="v">${esc(c.email) || '—'}</div></div>
       <div class="full"><div class="k">Endereço</div><div class="v">${esc([c.endereco, c.cidade].filter(Boolean).join(' · ')) || '—'}</div></div>
       <div><div class="k">Corretor</div><div class="v">${esc(x.corretor.nome)}${x.corretor.creci ? ' · ' + esc(x.corretor.creci) : ''}</div></div><div><div class="k">Comissão</div><div class="v">${fmtMoney(x.comissaoValor)} (${fmtNum(x.comissaoPct, 1)}%) <span class="badge ${x.comissaoPaga ? 'paga' : 'pendente'}">${x.comissaoPaga ? 'paga' : 'a pagar'}</span></div></div>
       <div><div class="k">Entrada</div><div class="v">${fmtMoney(x.entrada)}</div></div><div><div class="k">Parcelas</div><div class="v">${x.nParcelas}× ${fmtMoney(x.valorParcela)}${x.baloes && x.baloes.length ? ` + ${x.baloes.length} reforço(s)` : ''}</div></div>
+      ${(x.compradoresExtras || []).length ? `<div class="full"><div class="k">Demais compradores</div><div class="v">${esc(nomesDasPartes(x.compradoresExtras))}</div></div>` : ''}
+      ${(x.vendedoresExtras || []).length || x.vendedorId ? `<div class="full"><div class="k">Vendedor no contrato</div><div class="v">${esc(nomesDasPartes(todosVendedores(x)))}</div></div>` : ''}
       ${x.obs ? `<div class="full"><div class="k">Observações</div><div class="v">${esc(x.obs)}</div></div>` : ''}
     </div>
     ${correcaoResumoVenda(x)}
@@ -663,7 +665,8 @@ function abrirVendaForm(id, loteId, reservaId) {
   const c = x ? x.cliente : (res ? res.cliente : {}); const k = x ? x.corretor : (res ? res.corretor : { nome: db.config.empresa || 'Venda direta' });
   const sel = carteira ? '' : (x ? x.loteId : (loteId || lotes[0].id)); const lsel = sel ? getLote(sel) : null;
   const im = (x && x.imovel) || {};
-  const vsel = x ? (x.vendedorId || '') : '';
+  const vsel = x ? [x.vendedorId || ''].concat((x.vendedoresExtras || []).map(v => v.id || '')) : [''];
+  const compradores = x ? todosCompradores(x) : (c && c.nome ? [c] : [c]);
   const pv = res && res.proposta ? res.proposta : {};
   const total = x ? x.valorTotal : (pv.valor || (lsel ? lsel.preco : 0));
   const entrada = x ? x.entrada : (pv.entrada != null ? pv.entrada : Math.round(total * (num(cond.entradaMinPct) || 10) / 100));
@@ -686,12 +689,11 @@ function abrirVendaForm(id, loteId, reservaId) {
           <div class="fg"><label>Cidade</label><input type="text" id="vfImCidade" value="${esc(im.cidade || '')}"></div></div></details></div>`
     : `<div class="fg"><label>Lote *</label><select id="vfLote" onchange="vfLoteChange()" ${x ? 'disabled' : ''}>${optionsHtml(lotes, sel, l => `${loteLabel(l)} — ${fmtMoney(l.preco)}`)}</select></div>`}
     <div class="fieldset"><span class="lg">🧑‍🤝‍🧑 Comprador</span>
-      ${pessoaFormHtml('vc', c, { recolher: true, conjuge: true, telObrigatorio: true })}</div>
+      ${pessoasListaHtml('vc', compradores, { recolher: true, conjuge: true, telObrigatorio: true, rotulo: 'Comprador', rotuloBotao: 'Adicionar comprador' })}
+      <p class="help mt">O primeiro comprador é quem aparece nas telas de venda, recebível e cobrança. Os demais existem para o contrato. Marido e mulher não precisam de dois blocos: use o estado civil e o cônjuge.</p></div>
     <div class="fieldset"><span class="lg">✍️ Vendedor</span>
-      <div class="fg"><label>Quem vende neste contrato</label><select id="vfVendedor">
-        <option value="">${esc(vendedorPadrao().nome || 'Empresa do cadastro')} — padrão</option>
-        ${db.vendedores.map(vd => `<option value="${esc(vd.id)}" ${vsel === vd.id ? 'selected' : ''}>${esc(vd.nome)}${vd.cpf ? ' — ' + esc(fmtCPF(vd.cpf)) : ''}</option>`).join('')}</select>
-        <p class="help">Cadastre outros CNPJs do grupo em Cadastros › Vendedores. O contrato sai com a qualificação de quem você escolher aqui.</p></div></div>
+      ${vendedoresListaHtml('vfVend', vsel)}
+      <p class="help mt">Cadastre outros CNPJs do grupo em Cadastros › Vendedores. O contrato sai com a qualificação de todos os escolhidos aqui.</p></div>
     <div class="fieldset"><span class="lg">🧑‍💼 Corretor</span>
       ${!x && !res ? `<div class="fg"><label>Corretor cadastrado</label><select id="vkSel" onchange="vkPreenche()"><option value="">— Venda direta / digitar —</option>${optionsHtml(corrs, '', cc => cc.nome + (cc.imobiliaria ? ' (' + cc.imobiliaria + ')' : ''))}</select></div>` : ''}
       <div class="frow"><div class="fg"><label>Nome</label><input type="text" id="vkNome" value="${esc(k.nome || '')}"></div><div class="fg"><label>CRECI</label><input type="text" id="vkCreci" value="${esc(k.creci || '')}"></div></div>
@@ -711,18 +713,6 @@ function abrirVendaForm(id, loteId, reservaId) {
   openModal({ title: x ? '✏️ Editar venda' : '💰 Registrar venda', body, footer: `<button class="btn btn-secondary" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" onclick="salvarVenda('${x ? x.id : ''}','${reservaId || ''}')">Salvar venda</button>`, wide: true });
   window.vfManual = !!x; window.vfBaloes = x ? (x.baloes || []).map(b => ({ ...b })) : [];
   renderBaloes(); vfCalc();
-}
-/* Comprador e cônjuge saem do mesmo formulário; o registro anterior entra como base para
-   não perder campo que a tela do momento não mostrou. */
-function compradorDoForm(x, res) {
-  const antigo = (x && x.cliente) || (res && res.cliente) || {};
-  const c = pessoaDoForm('vc', antigo);
-  c.conjuge = conjugeDoForm('vc', c, antigo.conjuge);
-  return c;
-}
-function vendedorEscolhido(id) {
-  const v = id ? db.vendedores.find(y => y.id === id) : null;
-  return v ? Object.assign({}, v) : vendedorPadrao();
 }
 function vkPreenche() { const c = db.corretores.find(x => x.id === val('vkSel')); if (!c) return; setVal('vkNome', c.nome); setVal('vkCreci', c.creci); setVal('vkTel', c.telefone); setVal('vkImob', c.imobiliaria); }
 function vfLoteChange() { const l = getLote(val('vfLote')); if (l) { setVal('vfTotal', l.preco); window.vfManual = false; vfCalc(); } }
@@ -758,16 +748,21 @@ function salvarVenda(id, reservaId) {
   const n = Math.max(0, Math.round(num(val('vfN'))));
   if (n && !val('vfPrimeiro')) { toast('⚠️', 'Informe o 1º vencimento', '', true); return; }
   const baloes = (window.vfBaloes || []).filter(b => b.data && num(b.valor) > 0);
+  const compradores = pessoasDoFormLista('vc', x ? todosCompradores(x) : (res ? [res.cliente] : []));
+  if (!compradores.length) { toast('⚠️', 'Informe o comprador', '', true); return; }
+  const vendIds = vendedoresDoFormLista('vfVend');
   const venda = Object.assign({}, x || { id: genId(), loteId: l ? l.id : null, loteamentoId: lot.id, status: 'ativa', reservaId: reservaId || null, criadoEm: new Date().toISOString(), comissaoPaga: false, comissaoData: null }, {
     imovel: carteira ? {
       descricao: val('vfImDesc'), endereco: val('vfImEnd'), matricula: val('vfImMat'), descricaoMatricula: val('vfImDescMat'),
       cartorio: val('vfImCart'), area: num(val('vfImArea')) || null, cep: val('vfImCep'), bairro: val('vfImBairro'), cidade: val('vfImCidade')
     } : null,
-    cliente: compradorDoForm(x, res),
-    vendedorId: val('vfVendedor') || null,
-    /* O vendedor é congelado na venda: se o cadastro mudar depois, o contrato já assinado
-       continua contando a história que foi assinada. */
-    vendedor: vendedorEscolhido(val('vfVendedor')),
+    cliente: compradores[0],
+    compradoresExtras: compradores.slice(1),
+    vendedorId: vendIds[0] || null,
+    /* Os vendedores são congelados na venda: se o cadastro mudar depois, o contrato já
+       assinado continua contando a história que foi assinada. */
+    vendedor: vendedorPorId(vendIds[0]),
+    vendedoresExtras: vendIds.slice(1).map(vendedorPorId),
     corretor: { nome: val('vkNome') || 'Venda direta', creci: val('vkCreci'), telefone: val('vkTel'), imobiliaria: val('vkImob'), email: (x && x.corretor.email) || '', userId: (x && x.corretor.userId) || (res && res.corretor && res.corretor.userId) || (corretorSelecionado('vkSel') || {}).userId || null },
     corretorUserId: (x && x.corretorUserId) || (res && res.corretorUserId) || (corretorSelecionado('vkSel') || {}).userId || null,
     dataVenda: val('vfData'), valorTotal: total, entrada: num(val('vfEntrada')), dataEntrada: val('vfDataEntrada') || val('vfData'), nParcelas: n, jurosMes: num(val('vfJuros')),

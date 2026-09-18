@@ -8,12 +8,13 @@ const DOC_CAMPOS = [
   ['Empresa', [['empresa.nome', 'Nome'], ['empresa.cnpj', 'CNPJ'], ['empresa.endereco', 'Endereço'], ['empresa.cidade', 'Cidade'], ['empresa.telefone', 'Telefone'], ['empresa.email', 'E-mail'], ['empresa.representante', 'Quem assina'], ['empresa.repCpf', 'CPF de quem assina']]],
   ['Loteamento', [['loteamento.nome', 'Nome'], ['loteamento.cidade', 'Cidade'], ['loteamento.endereco', 'Endereço'], ['loteamento.descricao', 'Descrição']]],
   ['Lote', [['lote.identificacao', 'Quadra e lote'], ['lote.quadra', 'Quadra'], ['lote.numero', 'Número'], ['lote.area', 'Área (m²)'], ['lote.areaExtenso', 'Área por extenso'], ['lote.frente', 'Frente'], ['lote.fundos', 'Fundos'], ['lote.matricula', 'Matrícula'], ['lote.tipo', 'Tipo']]],
-  ['Comprador', [['comprador.qualificacao', 'Qualificação completa (com cônjuge)'], ['cliente.qualificacao', 'Qualificação só do comprador'], ['cliente.nome', 'Nome'], ['cliente.cpf', 'CPF/CNPJ'], ['cliente.rg', 'RG'], ['cliente.rgOrgao', 'Órgão do RG'], ['cliente.nacionalidade', 'Nacionalidade'], ['cliente.estadoCivil', 'Estado civil'], ['cliente.regimeBens', 'Regime de bens'], ['cliente.profissao', 'Profissão'], ['cliente.telefone', 'Telefone'], ['cliente.email', 'E-mail'], ['cliente.endereco', 'Endereço'], ['cliente.cidade', 'Cidade']]],
+  ['Comprador', [['comprador.qualificacao', 'Qualificação de todos (com cônjuges)'], ['comprador.nomes', 'Nomes de todos'], ['cliente.qualificacao', 'Qualificação só do primeiro'], ['cliente.nome', 'Nome'], ['cliente.cpf', 'CPF/CNPJ'], ['cliente.rg', 'RG'], ['cliente.rgOrgao', 'Órgão do RG'], ['cliente.nacionalidade', 'Nacionalidade'], ['cliente.estadoCivil', 'Estado civil'], ['cliente.regimeBens', 'Regime de bens'], ['cliente.profissao', 'Profissão'], ['cliente.telefone', 'Telefone'], ['cliente.email', 'E-mail'], ['cliente.endereco', 'Endereço'], ['cliente.cidade', 'Cidade']]],
   ['Cônjuge', [['conjuge.qualificacao', 'Qualificação do cônjuge'], ['conjuge.nome', 'Nome'], ['conjuge.cpf', 'CPF'], ['conjuge.rg', 'RG'], ['conjuge.nacionalidade', 'Nacionalidade'], ['conjuge.profissao', 'Profissão']]],
-  ['Vendedor', [['vendedor.qualificacao', 'Qualificação completa'], ['vendedor.nome', 'Nome / razão social'], ['vendedor.cpf', 'CNPJ/CPF'], ['vendedor.endereco', 'Endereço'], ['vendedor.representante', 'Quem assina'], ['vendedor.repCpf', 'CPF de quem assina']]],
+  ['Vendedor', [['vendedor.qualificacao', 'Qualificação de todos'], ['vendedor.nomes', 'Nomes de todos'], ['vendedor.nome', 'Nome / razão social'], ['vendedor.cpf', 'CNPJ/CPF'], ['vendedor.endereco', 'Endereço'], ['vendedor.representante', 'Quem assina'], ['vendedor.repCpf', 'CPF de quem assina']]],
   ['Imóvel', [['imovel.descricao', 'Descrição da matrícula'], ['imovel.identificacao', 'Identificação curta'], ['imovel.matricula', 'Matrícula'], ['imovel.cartorio', 'Cartório de registro'], ['imovel.endereco', 'Endereço do imóvel'], ['imovel.medidas', 'Medidas']]],
   ['Corretor', [['corretor.nome', 'Nome'], ['corretor.creci', 'CRECI'], ['corretor.telefone', 'Telefone'], ['corretor.imobiliaria', 'Imobiliária']]],
   ['Pagamento', [['pagamento.valorTotal', 'Valor total'], ['pagamento.valorTotalExtenso', 'Valor por extenso'], ['pagamento.entrada', 'Entrada'], ['pagamento.entradaExtenso', 'Entrada por extenso'], ['pagamento.dataEntrada', 'Data da entrada'], ['pagamento.nParcelas', 'Nº de parcelas'], ['pagamento.valorParcela', 'Valor da parcela'], ['pagamento.valorParcelaExtenso', 'Parcela por extenso'], ['pagamento.juros', 'Juros (% a.m.)'], ['pagamento.primeiroVencimento', '1º vencimento'], ['pagamento.saldo', 'Saldo financiado'], ['pagamento.reforcos', 'Reforços'], ['pagamento.indice', 'Índice de correção'], ['pagamento.indiceBase', 'Mês base do índice'], ['pagamento.resumo', 'Resumo em uma linha'], ['pagamento.tabela', 'Tabela de parcelas']]],
+  ['Assinaturas', [['assinaturas.vendedores', 'Linhas dos vendedores'], ['assinaturas.compradores', 'Linhas dos compradores e cônjuges']]],
   ['Documento', [['doc.data', 'Data'], ['doc.dataExtenso', 'Data por extenso'], ['doc.cidadeData', 'Cidade e data'], ['doc.validade', 'Validade da proposta']]]
 ];
 
@@ -67,6 +68,10 @@ function docContexto(o) {
   const cj = c.conjuge || {};
   /* Vendedor: o que a venda congelou, senão o escolhido, senão a empresa do cadastro. */
   const vd = o.vendedor || (o.venda ? vendedorDaVenda(o.venda) : vendedorPadrao());
+  /* Listas completas das partes. Os campos no singular seguem apontando para a primeira de
+     cada lado, que é quem as telas do dia a dia mostram. */
+  const compradores = (o.compradores && o.compradores.length) ? o.compradores : (c.nome ? [c] : []);
+  const vendedores = (o.vendedores && o.vendedores.length) ? o.vendedores : (vd.nome ? [vd] : []);
   const imv = imovelDados({ lote: o.lote, loteamento: o.loteamento, imovel: o.imovel || (o.venda || {}).imovel });
   const hoje = o.data || todayStr();
   const cidade = cfg.cidade || lot.cidade || '';
@@ -88,13 +93,16 @@ function docContexto(o) {
     'cliente.nacionalidade': c.nacionalidade || '', 'cliente.estadoCivil': estadoCivilTexto(c) || '', 'cliente.regimeBens': c.regimeBens || '',
     'cliente.profissao': c.profissao || '', 'cliente.telefone': fmtPhone(c.telefone) || '',
     'cliente.email': c.email || '', 'cliente.endereco': enderecoLinha(c) || c.endereco || '', 'cliente.cidade': c.cidade || '',
-    'cliente.qualificacao': qualificacaoPessoa(c), 'comprador.qualificacao': qualificacaoParte(c),
+    'cliente.qualificacao': qualificacaoPessoa(c), 'comprador.qualificacao': qualificacaoPartes(compradores),
+    'comprador.nomes': nomesDasPartes(compradores), 'vendedor.nomes': nomesDasPartes(vendedores),
+    'assinaturas.compradores': linhasAssinatura(compradores, 'Promitente comprador'),
+    'assinaturas.vendedores': linhasAssinatura(vendedores, 'Promitente vendedora'),
     'conjuge.nome': cj.nome || '', 'conjuge.cpf': fmtCPF(cj.cpf) || '', 'conjuge.rg': cj.rg || '',
     'conjuge.nacionalidade': cj.nacionalidade || '', 'conjuge.profissao': cj.profissao || '',
     'conjuge.qualificacao': cj.nome ? qualificacaoPessoa(cj) : '',
     'vendedor.nome': vd.nome || '', 'vendedor.cpf': fmtCPF(vd.cpf) || '', 'vendedor.endereco': enderecoLinha(vd) || vd.endereco || '',
     'vendedor.representante': (vd.representante || {}).nome || '', 'vendedor.repCpf': fmtCPF((vd.representante || {}).cpf) || '',
-    'vendedor.qualificacao': qualificacaoPessoa(vd),
+    'vendedor.qualificacao': qualificacaoPartes(vendedores),
     'imovel.descricao': imv.descricao || '', 'imovel.identificacao': imv.identificacao || '', 'imovel.matricula': imv.matricula || '',
     'imovel.cartorio': imv.cartorio || '', 'imovel.endereco': imv.endereco || '', 'imovel.medidas': imv.medidas || '',
     'corretor.nome': k.nome || '', 'corretor.creci': k.creci || '', 'corretor.telefone': fmtPhone(k.telefone) || '', 'corretor.imobiliaria': k.imobiliaria || '',
@@ -247,18 +255,10 @@ E por estarem assim justas e contratadas, as partes assinam o presente instrumen
 
 ---
 
-_______________________________
-{{vendedor.nome}}
-Promitente vendedora
+{{assinaturas.vendedores}}
 
-_______________________________
-{{cliente.nome}}
-Promitente comprador
-{{#se conjuge.nome}}
-_______________________________
-{{conjuge.nome}}
-Cônjuge do promitente comprador
-{{/se}}
+{{assinaturas.compradores}}
+
 _______________________________            _______________________________
 Testemunha                                  Testemunha`;
 
@@ -398,7 +398,9 @@ function gerarContratoVenda(vendaId) {
   const mods = modelosDo('contrato');
   const livres = docCamposLivres(mods[0].corpo);
   const c = v.cliente || {};
-  const falta = faltaQualificacao(c);
+  /* Com mais de um comprador, o aviso é do conjunto: basta um incompleto para o contrato
+     sair capenga. */
+  const falta = [...new Set(todosCompradores(v).flatMap(faltaQualificacao))];
   openModal({
     title: '📄 Gerar contrato',
     wide: true,
@@ -406,13 +408,10 @@ function gerarContratoVenda(vendaId) {
       ${mods.length > 1 ? `<div class="fg"><label>Modelo</label><select id="ctModelo">${mods.map(m => `<option value="${esc(m.id)}">${esc(m.nome)}</option>`).join('')}</select></div>` : ''}
       ${falta.length ? `<div class="alert warn" style="cursor:default"><span>Para o contrato sair completo ainda falta <b>${esc(falta.join(', '))}</b>. Complete abaixo.</span></div>` : ''}
       <div class="fieldset"><span class="lg">🧑‍🤝‍🧑 Qualificação do comprador</span>
-        ${pessoaFormHtml('ct', c, { conjuge: true })}
-        ${conjugeFormHtml('ct', c)}
-        <label class="check"><input type="checkbox" id="ctSalvar" checked> Guardar esses dados no cadastro do comprador</label></div>
+        ${pessoasListaHtml('ct', todosCompradores(v), { conjuge: true, rotulo: 'Comprador', rotuloBotao: 'Adicionar comprador' })}
+        <label class="check mt"><input type="checkbox" id="ctSalvar" checked> Guardar esses dados no cadastro da venda</label></div>
       <div class="fieldset"><span class="lg">✍️ Vendedor</span>
-        <div class="fg"><label>Quem assina como vendedor</label><select id="ctVendedor">
-          <option value="">${esc(vendedorPadrao().nome || 'Empresa do cadastro')} — padrão</option>
-          ${db.vendedores.map(vd => `<option value="${esc(vd.id)}" ${v.vendedorId === vd.id ? 'selected' : ''}>${esc(vd.nome)}</option>`).join('')}</select></div></div>
+        ${vendedoresListaHtml('ctVend', [v.vendedorId || ''].concat((v.vendedoresExtras || []).map(x => x.id || '')))}</div>
       <div class="frow"><div class="fg"><label>Data do contrato</label><input type="date" id="ctData" value="${esc(v.dataVenda || todayStr())}"></div></div>
       ${docFormLivres(livres, 'ctL_')}`,
     footer: `<button class="btn btn-secondary" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" onclick="gerarContratoConfirma('${v.id}')">📄 Gerar contrato</button>`
@@ -423,13 +422,19 @@ function gerarContratoConfirma(vendaId) {
   const l = getLote(v.loteId), lot = getLoteamento(v.loteamentoId);
   const mods = modelosDo('contrato');
   const mod = mods.find(m => m.id === val('ctModelo')) || mods[0];
-  const cliente = pessoaDoForm('ct', v.cliente || {});
-  cliente.conjuge = conjugeDoForm('ct', cliente, (v.cliente || {}).conjuge);
-  const vendedorId = val('ctVendedor') || null;
-  const vendedor = vendedorId ? (db.vendedores.find(y => y.id === vendedorId) || vendedorPadrao()) : vendedorPadrao();
-  if ($('#ctSalvar') && $('#ctSalvar').checked) upsert('vendas', Object.assign({}, v, { cliente, vendedorId, vendedor }));
+  const compradores = pessoasDoFormLista('ct', todosCompradores(v));
+  const cliente = compradores[0] || v.cliente || {};
+  const vendIds = vendedoresDoFormLista('ctVend');
+  const vendedores = vendIds.map(vendedorPorId);
+  const vendedor = vendedores[0];
+  if ($('#ctSalvar') && $('#ctSalvar').checked) {
+    upsert('vendas', Object.assign({}, v, {
+      cliente, compradoresExtras: compradores.slice(1),
+      vendedorId: vendIds[0] || null, vendedor, vendedoresExtras: vendedores.slice(1)
+    }));
+  }
   const ctx = docContexto({
-    loteamento: lot, lote: l, cliente, corretor: v.corretor, venda: v, vendedor, imovel: v.imovel,
+    loteamento: lot, lote: l, cliente, compradores, corretor: v.corretor, venda: v, vendedor, vendedores, imovel: v.imovel,
     pagamento: { valorTotal: v.valorTotal, entrada: v.entrada, dataEntrada: v.dataEntrada, nParcelas: v.nParcelas, valorParcela: v.valorParcela, jurosMes: v.jurosMes, primeiroVencimento: v.primeiroVencimento, baloes: v.baloes, indiceId: v.indiceId, indiceBase: v.indiceBase },
     data: val('ctData') || v.dataVenda,
     extras: docLerLivres(docCamposLivres(mod.corpo), 'ctL_')

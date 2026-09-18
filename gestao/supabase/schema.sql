@@ -566,6 +566,9 @@ alter table public.vendas add column if not exists imovel jsonb;
 -- Qualificação das partes e do imóvel: sem estes campos não sai contrato nem escritura.
 alter table public.vendas add column if not exists vendedor_id text;
 alter table public.vendas add column if not exists vendedor jsonb;
+-- Mais de um comprador (irmãos, sócios) e mais de um vendedor (empresas do mesmo grupo).
+alter table public.vendas add column if not exists compradores_extras jsonb not null default '[]'::jsonb;
+alter table public.vendas add column if not exists vendedores_extras jsonb not null default '[]'::jsonb;
 alter table public.lotes add column if not exists descricao_matricula text not null default '';
 alter table public.lotes add column if not exists logradouro text not null default '';
 alter table public.lotes add column if not exists numero_end text not null default '';
