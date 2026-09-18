@@ -272,12 +272,19 @@ function salvarIndiceLista(id) {
 // ================================================================ NA VENDA
 function indiceSelectHtml(selId, selBase, dataVenda) {
   const base = selBase || monthKey(dataVenda || todayStr());
+  /* Sem índice cadastrado o seletor fica vazio e parece defeito. Melhor dizer o que falta e
+     mandar para a tela certa. */
+  if (!db.indices.length) {
+    return `<div class="alert info" style="cursor:pointer" onclick="closeModal();irParaIndices()">
+      <span><b>Nenhum índice cadastrado ainda.</b> Para corrigir as parcelas por IGP-M, INPC, IPCA ou CUB, cadastre o índice em Cadastros › Índices. Sem isso a venda fica sem correção monetária.</span><span>›</span></div>`;
+  }
   return `<div class="frow"><div class="fg"><label>Índice de correção</label>
       <select id="vfIndice"><option value="">— sem correção —</option>${db.indices.slice().sort((a, b) => a.nome.localeCompare(b.nome)).map(i => `<option value="${i.id}" ${selId === i.id ? 'selected' : ''}>${esc(i.nome)}</option>`).join('')}</select>
       <div class="hint">Cada parcela usa o índice do mês anterior ao vencimento, que é quando ele foi divulgado. Depois de vencida, só multa e juros. Deflação entra como 0%.</div></div>
     <div class="fg"><label>Mês base da correção</label><input type="month" id="vfIndiceBase" value="${base}"><div class="hint">O índice deste mês é o primeiro a ser aplicado, na parcela do mês seguinte.</div></div></div>`;
 }
 
+function irParaIndices() { state.tab = 'cadastros'; state.sub.cad = 'indices'; renderCurrent(); }
 function correcaoResumoVenda(v) {
   if (!v.indiceId) return '';
   const ind = getIndice(v.indiceId); if (!ind) return '';

@@ -918,6 +918,7 @@ function pessoaFormHtml(pre, p, opc) {
   const pj = ehPJ(p);
   const idt = s => pre + s;
   const inp = (s, label, valor, tipo) => `<div class="fg"><label>${label}</label><input type="${tipo || 'text'}" id="${idt(s)}" value="${esc(valor ?? '')}"></div>`;
+  const ob = opc.obrigatorio ? ' *' : '';
   /* Identificação fica sempre à vista; o resto da qualificação pode ficar recolhido, para
      quem só quer registrar a venda rápido não ter de rolar vinte campos. */
   /* Quando a pessoa tem cônjuge no mesmo formulário, mudar a concordância dela vira a do
@@ -929,14 +930,14 @@ function pessoaFormHtml(pre, p, opc) {
     : opc.semTipo ? '' : `<div class="frow"><div class="fg"><label>Tipo</label><select id="${idt('Tipo')}" onchange="pessoaTipoChange('${pre}')"><option value="pf" ${pj ? '' : 'selected'}>Pessoa física</option><option value="pj" ${pj ? 'selected' : ''}>Pessoa jurídica</option></select></div>
     ${generoSel}</div>`}
     <div class="frow"><div class="fg"><label id="${idt('NomeLbl')}">${pj ? 'Razão social' : 'Nome completo'} *</label><input type="text" id="${idt('Nome')}" value="${esc(p.nome || '')}"></div>
-      <div class="fg"><label id="${idt('DocLbl')}">${pj ? 'CNPJ' : 'CPF'}</label><input type="text" id="${idt('Doc')}" value="${esc(p.cpf || '')}"></div></div>
+      <div class="fg"><label id="${idt('DocLbl')}">${pj ? 'CNPJ' : 'CPF'}${ob}</label><input type="text" id="${idt('Doc')}" value="${esc(p.cpf || '')}"></div></div>
     <div class="frow">${inp('Tel', 'Telefone' + (opc.telObrigatorio ? ' *' : ''), p.telefone, 'tel')}${inp('Email', 'E-mail', p.email, 'email')}</div>`;
   /* O cônjuge não tem estado civil próprio a declarar: ele é casado com quem está do lado. */
-  const civil = opc.semEstadoCivil ? '' : `<div class="fg"><label>Estado civil</label><select id="${idt('EstCivil')}" onchange="pessoaCivilChange('${pre}')"><option value="">—</option>${ESTADOS_CIVIS.map(e => `<option value="${e}" ${p.estadoCivil === e ? 'selected' : ''}>${e.charAt(0).toUpperCase() + e.slice(1)}</option>`).join('')}</select></div>`;
+  const civil = opc.semEstadoCivil ? '' : `<div class="fg"><label>Estado civil${ob}</label><select id="${idt('EstCivil')}" onchange="pessoaCivilChange('${pre}')"><option value="">—</option>${ESTADOS_CIVIS.map(e => `<option value="${e}" ${p.estadoCivil === e ? 'selected' : ''}>${e.charAt(0).toUpperCase() + e.slice(1)}</option>`).join('')}</select></div>`;
   const resto = `<div id="${idt('PfBox')}" style="${pj ? 'display:none' : ''}">
-      <div class="${opc.semEstadoCivil ? 'frow' : 'frow3'}">${inp('Nac', 'Nacionalidade', p.nacionalidade || 'brasileiro')}${inp('Prof', 'Profissão', p.profissao)}${civil}</div>
+      <div class="${opc.semEstadoCivil ? 'frow' : 'frow3'}">${inp('Nac', 'Nacionalidade' + ob, p.nacionalidade || 'brasileiro')}${inp('Prof', 'Profissão' + ob, p.profissao)}${civil}</div>
       ${opc.semEstadoCivil ? '' : `<div class="fg" id="${idt('RegimeBox')}" style="${temConjuge(p) ? '' : 'display:none'}"><label>Regime de bens</label><select id="${idt('Regime')}"><option value="">—</option>${REGIMES_BENS.map(r => `<option value="${r}" ${p.regimeBens === r ? 'selected' : ''}>${r.charAt(0).toUpperCase() + r.slice(1)}</option>`).join('')}</select></div>`}
-      <div class="frow">${inp('Rg', 'RG', p.rg)}${inp('RgOrgao', 'Órgão expedidor', p.rgOrgao)}</div>
+      <div class="frow">${inp('Rg', 'RG' + ob, p.rg)}${inp('RgOrgao', 'Órgão expedidor', p.rgOrgao)}</div>
     </div>
     <div id="${idt('PjBox')}" style="${pj ? '' : 'display:none'}">
       <div class="frow">${inp('Ie', 'Inscrição estadual', p.inscricaoEstadual)}${inp('RepCargo', 'Cargo de quem assina', (p.representante || {}).cargo)}</div>
@@ -945,13 +946,13 @@ function pessoaFormHtml(pre, p, opc) {
     ${opc.semEndereco ? '' : `<div id="${idt('EndBox')}">
       <div class="frow3">${inp('Cep', 'CEP', p.cep)}<div class="fg" style="grid-column:span 2"><label>Logradouro</label><input type="text" id="${idt('Logr')}" value="${esc(p.logradouro || p.endereco || '')}" placeholder="Rua, avenida, servidão…"></div></div>
       <div class="frow3">${inp('Num', 'Número', p.numeroEnd)}${inp('Compl', 'Complemento', p.complemento)}${inp('Bairro', 'Bairro', p.bairro)}</div>
-      <div class="frow"><div class="fg"><label>Cidade</label><input type="text" id="${idt('Cidade')}" value="${esc(p.cidade || '')}"></div>
+      <div class="frow"><div class="fg"><label>Cidade${ob}</label><input type="text" id="${idt('Cidade')}" value="${esc(p.cidade || '')}"></div>
         <div class="fg"><label>UF</label><select id="${idt('Uf')}"><option value="">—</option>${UFS.map(u => `<option value="${u}" ${p.uf === u ? 'selected' : ''}>${u}</option>`).join('')}</select></div></div></div>`}`;
   if (!opc.recolher) return cabeca + resto;
   /* O resumo é recalculado a cada tecla: um aviso do que falta que não some quando você
      preenche é pior que aviso nenhum. */
   return `<div oninput="qualifResumo('${pre}')" onchange="qualifResumo('${pre}')">${cabeca}
-    <details class="qualif"><summary>📋 Qualificação completa para o contrato <span id="${idt('Resumo')}">${qualifResumoHtml(p)}</span></summary>${resto}${opc.conjuge ? conjugeFormHtml(pre, p) : ''}</details></div>`;
+    <details class="qualif" open><summary>📋 Qualificação completa para o contrato <span id="${idt('Resumo')}">${qualifResumoHtml(p)}</span></summary>${resto}${opc.conjuge ? conjugeFormHtml(pre, p) : ''}</details></div>`;
 }
 
 /* O que ainda falta para o contrato sair qualificado. É a mesma conferência que a
