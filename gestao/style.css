@@ -414,3 +414,6 @@ details.qualif > summary::before { content: '▸ '; }
 details.qualif[open] > summary::before { content: '▾ '; }
 details.qualif[open] > summary { margin-bottom: 10px; }
 .tiny.ok { color: #15803d; }
+
+/* Cada pessoa a mais na venda ganha o seu bloco, separado do anterior */
+.pessoa-bloco + .pessoa-bloco { border-top: 1px dashed var(--border); padding-top: 10px; margin-top: 10px; }

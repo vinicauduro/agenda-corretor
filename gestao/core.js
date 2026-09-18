@@ -311,7 +311,7 @@ const TABLE_COLS = {
   lotes: ['id', 'loteamentoId', 'quadra', 'numero', 'area', 'frente', 'fundos', 'preco', 'tipo', 'status', 'obs', 'matricula', 'descricaoMatricula', 'logradouro', 'numeroEnd', 'bairro', 'cep', 'pts', 'reservaId', 'vendaId', 'criadoEm'],
   reservas: ['id', 'loteamentoId', 'loteId', 'corretor', 'corretorUserId', 'cliente', 'dataReserva', 'validade', 'status', 'proposta', 'obs', 'motivo', 'aprovadaEm', 'encerradaEm', 'criadoEm'],
   vendedores: ['id', 'tipo', 'nome', 'cpf', 'inscricaoEstadual', 'representante', 'telefone', 'email', 'cep', 'logradouro', 'numeroEnd', 'complemento', 'bairro', 'cidade', 'uf', 'endereco', 'obs', 'criadoEm'],
-  vendas: ['id', 'loteamentoId', 'loteId', 'imovel', 'vendedorId', 'vendedor', 'reservaId', 'cliente', 'corretor', 'corretorUserId', 'dataVenda', 'valorTotal', 'entrada', 'dataEntrada', 'nParcelas', 'jurosMes', 'valorParcela', 'primeiroVencimento', 'baloes', 'indiceId', 'indiceBase', 'comissaoPct', 'comissaoValor', 'comissaoPaga', 'comissaoData', 'status', 'obs', 'motivo', 'distratoEm', 'criadoEm'],
+  vendas: ['id', 'loteamentoId', 'loteId', 'imovel', 'vendedorId', 'vendedor', 'vendedoresExtras', 'reservaId', 'cliente', 'compradoresExtras', 'corretor', 'corretorUserId', 'dataVenda', 'valorTotal', 'entrada', 'dataEntrada', 'nParcelas', 'jurosMes', 'valorParcela', 'primeiroVencimento', 'baloes', 'indiceId', 'indiceBase', 'comissaoPct', 'comissaoValor', 'comissaoPaga', 'comissaoData', 'status', 'obs', 'motivo', 'distratoEm', 'criadoEm'],
   recebiveis: ['id', 'loteamentoId', 'vendaId', 'tipo', 'numero', 'descricao', 'vencimento', 'valor', 'valorPago', 'valorCorrigido', 'nossoNumero', 'remessaEm', 'bancoValor', 'bancoVenc', 'dataPagamento', 'forma', 'obsPagamento'],
   custos: ['id', 'loteamentoId', 'loteId', 'descricao', 'categoriaId', 'fornecedor', 'valor', 'formaPagamento', 'dataCompetencia', 'vencimento', 'status', 'dataPagamento', 'obs', 'criadoEm'],
   modelos: ['id', 'nome', 'tipo', 'corpo', 'criadoEm'],
@@ -765,6 +765,91 @@ function qualificacaoParte(p) {
   return `${base}, e ${laco} ${qcj}${mesmoEnd ? `, ${flexPessoa(cj, 'residente e domiciliado', 'residente e domiciliada')} no mesmo endereço` : ''}`;
 }
 
+// ---------------------------------------------------------------- várias partes
+/* Um imóvel costuma ser comprado por mais de uma pessoa — marido e mulher já resolvidos
+   pelo cônjuge, mas também dois irmãos, dois sócios, pai e filho. E do outro lado a
+   incorporadora às vezes vende junto com outra empresa do grupo. Por isso comprador e
+   vendedor são listas: a primeira pessoa é a principal, que continua sendo quem aparece
+   nas telas de venda, recebível e cobrança; as demais existem para o contrato.
+   Guardadas à parte (compradoresExtras, vendedoresExtras) para que nada que já lê
+   venda.cliente e venda.vendedor precise mudar. */
+function todosCompradores(v) {
+  if (!v) return [];
+  return [v.cliente].concat(v.compradoresExtras || []).filter(p => p && p.nome);
+}
+function todosVendedores(v) {
+  if (!v) return [];
+  return [vendedorDaVenda(v)].concat(v.vendedoresExtras || []).filter(p => p && p.nome);
+}
+/* Várias partes do mesmo lado, como o cartório escreve: separadas por ponto e vírgula e a
+   última com "e". Cada uma leva o seu cônjuge junto. */
+function qualificacaoPartes(lista) {
+  const qs = (lista || []).map(p => qualificacaoParte(p)).filter(Boolean);
+  if (qs.length <= 1) return qs[0] || '';
+  return qs.slice(0, -1).join('; ') + '; e ' + qs[qs.length - 1];
+}
+function nomesDasPartes(lista) {
+  const ns = (lista || []).map(p => (p || {}).nome).filter(Boolean);
+  if (ns.length <= 1) return ns[0] || '';
+  return ns.slice(0, -1).join(', ') + ' e ' + ns[ns.length - 1];
+}
+/* As linhas de assinatura: uma por parte, mais uma por cônjuge que assina junto. */
+function linhasAssinatura(lista, rotulo) {
+  const out = [];
+  (lista || []).forEach(p => {
+    if (!p || !p.nome) return;
+    out.push(`_______________________________\n${p.nome}\n${rotulo}`);
+    const cj = p.conjuge;
+    if (temConjuge(p) && cj && cj.nome) out.push(`_______________________________\n${cj.nome}\nCônjuge de ${p.nome}`);
+  });
+  return out.join('\n\n');
+}
+
+/* Lista de pessoas do mesmo papel no formulário. A primeira sempre existe; as outras
+   entram pelo botão e podem ser removidas. Os prefixos são vc, vc2, vc3… — o índice nunca
+   é reaproveitado, senão um bloco removido levaria junto os dados do que veio depois. */
+function pfxPessoa(base, i) { return i ? base + (i + 1) : base; }
+function pessoasListaHtml(base, lista, opc) {
+  opc = opc || {};
+  const arr = (lista && lista.length) ? lista : [null];
+  window.__pessoasN = window.__pessoasN || {}; window.__pessoasOpc = window.__pessoasOpc || {};
+  window.__pessoasN[base] = arr.length; window.__pessoasOpc[base] = opc;
+  return `<div id="${base}Lista">${arr.map((p, i) => pessoaBlocoHtml(base, p, i, opc)).join('')}</div>
+    <button type="button" class="btn btn-secondary btn-sm" onclick="addPessoa('${base}')">＋ ${esc(opc.rotuloBotao || 'Adicionar')}</button>`;
+}
+function pessoaBlocoHtml(base, p, i, opc) {
+  const pre = pfxPessoa(base, i);
+  const cab = i ? `<div class="row-between" style="margin-bottom:6px"><b class="tiny">${esc(opc.rotulo || 'Pessoa')} ${i + 1}</b><button type="button" class="btn-icon del" onclick="delPessoa('${pre}')">🗑</button></div>` : '';
+  /* Só o primeiro precisa de telefone: é por ele que o sistema fala com a venda. */
+  const o = i ? Object.assign({}, opc, { telObrigatorio: false }) : opc;
+  return `<div class="pessoa-bloco" id="${pre}Bloco">${cab}${pessoaFormHtml(pre, p, o)}</div>`;
+}
+function addPessoa(base) {
+  const box = $('#' + base + 'Lista'); if (!box) return;
+  const i = window.__pessoasN[base] || 1;
+  const tmp = document.createElement('div');
+  tmp.innerHTML = pessoaBlocoHtml(base, null, i, window.__pessoasOpc[base] || {});
+  box.appendChild(tmp.firstElementChild);
+  window.__pessoasN[base] = i + 1;
+  const foco = document.getElementById(pfxPessoa(base, i) + 'Nome'); if (foco) foco.focus();
+}
+function delPessoa(pre) { const el = $('#' + pre + 'Bloco'); if (el) el.remove(); }
+/* Lê a lista inteira. Bloco apagado some do documento e é pulado; pessoa sem nome não
+   entra, para um bloco aberto por engano não virar parte do contrato. */
+function pessoasDoFormLista(base, antigas) {
+  antigas = antigas || []; const out = [];
+  const n = (window.__pessoasN || {})[base] || 1;
+  for (let i = 0; i < n; i++) {
+    const pre = pfxPessoa(base, i);
+    if (!document.getElementById(pre + 'Nome')) continue;
+    const ant = antigas[i] || {};
+    const p = pessoaDoForm(pre, ant);
+    p.conjuge = conjugeDoForm(pre, p, ant.conjuge);
+    if (p.nome) out.push(p);
+  }
+  return out;
+}
+
 /* Quem assina pela empresa quando nenhum vendedor foi escolhido: os dados da própria
    empresa, em Cadastros › Configurações. */
 function vendedorPadrao() {
@@ -779,6 +864,50 @@ function vendedorDaVenda(v) {
   if (v && v.vendedor && v.vendedor.nome) return v.vendedor;
   if (v && v.vendedorId) { const x = db.vendedores.find(y => y.id === v.vendedorId); if (x) return x; }
   return vendedorPadrao();
+}
+
+/* Lista de vendedores do contrato. Aqui não se digita nada: escolhe-se no cadastro, porque
+   quem vende é sempre uma empresa (ou pessoa) que já existe em Cadastros › Vendedores. */
+function vendedorSelectHtml(id, sel) {
+  return `<select id="${id}"><option value="">${esc(vendedorPadrao().nome || 'Empresa do cadastro')} — padrão</option>${
+    db.vendedores.map(vd => `<option value="${esc(vd.id)}" ${sel === vd.id ? 'selected' : ''}>${esc(vd.nome)}${vd.cpf ? ' — ' + esc(fmtCPF(vd.cpf)) : ''}</option>`).join('')}</select>`;
+}
+function vendedoresListaHtml(base, ids) {
+  const arr = (ids && ids.length) ? ids : [''];
+  window.__vendN = window.__vendN || {}; window.__vendN[base] = arr.length;
+  return `<div id="${base}Lista">${arr.map((id, i) => vendedorLinhaHtml(base, id, i)).join('')}</div>
+    <button type="button" class="btn btn-secondary btn-sm" onclick="addVendedorLinha('${base}')">＋ Adicionar vendedor</button>`;
+}
+function vendedorLinhaHtml(base, id, i) {
+  const el = pfxPessoa(base, i);
+  return `<div class="fg" id="${el}Linha"><label>${i ? 'Vendedor ' + (i + 1) : 'Quem vende neste contrato'}</label>
+    <div class="row-between" style="gap:8px">${vendedorSelectHtml(el, id)}${i ? `<button type="button" class="btn-icon del" onclick="delVendedorLinha('${el}')">🗑</button>` : ''}</div></div>`;
+}
+function addVendedorLinha(base) {
+  const box = $('#' + base + 'Lista'); if (!box) return;
+  const i = window.__vendN[base] || 1;
+  const tmp = document.createElement('div');
+  tmp.innerHTML = vendedorLinhaHtml(base, '', i);
+  box.appendChild(tmp.firstElementChild);
+  window.__vendN[base] = i + 1;
+}
+function delVendedorLinha(el) { const x = $('#' + el + 'Linha'); if (x) x.remove(); }
+/* Devolve os ids escolhidos, sem repetir: assinar duas vezes pela mesma empresa não faz
+   sentido e sairia duplicado no contrato. */
+function vendedoresDoFormLista(base) {
+  const n = (window.__vendN || {})[base] || 1; const ids = [];
+  for (let i = 0; i < n; i++) {
+    const el = pfxPessoa(base, i);
+    if (!document.getElementById(el)) continue;
+    const v = val(el);
+    if (!ids.includes(v)) ids.push(v);
+  }
+  return ids.length ? ids : [''];
+}
+function vendedorPorId(id) {
+  if (!id) return vendedorPadrao();
+  const v = db.vendedores.find(y => y.id === id);
+  return v ? Object.assign({}, v) : vendedorPadrao();
 }
 
 // ---------------------------------------------------------------- formulário reutilizável

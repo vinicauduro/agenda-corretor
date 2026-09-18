@@ -369,9 +369,24 @@ com os campos antigos, que seguem funcionando. Para aproveitar os novos, entre n
 troque os parágrafos das partes por esses três campos; a lista de campos à direita já os
 mostra.
 
-**O que eu deixei de fora de propósito:** mais de um comprador sem ser o cônjuge (dois irmãos,
-dois sócios comprando juntos). Cabe, mas muda a tela e eu preferi não inventar antes de você
-dizer se acontece na sua rotina.
+**Mais de uma parte de cada lado** (feito depois que você confirmou que acontece):
+
+- [ ] No comprador há um botão **＋ Adicionar comprador**: dois irmãos, dois sócios, pai e
+      filho. Cada um ganha o bloco inteiro de qualificação, com o seu próprio cônjuge, e
+      pode ser removido no 🗑. Marido e mulher **não** precisam de dois blocos — para isso é
+      o estado civil e o cônjuge.
+- [ ] No vendedor há **＋ Adicionar vendedor**, quando duas empresas do grupo assinam a mesma
+      venda. Escolher o mesmo vendedor duas vezes não duplica.
+- [ ] O **primeiro** comprador continua sendo quem aparece nas telas de venda, recebível,
+      cobrança e boleto — só ele tem telefone obrigatório. Os demais existem para o contrato.
+      Na tela da venda aparece "e mais 1" e a lista dos demais.
+- [ ] No contrato as partes saem separadas por ponto e vírgula, com "e" antes da última, e
+      **cada uma ganha a sua linha de assinatura**, mais uma linha para cada cônjuge.
+
+Para isso o bloco de assinaturas do modelo padrão passou a usar `{{assinaturas.vendedores}}`
+e `{{assinaturas.compradores}}`, que montam as linhas sozinhos para quantas partes existirem.
+Se o seu modelo já estava editado, ele continua com as linhas fixas de antes — funcionam,
+mas só imprimem a primeira parte de cada lado.
 
 ---
 
