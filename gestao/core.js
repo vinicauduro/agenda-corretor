@@ -10,6 +10,13 @@ const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 
 function genId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
 function pad2(n) { return String(n).padStart(2, '0'); }
+/* Último dia do mês de uma data ISO. O cálculo de juros e de quitação é por mês fechado,
+   então é até esta data que um valor apurado no mês continua valendo. */
+function ultimoDiaDoMes(iso) {
+  const [y, m] = String(iso || '').split('-').map(Number);
+  if (!y || !m) return iso;
+  return `${y}-${pad2(m)}-${pad2(new Date(y, m, 0).getDate())}`;
+}
 function ymd(dt) { return dt.getFullYear() + '-' + pad2(dt.getMonth() + 1) + '-' + pad2(dt.getDate()); }
 function todayStr() { return ymd(new Date()); }
 function parseDate(s) { if (!s) return null; const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); }
@@ -102,12 +109,13 @@ function toast(icon, title, body, isErr) {
 }
 
 // ---------------------------------------------------------------- modal
-function openModal({ title, body, footer = '', wide = false, onClose = null }) {
+function openModal({ title, body, footer = '', wide = false, full = false, onClose = null }) {
   $('#modalTitle').innerHTML = title;
   $('#modalBody').innerHTML = body;
   $('#modalFoot').innerHTML = footer;
   $('#modalFoot').style.display = footer ? 'flex' : 'none';
-  $('#modalBox').classList.toggle('wide', wide);
+  $('#modalBox').classList.toggle('wide', wide && !full);
+  $('#modalBox').classList.toggle('full', !!full);
   $('#modalBody').scrollTop = 0;
   $('#modalOverlay').classList.add('open');
   state.modalOnClose = onClose;
@@ -210,6 +218,12 @@ function defaultConfig() {
     telefone: '',
     email: '',
     uf: '',
+    cep: '',
+    logradouro: '',
+    numeroEnd: '',
+    bairro: '',
+    inscricaoEstadual: '',
+    representantes: [],
     representante: '',
     repCpf: '',
     repCargo: '',
@@ -735,8 +749,12 @@ function qualificacaoPessoa(p, opc) {
     if (p.inscricaoEstadual) t.push(`inscrição estadual nº ${p.inscricaoEstadual}`);
     const end = enderecoLinha(p);
     if (end) t.push(`com sede ${prepLogradouro(p.logradouro || p.endereco)} ${end}`);
-    const rep = p.representante && p.representante.nome ? qualificacaoPessoa(p.representante, { semEndereco: false }) : '';
-    if (rep) t.push(`neste ato representada por ${rep}`);
+    /* Pode haver mais de um signatário: contrato social costuma exigir duas assinaturas. */
+    const reps = (p.representantes && p.representantes.length ? p.representantes : (p.representante ? [p.representante] : [])).filter(r => r && r.nome);
+    if (reps.length) {
+      const qs = reps.map(r => qualificacaoPessoa(r));
+      t.push(`neste ato ${reps.length > 1 ? 'representada por' : 'representada por'} ${qs.length > 1 ? qs.slice(0, -1).join('; ') + '; e ' + qs[qs.length - 1] : qs[0]}`);
+    }
     return `${nome}, ${t.join(', ')}`;
   }
   if (p.nacionalidade) t.push(palavraFlex(p, p.nacionalidade));
@@ -854,10 +872,13 @@ function pessoasDoFormLista(base, antigas) {
    empresa, em Cadastros › Configurações. */
 function vendedorPadrao() {
   const c = db.config || {};
+  const reps = (c.representantes || []).filter(r => r && r.nome);
   return {
-    id: '', tipo: 'pj', nome: c.empresa || '', cpf: c.cnpj || '', endereco: c.endereco || '', cidade: c.cidade || '',
-    uf: c.uf || '', telefone: c.telefone || '', email: c.email || '',
-    representante: c.representante ? { tipo: 'pf', genero: c.repGenero || 'm', nome: c.representante, cpf: c.repCpf || '', cargo: c.repCargo || '' } : null
+    id: '', tipo: 'pj', nome: c.empresa || '', cpf: c.cnpj || '', inscricaoEstadual: c.inscricaoEstadual || '',
+    cep: c.cep || '', logradouro: c.logradouro || '', numeroEnd: c.numeroEnd || '', bairro: c.bairro || '',
+    endereco: c.endereco || '', cidade: c.cidade || '', uf: c.uf || '', telefone: c.telefone || '', email: c.email || '',
+    representantes: reps,
+    representante: reps[0] || (c.representante ? { tipo: 'pf', genero: c.repGenero || 'm', nome: c.representante, cpf: c.repCpf || '', cargo: c.repCargo || '' } : null)
   };
 }
 function vendedorDaVenda(v) {
@@ -918,6 +939,7 @@ function pessoaFormHtml(pre, p, opc) {
   const pj = ehPJ(p);
   const idt = s => pre + s;
   const inp = (s, label, valor, tipo) => `<div class="fg"><label>${label}</label><input type="${tipo || 'text'}" id="${idt(s)}" value="${esc(valor ?? '')}"></div>`;
+  const ob = opc.obrigatorio ? ' *' : '';
   /* Identificação fica sempre à vista; o resto da qualificação pode ficar recolhido, para
      quem só quer registrar a venda rápido não ter de rolar vinte campos. */
   /* Quando a pessoa tem cônjuge no mesmo formulário, mudar a concordância dela vira a do
@@ -929,29 +951,30 @@ function pessoaFormHtml(pre, p, opc) {
     : opc.semTipo ? '' : `<div class="frow"><div class="fg"><label>Tipo</label><select id="${idt('Tipo')}" onchange="pessoaTipoChange('${pre}')"><option value="pf" ${pj ? '' : 'selected'}>Pessoa física</option><option value="pj" ${pj ? 'selected' : ''}>Pessoa jurídica</option></select></div>
     ${generoSel}</div>`}
     <div class="frow"><div class="fg"><label id="${idt('NomeLbl')}">${pj ? 'Razão social' : 'Nome completo'} *</label><input type="text" id="${idt('Nome')}" value="${esc(p.nome || '')}"></div>
-      <div class="fg"><label id="${idt('DocLbl')}">${pj ? 'CNPJ' : 'CPF'}</label><input type="text" id="${idt('Doc')}" value="${esc(p.cpf || '')}"></div></div>
+      <div class="fg"><label id="${idt('DocLbl')}">${pj ? 'CNPJ' : 'CPF'}${ob}</label><input type="text" id="${idt('Doc')}" value="${esc(p.cpf || '')}"></div></div>
     <div class="frow">${inp('Tel', 'Telefone' + (opc.telObrigatorio ? ' *' : ''), p.telefone, 'tel')}${inp('Email', 'E-mail', p.email, 'email')}</div>`;
   /* O cônjuge não tem estado civil próprio a declarar: ele é casado com quem está do lado. */
-  const civil = opc.semEstadoCivil ? '' : `<div class="fg"><label>Estado civil</label><select id="${idt('EstCivil')}" onchange="pessoaCivilChange('${pre}')"><option value="">—</option>${ESTADOS_CIVIS.map(e => `<option value="${e}" ${p.estadoCivil === e ? 'selected' : ''}>${e.charAt(0).toUpperCase() + e.slice(1)}</option>`).join('')}</select></div>`;
+  const civil = opc.semEstadoCivil ? '' : `<div class="fg"><label>Estado civil${ob}</label><select id="${idt('EstCivil')}" onchange="pessoaCivilChange('${pre}')"><option value="">—</option>${ESTADOS_CIVIS.map(e => `<option value="${e}" ${p.estadoCivil === e ? 'selected' : ''}>${e.charAt(0).toUpperCase() + e.slice(1)}</option>`).join('')}</select></div>`;
   const resto = `<div id="${idt('PfBox')}" style="${pj ? 'display:none' : ''}">
-      <div class="${opc.semEstadoCivil ? 'frow' : 'frow3'}">${inp('Nac', 'Nacionalidade', p.nacionalidade || 'brasileiro')}${inp('Prof', 'Profissão', p.profissao)}${civil}</div>
+      <div class="${opc.semEstadoCivil ? 'frow' : 'frow3'}">${inp('Nac', 'Nacionalidade' + ob, p.nacionalidade || 'brasileiro')}${inp('Prof', 'Profissão' + ob, p.profissao)}${civil}</div>
       ${opc.semEstadoCivil ? '' : `<div class="fg" id="${idt('RegimeBox')}" style="${temConjuge(p) ? '' : 'display:none'}"><label>Regime de bens</label><select id="${idt('Regime')}"><option value="">—</option>${REGIMES_BENS.map(r => `<option value="${r}" ${p.regimeBens === r ? 'selected' : ''}>${r.charAt(0).toUpperCase() + r.slice(1)}</option>`).join('')}</select></div>`}
-      <div class="frow">${inp('Rg', 'RG', p.rg)}${inp('RgOrgao', 'Órgão expedidor', p.rgOrgao)}</div>
+      <div class="frow">${inp('Rg', 'RG' + ob, p.rg)}${inp('RgOrgao', 'Órgão expedidor', p.rgOrgao)}</div>
+      ${opc.comCargo ? `<div class="fg"><label>Cargo na empresa</label><input type="text" id="${idt('Cargo')}" value="${esc(p.cargo || '')}" placeholder="sócio administrador, diretor…"></div>` : ''}
     </div>
     <div id="${idt('PjBox')}" style="${pj ? '' : 'display:none'}">
-      <div class="frow">${inp('Ie', 'Inscrição estadual', p.inscricaoEstadual)}${inp('RepCargo', 'Cargo de quem assina', (p.representante || {}).cargo)}</div>
-      <div class="frow">${inp('RepNome', 'Quem assina pela empresa', (p.representante || {}).nome)}${inp('RepCpf', 'CPF de quem assina', (p.representante || {}).cpf)}</div>
+      <div class="frow">${inp('Ie', 'Inscrição estadual', p.inscricaoEstadual)}${opc.semRepresentante ? '<div class="fg"></div>' : inp('RepCargo', 'Cargo de quem assina', (p.representante || {}).cargo)}</div>
+      ${opc.semRepresentante ? '' : `<div class="frow">${inp('RepNome', 'Quem assina pela empresa', (p.representante || {}).nome)}${inp('RepCpf', 'CPF de quem assina', (p.representante || {}).cpf)}</div>`}
     </div>
     ${opc.semEndereco ? '' : `<div id="${idt('EndBox')}">
       <div class="frow3">${inp('Cep', 'CEP', p.cep)}<div class="fg" style="grid-column:span 2"><label>Logradouro</label><input type="text" id="${idt('Logr')}" value="${esc(p.logradouro || p.endereco || '')}" placeholder="Rua, avenida, servidão…"></div></div>
       <div class="frow3">${inp('Num', 'Número', p.numeroEnd)}${inp('Compl', 'Complemento', p.complemento)}${inp('Bairro', 'Bairro', p.bairro)}</div>
-      <div class="frow"><div class="fg"><label>Cidade</label><input type="text" id="${idt('Cidade')}" value="${esc(p.cidade || '')}"></div>
+      <div class="frow"><div class="fg"><label>Cidade${ob}</label><input type="text" id="${idt('Cidade')}" value="${esc(p.cidade || '')}"></div>
         <div class="fg"><label>UF</label><select id="${idt('Uf')}"><option value="">—</option>${UFS.map(u => `<option value="${u}" ${p.uf === u ? 'selected' : ''}>${u}</option>`).join('')}</select></div></div></div>`}`;
   if (!opc.recolher) return cabeca + resto;
   /* O resumo é recalculado a cada tecla: um aviso do que falta que não some quando você
      preenche é pior que aviso nenhum. */
   return `<div oninput="qualifResumo('${pre}')" onchange="qualifResumo('${pre}')">${cabeca}
-    <details class="qualif"><summary>📋 Qualificação completa para o contrato <span id="${idt('Resumo')}">${qualifResumoHtml(p)}</span></summary>${resto}${opc.conjuge ? conjugeFormHtml(pre, p) : ''}</details></div>`;
+    <details class="qualif" open><summary>📋 Qualificação completa para o contrato <span id="${idt('Resumo')}">${qualifResumoHtml(p)}</span></summary>${resto}${opc.conjuge ? conjugeFormHtml(pre, p) : ''}</details></div>`;
 }
 
 /* O que ainda falta para o contrato sair qualificado. É a mesma conferência que a
@@ -1019,9 +1042,10 @@ function pessoaDoForm(pre, antiga) {
       p.regimeBens = temConjuge(p) ? val(pre + 'Regime') : '';
     }
     p.rg = val(pre + 'Rg'); p.rgOrgao = val(pre + 'RgOrgao');
+    if (tem('Cargo')) p.cargo = val(pre + 'Cargo');
   }
-  if (tem('Ie')) {
-    p.inscricaoEstadual = val(pre + 'Ie');
+  if (tem('Ie')) p.inscricaoEstadual = val(pre + 'Ie');
+  if (tem('RepNome')) {
     const rn = val(pre + 'RepNome');
     p.representante = rn ? { tipo: 'pf', genero: 'm', nome: rn, cpf: val(pre + 'RepCpf'), cargo: val(pre + 'RepCargo') } : null;
   }

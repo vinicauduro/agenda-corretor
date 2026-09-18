@@ -150,9 +150,8 @@ function cadBancoHtml() {
     <div class="frow3"><div class="fg"><label>Conta corrente</label><input type="text" id="bcConta" value="${esc(c.conta || '')}"></div>
       <div class="fg"><label>Dígito da conta</label><input type="text" id="bcContaDv" value="${esc(c.contaDv || '')}" maxlength="1"></div>
       <div class="fg"><label>Convênio / código do cedente</label><input type="text" id="bcConvenio" value="${esc(c.convenio || '')}" placeholder="1234567"></div></div>
-    <div class="frow"><div class="fg"><label>Próximo nosso número</label><input type="number" id="bcNN" value="${c.id ? proximoNossoNumero(c) : (c.nossoNumeroAtual || 1)}"><div class="hint">${c.id && maiorNossoNumeroUsado(c) ? 'Maior já usado neste sistema: ' + maiorNossoNumeroUsado(c) + '. O sistema nunca repete nem volta atrás.' : 'O sistema numera sozinho a partir daqui.'}</div></div>
-      <div class="fg"><label>Próxima remessa (sequencial)</label><input type="number" id="bcSeq" value="${c.remessaSeq || 1}"></div></div>
-    <div class="alert info" style="cursor:default"><span><b>Vindo de outro sistema?</b> O banco recusa título cujo nosso número já foi usado neste convênio, e não existe jeito de descobrir onde o outro sistema parou — ele continua consumindo números enquanto os dois rodam. Em vez de tentar continuar a contagem, comece numa <b>faixa separada e bem alta</b>, por exemplo <b>1000000</b>. São 10 dígitos disponíveis, quase 10 bilhões de números: não há risco de um alcançar o outro.</span></div>
+    <div class="fg"><label>Próxima remessa (sequencial)</label><input type="number" id="bcSeq" value="${c.remessaSeq || 1}"></div>
+    <div class="alert info" style="cursor:default"><span><b>O nosso número é do sistema.</b> Cada boleto recebe o seu sozinho, ${c.id ? `a partir de <b>${proximoNossoNumero(c)}</b>` : `começando em <b>${NN_INICIAL}</b>`}, sem repetir e sem voltar atrás — o banco recusa título cujo número já foi usado neste convênio. A faixa começa bem acima da que um sistema antigo estaria usando, para que os dois nunca se encontrem enquanto rodam juntos.</span></div>
     <div class="fieldset"><span class="lg">📄 Instruções do boleto</span>
       <div class="frow3"><div class="fg"><label>Multa por atraso (%)</label><input type="number" id="bcMulta" step="0.01" value="${c.multaPct ?? 2}"></div>
         <div class="fg"><label>Juros de mora (% ao mês)</label><input type="number" id="bcJuros" step="0.01" value="${fmtNumPlano(jurosMesDaConta(c))}"><div class="hint">O banco cobra por dia; o sistema divide por 30 sozinho.</div></div>
@@ -160,10 +159,7 @@ function cadBancoHtml() {
       <div class="frow3"><div class="fg"><label>Protestar após (dias)</label><input type="number" id="bcProtesto" value="${c.protestoDias ?? 0}"><div class="hint">0 = não protestar</div></div>
         <div class="fg"><label>Baixar após vencimento (dias)</label><input type="number" id="bcBaixa" value="${c.baixaDias ?? 0}"></div>
         <div class="fg"><label>Espécie / aceite</label><select id="bcEspecie"><option value="DM" ${c.especie === 'DM' ? 'selected' : ''}>Duplicata mercantil</option><option value="DS" ${c.especie === 'DS' ? 'selected' : ''}>Duplicata de serviço</option><option value="OU" ${c.especie === 'OU' ? 'selected' : ''}>Outros</option></select></div></div>
-      <div class="frow"><div class="fg"><label>Código de instrução 1 (remessa)</label><input type="text" id="bcInstr1" maxlength="2" value="${esc(c.instrucao1 || '')}" placeholder="em branco"></div>
-        <div class="fg"><label>Código de instrução 2 (remessa)</label><input type="text" id="bcInstr2" maxlength="2" value="${esc(c.instrucao2 || '')}" placeholder="em branco"></div></div>
-      <p class="help">Os dias acima valem para o <b>texto do boleto</b>. Para o banco <b>agir sozinho</b> — protestar ou baixar — ele precisa do código de instrução, que muda de banco para banco. Não preencha por conta própria: pegue no manual de cobrança do seu banco. Em branco, o banco não protesta nem baixa nada por conta.</p>
-      ${(num(c.protestoDias) > 0 && !c.instrucao1) ? '<div class="alert warn" style="cursor:default"><span>Você configurou protesto por dias, mas sem código de instrução o banco <b>não vai protestar</b> — o aviso sai só impresso no boleto.</span></div>' : ''}
+      <p class="help">Os dias acima saem <b>impressos no boleto</b>, como aviso ao comprador. O banco não protesta nem baixa nada por conta própria: para isso ele precisaria de um código de instrução, que muda de banco para banco e que o sistema não manda. É de propósito — um código errado faria o banco protestar um comprador por engano. Se um dia você quiser mesmo o protesto automático, a gente liga isso junto com o seu gerente.</p>
       <div class="fg"><label>Mensagem 1 no boleto</label><input type="text" id="bcMsg1" value="${esc(c.mensagem1 || '')}" placeholder="Referente ao lote {{lote}} do {{loteamento}}"></div>
       <div class="fg"><label>Mensagem 2 no boleto</label><input type="text" id="bcMsg2" value="${esc(c.mensagem2 || '')}" placeholder="Não receber após 30 dias do vencimento"></div></div>
     <div class="btn-row">${c.id ? `<button class="btn btn-outline-danger" onclick="excluirContaBanco('${c.id}')">Excluir</button>` : ''}<button class="btn btn-primary" onclick="salvarContaBanco('${c.id || ''}')">Salvar conta de cobrança</button>
@@ -195,20 +191,18 @@ function salvarContaBanco(id) {
   const rec = Object.assign({}, prev || { id: genId(), criadoEm: new Date().toISOString() }, {
     loteamentoId: val('bcEmp') || '', banco: val('bcBanco'), carteira: val('bcCarteira'), variacao: val('bcVariacao'),
     agencia: val('bcAgencia'), agenciaDv: val('bcAgenciaDv'), conta: val('bcConta'), contaDv: val('bcContaDv'),
-    convenio: val('bcConvenio'), nossoNumeroAtual: Math.max(1, Math.round(num(val('bcNN')))), nnMax: prev ? num(prev.nnMax) : 0, remessaSeq: Math.max(1, Math.round(num(val('bcSeq')))),
+    convenio: val('bcConvenio'),
+    /* O nosso número não é digitado: conta nova começa na faixa alta e daí o sistema anda
+       sozinho. Conta que já existe mantém o ponto em que está. */
+    nossoNumeroAtual: prev ? num(prev.nossoNumeroAtual) || NN_INICIAL : NN_INICIAL,
+    nnMax: prev ? num(prev.nnMax) : 0, remessaSeq: Math.max(1, Math.round(num(val('bcSeq')))),
     multaPct: num(val('bcMulta')), jurosMesPct: num(val('bcJuros')), jurosDia: num(val('bcJuros')) / 30, descontoPct: num(val('bcDesc')),
     protestoDias: Math.round(num(val('bcProtesto'))), baixaDias: Math.round(num(val('bcBaixa'))),
-    especie: val('bcEspecie'), aceite: 'N', instrucao1: soDigitos(val('bcInstr1')).slice(0, 2), instrucao2: soDigitos(val('bcInstr2')).slice(0, 2),
+    especie: val('bcEspecie'), aceite: 'N',
+    instrucao1: (prev && prev.instrucao1) || '', instrucao2: (prev && prev.instrucao2) || '',
     mensagem1: val('bcMsg1'), mensagem2: val('bcMsg2')
   });
   if (!rec.agencia || !rec.conta || !rec.convenio) { toast('⚠️', 'Faltam dados', 'Agência, conta e convênio são obrigatórios.', true); return; }
-  /* O nosso número não pode andar para trás: repetir número é recusa certa no banco. */
-  const maiorUsado = prev ? maiorNossoNumeroUsado(prev) : 0;
-  if (maiorUsado && rec.nossoNumeroAtual <= maiorUsado) {
-    toast('⚠️', 'Nosso número já usado', `O ${rec.nossoNumeroAtual} já saiu em boleto. Informe um número acima de ${maiorUsado}.`, true);
-    return;
-  }
-  if (rec.nossoNumeroAtual > 9999999999) { toast('⚠️', 'Nosso número muito grande', 'O limite do Banco do Brasil é 10 dígitos.', true); return; }
   upsert('contasBanco', rec);
   logAct(`Conta de cobrança salva: ${(BANCOS[pad(rec.banco, 3)] || {}).nome || rec.banco}`);
   state.sub.contaEdit = null;

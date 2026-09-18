@@ -246,6 +246,14 @@ select:focus, input:focus, textarea:focus { outline: none; border-color: var(--p
   display: flex; flex-direction: column; box-shadow: 0 -10px 50px rgba(0,0,0,0.25); animation: up 0.2s ease;
 }
 .modal.wide { max-width: 860px; }
+/* Tela cheia: para escrever contrato num campo de texto que caiba o contrato */
+.modal.full { max-width: 1400px; width: 96vw; height: 94vh; max-height: 94vh; }
+.modal.full .modal-body { display: flex; flex-direction: column; }
+.doc-editor-grid { display: grid; grid-template-columns: 1fr 300px; gap: 14px; flex: 1; min-height: 0; }
+.doc-editor-grid > .fg { display: flex; flex-direction: column; min-height: 0; margin: 0; }
+.doc-editor-grid .doc-editor { flex: 1; min-height: 300px; resize: none; }
+.doc-editor-grid .doc-paleta { overflow-y: auto; border-left: 1px solid var(--border); padding-left: 12px; }
+@media (max-width: 900px) { .doc-editor-grid { grid-template-columns: 1fr; } .doc-editor-grid .doc-paleta { border-left: none; padding-left: 0; max-height: 200px; } }
 @keyframes up { from { transform: translateY(30px); opacity: 0; } to { transform: none; opacity: 1; } }
 .modal-head { padding: 14px 18px 10px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .modal-head h2 { font-size: 1.02rem; font-weight: 800; }
@@ -417,3 +425,15 @@ details.qualif[open] > summary { margin-bottom: 10px; }
 
 /* Cada pessoa a mais na venda ganha o seu bloco, separado do anterior */
 .pessoa-bloco + .pessoa-bloco { border-top: 1px dashed var(--border); padding-top: 10px; margin-top: 10px; }
+
+/* Lançamento de índices: navegação de ano e a coluna de doze meses */
+.ix-ano-nav { display: flex; align-items: center; justify-content: center; gap: 14px; margin-bottom: 12px; font-size: 1.05rem; }
+.ix-tab td { padding: 7px 10px; }
+.ix-tab th:last-child, .ix-tab td:last-child { width: 28px; }
+.ix-tab tr.ix-futuro td:first-child { color: var(--muted); }
+.ix-val { text-align: right; padding: 6px 8px; }
+.ix-resumo-grid { display: flex; flex-wrap: wrap; gap: 10px; }
+.ix-resumo-grid > div { flex: 1 1 120px; text-align: center; padding: 10px; border-right: 1px solid var(--border); cursor: pointer; }
+.ix-resumo-grid > div:last-child { border-right: none; }
+.ix-resumo-grid .v { font-size: 1.5rem; font-weight: 800; }
+.ix-resumo-grid .k { font-size: 0.78rem; color: var(--muted); }

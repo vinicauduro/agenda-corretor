@@ -465,13 +465,15 @@ function abrirModeloForm(id, tipo) {
   const paleta = DOC_CAMPOS.map(([grupo, itens]) => `<div class="doc-grupo"><b>${esc(grupo)}</b> ${itens.map(([k, rot]) => `<button type="button" class="doc-chip" onclick="modInserir('${k}')" title="${esc(k)}">${esc(rot)}</button>`).join('')}</div>`).join('');
   openModal({
     title: m ? '✏️ Editar modelo' : (t === 'proposta' ? '＋ Modelo de proposta' : '＋ Modelo de contrato'),
-    wide: true,
+    full: true,
     body: `<div class="frow"><div class="fg"><label>Nome do modelo *</label><input type="text" id="mdNome" value="${esc(rasc ? rasc.nome : (m ? m.nome : ''))}" placeholder="${t === 'proposta' ? 'Proposta de compra' : 'Promessa de compra e venda'}"></div>
       <div class="fg"><label>Tipo</label><select id="mdTipo"><option value="proposta" ${t === 'proposta' ? 'selected' : ''}>Proposta (corretor)</option><option value="contrato" ${t === 'contrato' ? 'selected' : ''}>Contrato (venda)</option></select></div></div>
-      <div class="fg"><label>Texto do documento</label>
-        <textarea id="mdCorpo" class="doc-editor" spellcheck="false">${esc(rasc ? rasc.corpo : (m ? m.corpo : (t === 'proposta' ? MODELO_PROPOSTA : MODELO_CONTRATO)))}</textarea>
-        <div class="hint">Clique em um campo abaixo para inserir no lugar do cursor. Use <b># </b> no começo da linha para título, <b>## </b> para subtítulo e <b>**texto**</b> para negrito. Qualquer campo que você inventar, por exemplo <b>{{foro}}</b>, vira um preenchimento na hora de gerar.</div></div>
-      <div class="doc-paleta">${paleta}</div>`,
+      <div class="doc-editor-grid">
+        <div class="fg"><label>Texto do documento</label>
+          <textarea id="mdCorpo" class="doc-editor" spellcheck="false">${esc(rasc ? rasc.corpo : (m ? m.corpo : (t === 'proposta' ? MODELO_PROPOSTA : MODELO_CONTRATO)))}</textarea>
+          <div class="hint">Clique num campo ao lado para inserir no lugar do cursor. Use <b># </b> no começo da linha para título, <b>## </b> para subtítulo e <b>**texto**</b> para negrito. Qualquer campo que você inventar, por exemplo <b>{{foro}}</b>, vira um preenchimento na hora de gerar.</div></div>
+        <div class="doc-paleta">${paleta}</div>
+      </div>`,
     footer: `<button class="btn btn-secondary" onclick="closeModal()">Cancelar</button><button class="btn btn-outline" onclick="modTestar()">👁️ Ver exemplo</button><button class="btn btn-primary" onclick="salvarModelo('${esc(id || '')}')">Salvar modelo</button>`
   });
 }
