@@ -368,6 +368,14 @@ function abrirLoteForm(id) {
       <div class="fg"><label>Tipo</label><select id="lfTipo"><option value="residencial" ${!l || l.tipo !== 'comercial' ? 'selected' : ''}>Residencial</option><option value="comercial" ${l && l.tipo === 'comercial' ? 'selected' : ''}>Comercial</option></select></div></div>
     <div class="frow"><div class="fg"><label>Matrícula</label><input type="text" id="lfMatricula" value="${esc(l ? l.matricula || '' : '')}"></div>
       <div class="fg"><label>Status</label><select id="lfStatus" ${l && (l.status === 'vendido' || l.status === 'reservado') ? 'disabled' : ''}><option value="disponivel" ${!l || l.status === 'disponivel' ? 'selected' : ''}>Disponível</option><option value="bloqueado" ${l && l.status === 'bloqueado' ? 'selected' : ''}>Indisponível / bloqueado</option>${l && l.status === 'reservado' ? '<option value="reservado" selected>Reservado</option>' : ''}${l && l.status === 'vendido' ? '<option value="vendido" selected>Vendido</option>' : ''}</select></div></div>
+    <details class="qualif"><summary>📋 Qualificação do imóvel para contrato e escritura</summary>
+      <div class="fg"><label>Descrição conforme a matrícula</label><textarea id="lfDescMat" rows="3" placeholder="Copie do registro, com as confrontações, exatamente como está na matrícula.">${esc(l ? l.descricaoMatricula || '' : '')}</textarea>
+        <div class="hint">O contrato descreve o imóvel com as mesmas palavras da matrícula; qualquer diferença vira exigência no cartório.</div></div>
+      <div class="frow3"><div class="fg"><label>CEP</label><input type="text" id="lfCep" value="${esc(l ? l.cep || '' : '')}"></div>
+        <div class="fg" style="grid-column:span 2"><label>Logradouro</label><input type="text" id="lfLogr" value="${esc(l ? l.logradouro || '' : '')}" placeholder="${esc(lot.logradouro || lot.endereco || 'Rua do loteamento')}"></div></div>
+      <div class="frow"><div class="fg"><label>Número</label><input type="text" id="lfNum" value="${esc(l ? l.numeroEnd || '' : '')}"></div>
+        <div class="fg"><label>Bairro</label><input type="text" id="lfBairro" value="${esc(l ? l.bairro || '' : '')}" placeholder="${esc(lot.bairro || '')}"></div></div>
+      <p class="help">Em branco, o contrato usa o endereço do empreendimento.</p></details>
     <div class="fg"><label>Observações</label><textarea id="lfObs">${esc(l ? l.obs || '' : '')}</textarea></div>`;
   openModal({ title: l ? `✏️ Editar ${esc(loteShort(l))}` : '＋ Novo lote', body, footer: `${l ? `<button class="btn btn-outline-danger" onclick="excluirLote('${l.id}')">Excluir</button>` : ''}<button class="btn btn-secondary" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" onclick="salvarLote('${l ? l.id : ''}')">Salvar</button>` });
   lfCalc();
@@ -382,7 +390,8 @@ function salvarLote(id) {
   const prev = id ? getLote(id) : null;
   const rec = Object.assign({}, prev || { id: genId(), loteamentoId: lot.id, status: 'disponivel', criadoEm: new Date().toISOString() }, {
     quadra, numero, area: num(val('lfArea')), frente: num(val('lfFrente')) || null, fundos: num(val('lfFundos')) || null, preco: num(val('lfPreco')),
-    tipo: val('lfTipo'), matricula: val('lfMatricula'), obs: val('lfObs')
+    tipo: val('lfTipo'), matricula: val('lfMatricula'), obs: val('lfObs'),
+    descricaoMatricula: val('lfDescMat'), cep: val('lfCep'), logradouro: val('lfLogr'), numeroEnd: val('lfNum'), bairro: val('lfBairro')
   });
   const stEl = $('#lfStatus'); if (stEl && !stEl.disabled) rec.status = stEl.value;
   upsert('lotes', rec);
@@ -654,6 +663,7 @@ function abrirVendaForm(id, loteId, reservaId) {
   const c = x ? x.cliente : (res ? res.cliente : {}); const k = x ? x.corretor : (res ? res.corretor : { nome: db.config.empresa || 'Venda direta' });
   const sel = carteira ? '' : (x ? x.loteId : (loteId || lotes[0].id)); const lsel = sel ? getLote(sel) : null;
   const im = (x && x.imovel) || {};
+  const vsel = x ? (x.vendedorId || '') : '';
   const pv = res && res.proposta ? res.proposta : {};
   const total = x ? x.valorTotal : (pv.valor || (lsel ? lsel.preco : 0));
   const entrada = x ? x.entrada : (pv.entrada != null ? pv.entrada : Math.round(total * (num(cond.entradaMinPct) || 10) / 100));
@@ -666,13 +676,22 @@ function abrirVendaForm(id, loteId, reservaId) {
     ${carteira ? `<div class="fieldset"><span class="lg">🏠 Imóvel</span>
       <div class="fg"><label>Descrição *</label><input type="text" id="vfImDesc" value="${esc(im.descricao || '')}" placeholder="Ex.: Apartamento 302, Ed. Aurora"></div>
       <div class="frow"><div class="fg"><label>Endereço</label><input type="text" id="vfImEnd" value="${esc(im.endereco || '')}"></div>
-        <div class="fg"><label>Matrícula</label><input type="text" id="vfImMat" value="${esc(im.matricula || '')}"></div></div></div>`
+        <div class="fg"><label>Matrícula</label><input type="text" id="vfImMat" value="${esc(im.matricula || '')}"></div></div>
+      <details class="qualif"><summary>📋 Qualificação do imóvel para contrato e escritura</summary>
+        <div class="fg"><label>Descrição conforme a matrícula</label><textarea id="vfImDescMat" rows="3" placeholder="Copie do registro, com as confrontações, exatamente como está na matrícula.">${esc(im.descricaoMatricula || '')}</textarea></div>
+        <div class="frow"><div class="fg"><label>Cartório de Registro de Imóveis</label><input type="text" id="vfImCart" value="${esc(im.cartorio || '')}"></div>
+          <div class="fg"><label>Área (m²)</label><input type="number" id="vfImArea" step="0.01" value="${im.area || ''}"></div></div>
+        <div class="frow3"><div class="fg"><label>CEP</label><input type="text" id="vfImCep" value="${esc(im.cep || '')}"></div>
+          <div class="fg"><label>Bairro</label><input type="text" id="vfImBairro" value="${esc(im.bairro || '')}"></div>
+          <div class="fg"><label>Cidade</label><input type="text" id="vfImCidade" value="${esc(im.cidade || '')}"></div></div></details></div>`
     : `<div class="fg"><label>Lote *</label><select id="vfLote" onchange="vfLoteChange()" ${x ? 'disabled' : ''}>${optionsHtml(lotes, sel, l => `${loteLabel(l)} — ${fmtMoney(l.preco)}`)}</select></div>`}
     <div class="fieldset"><span class="lg">🧑‍🤝‍🧑 Comprador</span>
-      <div class="fg"><label>Nome *</label><input type="text" id="vcNome" value="${esc(c.nome || '')}"></div>
-      <div class="frow"><div class="fg"><label>CPF/CNPJ</label><input type="text" id="vcCpf" value="${esc(c.cpf || '')}"></div><div class="fg"><label>Telefone *</label><input type="tel" id="vcTel" value="${esc(c.telefone || '')}"></div></div>
-      <div class="frow"><div class="fg"><label>E-mail</label><input type="email" id="vcEmail" value="${esc(c.email || '')}"></div><div class="fg"><label>Cidade</label><input type="text" id="vcCidade" value="${esc(c.cidade || '')}"></div></div>
-      <div class="frow"><div class="fg"><label>Endereço</label><input type="text" id="vcEnd" value="${esc(c.endereco || '')}"></div><div class="fg"><label>Profissão</label><input type="text" id="vcProf" value="${esc(c.profissao || '')}"></div></div></div>
+      ${pessoaFormHtml('vc', c, { recolher: true, conjuge: true, telObrigatorio: true })}</div>
+    <div class="fieldset"><span class="lg">✍️ Vendedor</span>
+      <div class="fg"><label>Quem vende neste contrato</label><select id="vfVendedor">
+        <option value="">${esc(vendedorPadrao().nome || 'Empresa do cadastro')} — padrão</option>
+        ${db.vendedores.map(vd => `<option value="${esc(vd.id)}" ${vsel === vd.id ? 'selected' : ''}>${esc(vd.nome)}${vd.cpf ? ' — ' + esc(fmtCPF(vd.cpf)) : ''}</option>`).join('')}</select>
+        <p class="help">Cadastre outros CNPJs do grupo em Cadastros › Vendedores. O contrato sai com a qualificação de quem você escolher aqui.</p></div></div>
     <div class="fieldset"><span class="lg">🧑‍💼 Corretor</span>
       ${!x && !res ? `<div class="fg"><label>Corretor cadastrado</label><select id="vkSel" onchange="vkPreenche()"><option value="">— Venda direta / digitar —</option>${optionsHtml(corrs, '', cc => cc.nome + (cc.imobiliaria ? ' (' + cc.imobiliaria + ')' : ''))}</select></div>` : ''}
       <div class="frow"><div class="fg"><label>Nome</label><input type="text" id="vkNome" value="${esc(k.nome || '')}"></div><div class="fg"><label>CRECI</label><input type="text" id="vkCreci" value="${esc(k.creci || '')}"></div></div>
@@ -692,6 +711,18 @@ function abrirVendaForm(id, loteId, reservaId) {
   openModal({ title: x ? '✏️ Editar venda' : '💰 Registrar venda', body, footer: `<button class="btn btn-secondary" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" onclick="salvarVenda('${x ? x.id : ''}','${reservaId || ''}')">Salvar venda</button>`, wide: true });
   window.vfManual = !!x; window.vfBaloes = x ? (x.baloes || []).map(b => ({ ...b })) : [];
   renderBaloes(); vfCalc();
+}
+/* Comprador e cônjuge saem do mesmo formulário; o registro anterior entra como base para
+   não perder campo que a tela do momento não mostrou. */
+function compradorDoForm(x, res) {
+  const antigo = (x && x.cliente) || (res && res.cliente) || {};
+  const c = pessoaDoForm('vc', antigo);
+  c.conjuge = conjugeDoForm('vc', c, antigo.conjuge);
+  return c;
+}
+function vendedorEscolhido(id) {
+  const v = id ? db.vendedores.find(y => y.id === id) : null;
+  return v ? Object.assign({}, v) : vendedorPadrao();
 }
 function vkPreenche() { const c = db.corretores.find(x => x.id === val('vkSel')); if (!c) return; setVal('vkNome', c.nome); setVal('vkCreci', c.creci); setVal('vkTel', c.telefone); setVal('vkImob', c.imobiliaria); }
 function vfLoteChange() { const l = getLote(val('vfLote')); if (l) { setVal('vfTotal', l.preco); window.vfManual = false; vfCalc(); } }
@@ -728,8 +759,15 @@ function salvarVenda(id, reservaId) {
   if (n && !val('vfPrimeiro')) { toast('⚠️', 'Informe o 1º vencimento', '', true); return; }
   const baloes = (window.vfBaloes || []).filter(b => b.data && num(b.valor) > 0);
   const venda = Object.assign({}, x || { id: genId(), loteId: l ? l.id : null, loteamentoId: lot.id, status: 'ativa', reservaId: reservaId || null, criadoEm: new Date().toISOString(), comissaoPaga: false, comissaoData: null }, {
-    imovel: carteira ? { descricao: val('vfImDesc'), endereco: val('vfImEnd'), matricula: val('vfImMat') } : null,
-    cliente: { nome: val('vcNome'), cpf: val('vcCpf'), telefone: val('vcTel'), email: val('vcEmail'), cidade: val('vcCidade'), endereco: val('vcEnd'), profissao: val('vcProf') },
+    imovel: carteira ? {
+      descricao: val('vfImDesc'), endereco: val('vfImEnd'), matricula: val('vfImMat'), descricaoMatricula: val('vfImDescMat'),
+      cartorio: val('vfImCart'), area: num(val('vfImArea')) || null, cep: val('vfImCep'), bairro: val('vfImBairro'), cidade: val('vfImCidade')
+    } : null,
+    cliente: compradorDoForm(x, res),
+    vendedorId: val('vfVendedor') || null,
+    /* O vendedor é congelado na venda: se o cadastro mudar depois, o contrato já assinado
+       continua contando a história que foi assinada. */
+    vendedor: vendedorEscolhido(val('vfVendedor')),
     corretor: { nome: val('vkNome') || 'Venda direta', creci: val('vkCreci'), telefone: val('vkTel'), imobiliaria: val('vkImob'), email: (x && x.corretor.email) || '', userId: (x && x.corretor.userId) || (res && res.corretor && res.corretor.userId) || (corretorSelecionado('vkSel') || {}).userId || null },
     corretorUserId: (x && x.corretorUserId) || (res && res.corretorUserId) || (corretorSelecionado('vkSel') || {}).userId || null,
     dataVenda: val('vfData'), valorTotal: total, entrada: num(val('vfEntrada')), dataEntrada: val('vfDataEntrada') || val('vfData'), nParcelas: n, jurosMes: num(val('vfJuros')),
@@ -766,7 +804,7 @@ function renderCadastros() {
   const v = $('#av-cadastros');
   state.sub.cad = state.sub.cad || 'corretores';
   const todasTabs = [['corretores', Cloud.active ? '👥 Equipe' : '🧑‍💼 Corretores', 'equipe.gerenciar'],
-    ['permissoes', '🔐 Permissões', 'equipe.gerenciar'], ['categorias', '🏷️ Categorias', 'custos.editar'], ['documentos', '📄 Documentos', 'documentos.editar'],
+    ['vendedores', '✍️ Vendedores', 'config.editar'], ['permissoes', '🔐 Permissões', 'equipe.gerenciar'], ['categorias', '🏷️ Categorias', 'custos.editar'], ['documentos', '📄 Documentos', 'documentos.editar'],
     ['indices', '📈 Índices', 'indices.editar'], ['cobranca', '🔔 Cobrança', 'cobranca.registrar'], ['banco', '🏦 Banco', 'config.editar'], ['vitrine', '🌐 Vitrine', 'vitrine.gerenciar'],
     ['config', '⚙️ Configurações', 'config.editar'], ['nuvem', Cloud.active ? '☁️ Conta' : '☁️ Nuvem', null], ['backup', '💾 Backup', 'backup.usar']];
   const tabs = todasTabs.filter(t => !t[2] || pode(t[2])).map(t => [t[0], t[1]]);
@@ -774,6 +812,7 @@ function renderCadastros() {
   const sub = state.sub.cad;
   let html = `<div class="subtabs">${tabs.map(([k, l]) => `<div class="chip ${sub === k ? 'active' : ''}" onclick="state.sub.cad='${k}';renderCadastros()">${l}</div>`).join('')}</div>`;
   if (sub === 'corretores') html += Cloud.active ? cadEquipeHtml() : cadCorretoresHtml();
+  else if (sub === 'vendedores') html += cadVendedoresHtml();
   else if (sub === 'categorias') html += cadCategoriasHtml();
   else if (sub === 'documentos') html += cadDocumentosHtml();
   else if (sub === 'indices') html += cadIndicesHtml();
@@ -808,6 +847,16 @@ function abrirLoteamentoForm(id) {
     <div class="fg"><label>Nome *</label><input type="text" id="lmNome" value="${esc(l ? l.nome : '')}" placeholder="Ex.: Residencial Vista Verde"></div>
     <div class="frow"><div class="fg"><label>Cidade / UF</label><input type="text" id="lmCidade" value="${esc(l ? l.cidade || '' : '')}"></div><div class="fg"><label>Endereço / acesso</label><input type="text" id="lmEnd" value="${esc(l ? l.endereco || '' : '')}"></div></div>
     <div class="fg"><label>Descrição para os corretores</label><textarea id="lmDesc" placeholder="Infraestrutura, diferenciais, área de lazer…">${esc(l ? l.descricao || '' : '')}</textarea></div>
+    <details class="qualif"><summary>📋 Endereço e registro — para contrato, escritura e declaração fiscal</summary>
+      <div class="frow3"><div class="fg"><label>CEP</label><input type="text" id="lmCep" value="${esc(l ? l.cep || '' : '')}"></div>
+        <div class="fg" style="grid-column:span 2"><label>Logradouro</label><input type="text" id="lmLogr" value="${esc(l ? l.logradouro || '' : '')}" placeholder="Rua, avenida, rodovia…"></div></div>
+      <div class="frow3"><div class="fg"><label>Número</label><input type="text" id="lmNum" value="${esc(l ? l.numeroEnd || '' : '')}"></div>
+        <div class="fg"><label>Bairro</label><input type="text" id="lmBairro" value="${esc(l ? l.bairro || '' : '')}"></div>
+        <div class="fg"><label>UF</label><select id="lmUf"><option value="">—</option>${UFS.map(u => `<option value="${u}" ${(l || {}).uf === u ? 'selected' : ''}>${u}</option>`).join('')}</select></div></div>
+      <div class="frow"><div class="fg"><label>Cartório de Registro de Imóveis</label><input type="text" id="lmCartorio" value="${esc(l ? l.cartorio || '' : '')}" placeholder="Ex.: 1º Ofício de Registro de Imóveis da Comarca de…"></div>
+        <div class="fg"><label>Matrícula mãe</label><input type="text" id="lmMatMae" value="${esc(l ? l.matriculaMae || '' : '')}"></div></div>
+      <div class="fg"><label>Código do município no IBGE</label><input type="text" id="lmIbge" value="${esc(l ? l.codigoIbge || '' : '')}" placeholder="7 dígitos">
+        <div class="hint">Só a declaração fiscal usa. Se não souber agora, deixe em branco e preencha depois.</div></div></details>
     <div class="fieldset"><span class="lg">💳 Condições de pagamento padrão</span>
       <div class="frow"><div class="fg"><label>Entrada mínima (%)</label><input type="number" id="lmEntrada" step="0.1" value="${c.entradaMinPct ?? 10}"></div><div class="fg"><label>Máximo de parcelas</label><input type="number" id="lmMaxP" value="${c.maxParcelas ?? 120}"></div></div>
       <div class="frow"><div class="fg"><label>Juros do parcelamento (% a.m.)</label><input type="number" id="lmJuros" step="0.01" value="${c.jurosMes ?? 0}"><div class="hint">0 = sem juros (parcelas lineares)</div></div><div class="fg"><label>Desconto à vista (%)</label><input type="number" id="lmDesc2" step="0.1" value="${c.descontoVistaPct ?? 0}"></div></div></div>`;
@@ -817,7 +866,9 @@ function abrirLoteamentoForm(id) {
 function salvarLoteamento(id) {
   const nome = val('lmNome'); if (!nome) { toast('⚠️', 'Informe o nome', '', true); return; }
   const prev = id ? getLoteamento(id) : null;
-  const rec = Object.assign({}, prev || { id: genId(), criadoEm: new Date().toISOString(), orcamento: {}, tipo: val('lmTipo') === 'carteira' ? 'carteira' : 'loteamento' }, { nome, cidade: val('lmCidade'), endereco: val('lmEnd'), descricao: val('lmDesc'), cond: { entradaMinPct: num(val('lmEntrada')), maxParcelas: Math.round(num(val('lmMaxP'))) || 120, jurosMes: num(val('lmJuros')), descontoVistaPct: num(val('lmDesc2')) } });
+  const rec = Object.assign({}, prev || { id: genId(), criadoEm: new Date().toISOString(), orcamento: {}, tipo: val('lmTipo') === 'carteira' ? 'carteira' : 'loteamento' }, { nome, cidade: val('lmCidade'), endereco: val('lmEnd'), descricao: val('lmDesc'),
+    cep: val('lmCep'), logradouro: val('lmLogr'), numeroEnd: val('lmNum'), bairro: val('lmBairro'), uf: val('lmUf'),
+    cartorio: val('lmCartorio'), matriculaMae: val('lmMatMae'), codigoIbge: onlyDigits(val('lmIbge')), cond: { entradaMinPct: num(val('lmEntrada')), maxParcelas: Math.round(num(val('lmMaxP'))) || 120, jurosMes: num(val('lmJuros')), descontoVistaPct: num(val('lmDesc2')) } });
   upsert('loteamentos', rec);
   if (!prev) { logAct(`${empLabel(rec)} cadastrado: ${nome}`); state.empAberto = rec.id; state.empSub = 'resumo'; setCurLotSilencioso(rec.id); state.tab = 'emp'; }
   closeModal(); renderCurrent(); toast('✅', `${empLabel(rec)} salva`.replace('Loteamento salva', 'Loteamento salvo'), nome);
@@ -851,6 +902,45 @@ function cadCorretoresHtml() {
   return `<div class="card"><h3>🧑‍💼 Corretores <span class="h-actions"><button class="btn btn-primary btn-sm" onclick="abrirCorretorForm()">＋ Novo</button></span></h3>
     <p class="help mb">Corretores são cadastrados automaticamente quando fazem o primeiro pedido de reserva. Você também pode cadastrá-los aqui.</p>
     ${db.corretores.slice().sort((a, b) => naturalCmp(a.nome, b.nome)).map(c => { const s = stats(c); return `<div class="item ${c.ativo === false ? 'bloqueado' : ''}" onclick="abrirCorretorForm('${c.id}')"><div class="info"><div class="title">${esc(c.nome)} ${c.ativo === false ? '<span class="badge neutral">inativo</span>' : ''}</div><div class="meta"><span>${esc(c.creci || 'sem CRECI')}</span><span>· ${esc(fmtPhone(c.telefone))}</span>${c.imobiliaria ? `<span>· ${esc(c.imobiliaria)}</span>` : ''}<span>· ${s.res} reserva(s) · ${s.vend.length} venda(s) · ${fmtMoneyShort(s.vend.reduce((t, v) => t + num(v.valorTotal), 0))}</span></div></div><div class="side">${c.telefone ? `<a class="btn-icon" style="background:#dcfce7;color:#166534;text-decoration:none" target="_blank" href="${waLink(c.telefone, '')}" onclick="event.stopPropagation()">💬</a>` : ''}</div></div>`; }).join('') || '<p class="help">Nenhum corretor ainda.</p>'}</div>`;
+}
+
+/* ---- Vendedores (outorgantes) ----------------------------------------------------------
+   Quem vende no contrato nem sempre é a empresa do cadastro: incorporadora costuma ter um
+   CNPJ por empreendimento, e às vezes vende imóvel que está no nome de outra do grupo. Por
+   isso a venda pergunta sempre, tendo a empresa como padrão. */
+function cadVendedoresHtml() {
+  const pad = vendedorPadrao();
+  return `<div class="card"><h3>✍️ Quem assina como vendedor <span class="h-actions"><button class="btn btn-primary btn-sm" onclick="abrirVendedorForm()">＋ Novo</button></span></h3>
+    <p class="help mb">A empresa do cadastro já entra como vendedora padrão. Cadastre aqui os outros CNPJs do grupo — a cada venda o sistema pergunta qual deles assina o contrato.</p>
+    <div class="item" onclick="state.sub.cad='config';renderCadastros()"><div class="info"><div class="title">${esc(pad.nome || 'Empresa sem nome')} <span class="badge neutral">padrão</span></div>
+      <div class="meta"><span>${esc(pad.cpf ? fmtCPF(pad.cpf) : 'sem CNPJ')}</span>${pad.cidade ? `<span>· ${esc(pad.cidade)}</span>` : ''}<span>· editar em Configurações</span></div></div></div>
+    ${db.vendedores.slice().sort((a, b) => naturalCmp(a.nome, b.nome)).map(v => {
+      const falta = faltaQualificacao(v);
+      return `<div class="item" onclick="abrirVendedorForm('${v.id}')"><div class="info"><div class="title">${esc(v.nome)}</div>
+        <div class="meta"><span>${esc(v.cpf ? fmtCPF(v.cpf) : 'sem documento')}</span>${v.cidade ? `<span>· ${esc(v.cidade)}</span>` : ''}
+        ${falta.length ? `<span class="warn">· falta ${esc(falta.join(', '))}</span>` : '<span>· qualificação completa</span>'}</div></div>
+        <div class="side"><span class="muted">${db.vendas.filter(x => x.vendedorId === v.id).length} venda(s)</span></div></div>`;
+    }).join('')}</div>`;
+}
+function abrirVendedorForm(id) {
+  const v = id ? db.vendedores.find(x => x.id === id) : null;
+  const body = `<p class="help mb">Estes dados entram na qualificação do vendedor no contrato, exatamente como serão impressos.</p>
+    ${pessoaFormHtml('vdd', v || { tipo: 'pj' }, {})}
+    <div class="fg"><label>Observações</label><input type="text" id="vddObs" value="${esc(v ? v.obs || '' : '')}"></div>`;
+  openModal({ title: v ? '✏️ Vendedor' : '＋ Novo vendedor', body, wide: true,
+    footer: `${v ? `<button class="btn btn-outline-danger" onclick="excluirVendedor('${v.id}')">Excluir</button>` : ''}<button class="btn btn-secondary" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" onclick="salvarVendedor('${v ? v.id : ''}')">Salvar</button>` });
+}
+function salvarVendedor(id) {
+  if (!val('vddNome')) { toast('⚠️', 'Informe o nome ou a razão social', '', true); return; }
+  const prev = id ? db.vendedores.find(x => x.id === id) : null;
+  const p = pessoaDoForm('vdd', prev || {});
+  upsert('vendedores', Object.assign({}, prev || { id: genId(), criadoEm: new Date().toISOString() }, p, { obs: val('vddObs') }));
+  closeModal(); renderCadastros(); toast('✅', 'Vendedor salvo', p.nome);
+}
+function excluirVendedor(id) {
+  const usos = db.vendas.filter(v => v.vendedorId === id).length;
+  if (usos && !confirm(`Este vendedor está em ${usos} venda(s). Os contratos já emitidos guardam os dados como estavam, mas ele some da lista. Excluir?`)) return;
+  removeRec('vendedores', id); closeModal(); renderCadastros();
 }
 function abrirCorretorForm(id) {
   const c = id ? db.corretores.find(x => x.id === id) : null;
@@ -893,10 +983,13 @@ function cadConfigHtml() {
     <button class="btn btn-primary" onclick="salvarConfig()">Salvar configurações</button></div>
     <div class="card"><h3>🏢 Dados da empresa para documentos</h3>
     <p class="help">Usados para preencher propostas e contratos automaticamente.</p>
-    <div class="frow"><div class="fg"><label>CNPJ</label><input type="text" id="cgCnpj" value="${esc(c.cnpj || '')}"></div><div class="fg"><label>Cidade (foro)</label><input type="text" id="cgCidade" value="${esc(c.cidade || '')}"></div></div>
+    <div class="frow3"><div class="fg"><label>CNPJ</label><input type="text" id="cgCnpj" value="${esc(c.cnpj || '')}"></div><div class="fg"><label>Cidade (foro)</label><input type="text" id="cgCidade" value="${esc(c.cidade || '')}"></div>
+      <div class="fg"><label>UF</label><select id="cgUf"><option value="">—</option>${UFS.map(u => `<option value="${u}" ${c.uf === u ? 'selected' : ''}>${u}</option>`).join('')}</select></div></div>
     <div class="fg"><label>Endereço completo</label><input type="text" id="cgEnd" value="${esc(c.endereco || '')}" placeholder="Rua, número, bairro, cidade/UF"></div>
     <div class="frow"><div class="fg"><label>Telefone</label><input type="tel" id="cgTel" value="${esc(c.telefone || '')}"></div><div class="fg"><label>E-mail</label><input type="email" id="cgEmail" value="${esc(c.email || '')}"></div></div>
-    <div class="frow"><div class="fg"><label>Quem assina pela empresa</label><input type="text" id="cgRep" value="${esc(c.representante || '')}"></div><div class="fg"><label>CPF de quem assina</label><input type="text" id="cgRepCpf" value="${esc(c.repCpf || '')}"></div></div>
+    <div class="frow3"><div class="fg"><label>Quem assina pela empresa</label><input type="text" id="cgRep" value="${esc(c.representante || '')}"></div><div class="fg"><label>CPF de quem assina</label><input type="text" id="cgRepCpf" value="${esc(c.repCpf || '')}"></div>
+      <div class="fg"><label>Cargo de quem assina</label><input type="text" id="cgRepCargo" value="${esc(c.repCargo || '')}" placeholder="sócio administrador"></div></div>
+    <div class="fg"><label>Concordância de quem assina</label><select id="cgRepGenero"><option value="m" ${c.repGenero === 'f' ? '' : 'selected'}>Masculino — brasileiro, casado</option><option value="f" ${c.repGenero === 'f' ? 'selected' : ''}>Feminino — brasileira, casada</option></select></div>
     <button class="btn btn-primary" onclick="salvarEmpresaDocs()">Salvar dados da empresa</button></div>
     ${Cloud.active ? '' : `<div class="card"><h3>🔐 Acesso</h3>
     <div class="frow"><div class="fg"><label>Novo PIN do administrador</label><input type="password" inputmode="numeric" id="cgPin" placeholder="mín. 4 dígitos" autocomplete="new-password"><div class="hint">${c.pinPadrao ? '<b style="color:#b45309">Você ainda usa o PIN padrão 1234. Troque agora.</b>' : 'PIN personalizado ativo.'}</div></div>
@@ -905,7 +998,7 @@ function cadConfigHtml() {
     <p class="help mt">⚠️ Este controle de acesso é simples (sem servidor). Serve para organizar o uso, não para proteger dados sigilosos.</p></div>`}`;
 }
 function salvarEmpresaDocs() {
-  setConfig({ cnpj: val('cgCnpj'), cidade: val('cgCidade'), endereco: val('cgEnd'), telefone: val('cgTel'), email: val('cgEmail'), representante: val('cgRep'), repCpf: val('cgRepCpf') });
+  setConfig({ cnpj: val('cgCnpj'), cidade: val('cgCidade'), uf: val('cgUf'), endereco: val('cgEnd'), telefone: val('cgTel'), email: val('cgEmail'), representante: val('cgRep'), repCpf: val('cgRepCpf'), repCargo: val('cgRepCargo'), repGenero: val('cgRepGenero') });
   toast('✅', 'Dados da empresa salvos', 'Já valem para os próximos documentos.'); renderCadastros();
 }
 function salvarConfig() {

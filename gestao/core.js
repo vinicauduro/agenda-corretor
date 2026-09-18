@@ -209,8 +209,11 @@ function defaultConfig() {
     cidade: '',
     telefone: '',
     email: '',
+    uf: '',
     representante: '',
     repCpf: '',
+    repCargo: '',
+    repGenero: 'm',
     pix: '',
     mostrarPrecoVendido: true
   };
@@ -220,10 +223,10 @@ function defaultDB() {
     meta: { version: 1, createdAt: new Date().toISOString() },
     config: defaultConfig(),
     loteamentos: [], lotes: [], reservas: [], vendas: [], recebiveis: [], custos: [],
-    categorias: defaultCategorias(), corretores: [], leads: [], modelos: [], indices: [], cobrancas: [], contasBanco: [], remessas: [], log: []
+    categorias: defaultCategorias(), corretores: [], vendedores: [], leads: [], modelos: [], indices: [], cobrancas: [], contasBanco: [], remessas: [], log: []
   };
 }
-const COLLECTIONS = ['loteamentos', 'lotes', 'reservas', 'vendas', 'recebiveis', 'custos', 'categorias', 'corretores', 'leads', 'modelos', 'indices', 'cobrancas', 'contasBanco', 'remessas', 'log'];
+const COLLECTIONS = ['loteamentos', 'lotes', 'reservas', 'vendas', 'recebiveis', 'custos', 'categorias', 'corretores', 'vendedores', 'leads', 'modelos', 'indices', 'cobrancas', 'contasBanco', 'remessas', 'log'];
 function normalizeDB(data) {
   const d = data && typeof data === 'object' ? data : {};
   d.meta = d.meta || { version: 1 };
@@ -303,11 +306,12 @@ function codigoConvite(n) {
 }
 
 const TABLE_COLS = {
-  loteamentos: ['id', 'nome', 'tipo', 'cidade', 'endereco', 'descricao', 'cond', 'orcamento', 'planta', 'criadoEm'],
+  loteamentos: ['id', 'nome', 'tipo', 'cidade', 'endereco', 'logradouro', 'numeroEnd', 'bairro', 'cep', 'uf', 'codigoIbge', 'cartorio', 'matriculaMae', 'descricao', 'cond', 'orcamento', 'planta', 'criadoEm'],
   categorias: ['id', 'nome', 'cor'],
-  lotes: ['id', 'loteamentoId', 'quadra', 'numero', 'area', 'frente', 'fundos', 'preco', 'tipo', 'status', 'obs', 'matricula', 'pts', 'reservaId', 'vendaId', 'criadoEm'],
+  lotes: ['id', 'loteamentoId', 'quadra', 'numero', 'area', 'frente', 'fundos', 'preco', 'tipo', 'status', 'obs', 'matricula', 'descricaoMatricula', 'logradouro', 'numeroEnd', 'bairro', 'cep', 'pts', 'reservaId', 'vendaId', 'criadoEm'],
   reservas: ['id', 'loteamentoId', 'loteId', 'corretor', 'corretorUserId', 'cliente', 'dataReserva', 'validade', 'status', 'proposta', 'obs', 'motivo', 'aprovadaEm', 'encerradaEm', 'criadoEm'],
-  vendas: ['id', 'loteamentoId', 'loteId', 'imovel', 'reservaId', 'cliente', 'corretor', 'corretorUserId', 'dataVenda', 'valorTotal', 'entrada', 'dataEntrada', 'nParcelas', 'jurosMes', 'valorParcela', 'primeiroVencimento', 'baloes', 'indiceId', 'indiceBase', 'comissaoPct', 'comissaoValor', 'comissaoPaga', 'comissaoData', 'status', 'obs', 'motivo', 'distratoEm', 'criadoEm'],
+  vendedores: ['id', 'tipo', 'nome', 'cpf', 'inscricaoEstadual', 'representante', 'telefone', 'email', 'cep', 'logradouro', 'numeroEnd', 'complemento', 'bairro', 'cidade', 'uf', 'endereco', 'obs', 'criadoEm'],
+  vendas: ['id', 'loteamentoId', 'loteId', 'imovel', 'vendedorId', 'vendedor', 'reservaId', 'cliente', 'corretor', 'corretorUserId', 'dataVenda', 'valorTotal', 'entrada', 'dataEntrada', 'nParcelas', 'jurosMes', 'valorParcela', 'primeiroVencimento', 'baloes', 'indiceId', 'indiceBase', 'comissaoPct', 'comissaoValor', 'comissaoPaga', 'comissaoData', 'status', 'obs', 'motivo', 'distratoEm', 'criadoEm'],
   recebiveis: ['id', 'loteamentoId', 'vendaId', 'tipo', 'numero', 'descricao', 'vencimento', 'valor', 'valorPago', 'valorCorrigido', 'nossoNumero', 'remessaEm', 'bancoValor', 'bancoVenc', 'dataPagamento', 'forma', 'obsPagamento'],
   custos: ['id', 'loteamentoId', 'loteId', 'descricao', 'categoriaId', 'fornecedor', 'valor', 'formaPagamento', 'dataCompetencia', 'vencimento', 'status', 'dataPagamento', 'obs', 'criadoEm'],
   modelos: ['id', 'nome', 'tipo', 'corpo', 'criadoEm'],
@@ -611,6 +615,337 @@ function imovelDaVenda(v) {
 }
 function imovelLabel(v) { return imovelDaVenda(v).label; }
 function imovelShort(v) { return imovelDaVenda(v).curto; }
+
+/* O imóvel como ele entra no contrato. A descrição vale mais que qualquer campo solto:
+   o cartório compara com a matrícula palavra por palavra, então quando o usuário copiou a
+   descrição de lá é ela que sai. Sem isso, monto uma a partir das medidas, que serve para
+   proposta e é melhor que linha em branco. */
+function imovelDados(o) {
+  o = o || {};
+  const l = o.lote || null, lot = o.loteamento || null, im = o.imovel || {};
+  if (l) {
+    const medidas = [l.area ? `área de ${fmtNum(l.area, 2)} m²` : '', l.frente ? `frente de ${fmtNum(l.frente, 2)} m` : '', l.fundos ? `fundos de ${fmtNum(l.fundos, 2)} m` : ''].filter(Boolean).join(', ');
+    const ident = `Lote ${l.numero} da Quadra ${l.quadra}${lot ? ` do ${empLabel(lot)} ${lot.nome}` : ''}`;
+    const end = enderecoLinha({
+      logradouro: l.logradouro || (lot || {}).logradouro, numeroEnd: l.numeroEnd || (lot || {}).numeroEnd,
+      bairro: l.bairro || (lot || {}).bairro, cep: l.cep || (lot || {}).cep,
+      cidade: (lot || {}).cidade, uf: (lot || {}).uf, endereco: (lot || {}).endereco
+    });
+    return {
+      identificacao: ident, descricao: l.descricaoMatricula || `${ident}, com ${medidas || 'medidas não informadas'}`,
+      matricula: l.matricula || '', cartorio: (lot || {}).cartorio || '', endereco: end,
+      area: l.area || 0, medidas, cidade: (lot || {}).cidade || '', uf: (lot || {}).uf || '', codigoIbge: (lot || {}).codigoIbge || ''
+    };
+  }
+  const desc = (im.descricao || '').trim();
+  const end = enderecoLinha({ logradouro: im.logradouro, numeroEnd: im.numeroEnd, bairro: im.bairro, cep: im.cep, cidade: im.cidade || (lot || {}).cidade, uf: im.uf || (lot || {}).uf, endereco: im.endereco });
+  const medidas = im.area ? `área de ${fmtNum(im.area, 2)} m²` : '';
+  return {
+    identificacao: desc, descricao: im.descricaoMatricula || [desc, medidas].filter(Boolean).join(', '),
+    matricula: im.matricula || '', cartorio: im.cartorio || '', endereco: end,
+    area: im.area || 0, medidas, cidade: im.cidade || (lot || {}).cidade || '', uf: im.uf || (lot || {}).uf || '', codigoIbge: (lot || {}).codigoIbge || ''
+  };
+}
+/* Mesmo bloco a partir de uma venda já salva, resolvendo lote e empreendimento pelos ids. */
+function imovelDaVendaDados(v) {
+  if (!v) return imovelDados({});
+  return imovelDados({ lote: v.loteId ? getLote(v.loteId) : null, loteamento: v.loteamentoId ? getLoteamento(v.loteamentoId) : null, imovel: v.imovel });
+}
+
+/* ===== Qualificação das partes =========================================================
+   Contrato, escritura e declaração fiscal pedem a mesma coisa: quem é a pessoa, por
+   inteiro. Nome, nacionalidade, estado civil com o regime de bens, profissão, RG, CPF e
+   endereço — e, quando casada, o mesmo bloco outra vez para o cônjuge, que também assina.
+   Comprador, cônjuge, vendedor e representante usam este mesmo formulário e o mesmo
+   gerador de texto, porque num contrato os quatro são qualificados igual. */
+
+const ESTADOS_CIVIS = ['solteiro', 'casado', 'união estável', 'divorciado', 'separado judicialmente', 'viúvo'];
+const REGIMES_BENS = ['comunhão parcial de bens', 'comunhão universal de bens', 'separação total de bens', 'separação obrigatória de bens', 'participação final nos aquestos'];
+const UFS = ['AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO'];
+/* Estado civil em que existe cônjuge ou companheiro que também assina o contrato. */
+const CIVIS_COM_CONJUGE = ['casado', 'união estável'];
+
+function pessoaVazia() { return { tipo: 'pf', genero: 'm', nacionalidade: 'brasileiro' }; }
+function ehPJ(p) { return (p || {}).tipo === 'pj'; }
+function temConjuge(p) { return CIVIS_COM_CONJUGE.includes(((p || {}).estadoCivil || '').trim()); }
+
+/* Concordância: um contrato que diz "Maria, brasileiro, casado" entrega que foi gerado
+   por máquina. Só mexe na última letra da primeira palavra, que é onde a flexão cai:
+   brasileiro→brasileira, casado→casada, viúvo→viúva, separado judicialmente→separada
+   judicialmente. "União estável" não termina em o e passa intacta. */
+function feminino(txt) {
+  const ps = String(txt || '').split(' ');
+  if (/o$/.test(ps[0])) ps[0] = ps[0].slice(0, -1) + 'a';
+  return ps.join(' ');
+}
+function flexPessoa(p, masc, fem) { return (p || {}).genero === 'f' ? fem : masc; }
+function palavraFlex(p, txt) { return (p || {}).genero === 'f' ? feminino(txt) : txt; }
+
+function estadoCivilTexto(p) {
+  const ec = ((p || {}).estadoCivil || '').trim(); if (!ec) return '';
+  const base = palavraFlex(p, ec);
+  return temConjuge(p) && p.regimeBens ? `${base} sob o regime da ${p.regimeBens}` : base;
+}
+
+/* Preposição do logradouro. A maioria é feminina (rua, avenida, travessa), mas loteamento
+   e condomínio não são, e "na Loteamento" salta aos olhos. No que eu não reconheço uso
+   "em", que nunca fica errado. */
+const LOGR_FEM = ['rua', 'avenida', 'travessa', 'alameda', 'estrada', 'rodovia', 'praça', 'vila', 'servidão', 'linha', 'via', 'ladeira', 'esplanada'];
+const LOGR_MASC = ['loteamento', 'condomínio', 'jardim', 'parque', 'largo', 'beco', 'sítio', 'bairro', 'campo', 'residencial', 'setor', 'quadra'];
+function prepLogradouro(logr) {
+  const p1 = String(logr || '').trim().split(/\s+/)[0].toLowerCase();
+  if (LOGR_FEM.includes(p1)) return 'na';
+  if (LOGR_MASC.includes(p1)) return 'no';
+  return 'em';
+}
+
+function fmtCEP(s) {
+  const d = onlyDigits(s);
+  return d.length === 8 ? `${d.slice(0, 5)}-${d.slice(5)}` : (s || '');
+}
+
+/* O endereço numa linha só, do jeito que entra no contrato. Os campos são guardados
+   separados porque a declaração fiscal pede cada um deles em sua própria coluna; quem
+   só quer imprimir um contrato lê esta linha pronta. Cadastro antigo, que tinha só um
+   campo de texto livre, continua saindo por aqui pelo campo endereco. */
+function enderecoLinha(p) {
+  p = p || {};
+  const partes = [];
+  /* Cadastro antigo guardava o endereço numa linha só, número incluído. Se o logradouro já
+     traz algarismo, ele não ganha "s/n" — senão sairia "Rua Exemplo, 100, s/n". */
+  if (p.logradouro) partes.push(p.logradouro + (p.numeroEnd ? `, nº ${p.numeroEnd}` : (/\d/.test(p.logradouro) ? '' : ', s/n')));
+  else if (p.endereco) partes.push(p.endereco);
+  if (p.complemento) partes.push(p.complemento);
+  if (p.bairro) partes.push(p.bairro);
+  if (p.cep) partes.push('CEP ' + fmtCEP(p.cep));
+  const cid = [p.cidade, p.uf].filter(Boolean).join('/');
+  if (cid) partes.push(cid);
+  return partes.join(', ');
+}
+
+/* O parágrafo de qualificação, como sai no contrato. Campo em branco simplesmente não
+   aparece: metade dos cadastros começa incompleto e o texto tem de continuar legível. */
+function qualificacaoPessoa(p, opc) {
+  p = p || {}; opc = opc || {};
+  const nome = (p.nome || '').trim(); if (!nome) return '';
+  const t = [];
+  if (ehPJ(p)) {
+    t.push('pessoa jurídica de direito privado');
+    if (p.cpf) t.push(`inscrita no CNPJ sob o nº ${fmtCPF(p.cpf)}`);
+    if (p.inscricaoEstadual) t.push(`inscrição estadual nº ${p.inscricaoEstadual}`);
+    const end = enderecoLinha(p);
+    if (end) t.push(`com sede ${prepLogradouro(p.logradouro || p.endereco)} ${end}`);
+    const rep = p.representante && p.representante.nome ? qualificacaoPessoa(p.representante, { semEndereco: false }) : '';
+    if (rep) t.push(`neste ato representada por ${rep}`);
+    return `${nome}, ${t.join(', ')}`;
+  }
+  if (p.nacionalidade) t.push(palavraFlex(p, p.nacionalidade));
+  const ec = estadoCivilTexto(p); if (ec) t.push(ec);
+  if (p.profissao) t.push(p.profissao);
+  if (p.cargo) t.push(`na qualidade de ${p.cargo}`);
+  if (p.rg) t.push(`${flexPessoa(p, 'portador', 'portadora')} da cédula de identidade RG nº ${p.rg}${p.rgOrgao ? ' ' + p.rgOrgao : ''}`);
+  if (p.cpf) t.push(`${flexPessoa(p, 'inscrito', 'inscrita')} no CPF sob o nº ${fmtCPF(p.cpf)}`);
+  const end = opc.semEndereco ? '' : enderecoLinha(p);
+  if (end) t.push(`${flexPessoa(p, 'residente e domiciliado', 'residente e domiciliada')} ${prepLogradouro(p.logradouro || p.endereco)} ${end}`);
+  return t.length ? `${nome}, ${t.join(', ')}` : nome;
+}
+
+/* A parte inteira: a pessoa e, quando casada, o cônjuge logo em seguida. Se os dois moram
+   juntos o endereço não se repete — o cartório escreve "no mesmo endereço". */
+function qualificacaoParte(p) {
+  p = p || {};
+  const base = qualificacaoPessoa(p);
+  const cj = p.conjuge || {};
+  if (!base || !temConjuge(p) || !cj.nome) return base;
+  const mesmoEnd = !!cj.mesmoEndereco || (!!enderecoLinha(p) && enderecoLinha(cj) === enderecoLinha(p));
+  const qcj = qualificacaoPessoa(cj, { semEndereco: mesmoEnd });
+  const laco = ((p.estadoCivil || '').trim() === 'união estável')
+    ? flexPessoa(cj, 'seu companheiro', 'sua companheira')
+    : flexPessoa(cj, 'seu marido', 'sua esposa');
+  return `${base}, e ${laco} ${qcj}${mesmoEnd ? `, ${flexPessoa(cj, 'residente e domiciliado', 'residente e domiciliada')} no mesmo endereço` : ''}`;
+}
+
+/* Quem assina pela empresa quando nenhum vendedor foi escolhido: os dados da própria
+   empresa, em Cadastros › Configurações. */
+function vendedorPadrao() {
+  const c = db.config || {};
+  return {
+    id: '', tipo: 'pj', nome: c.empresa || '', cpf: c.cnpj || '', endereco: c.endereco || '', cidade: c.cidade || '',
+    uf: c.uf || '', telefone: c.telefone || '', email: c.email || '',
+    representante: c.representante ? { tipo: 'pf', genero: c.repGenero || 'm', nome: c.representante, cpf: c.repCpf || '', cargo: c.repCargo || '' } : null
+  };
+}
+function vendedorDaVenda(v) {
+  if (v && v.vendedor && v.vendedor.nome) return v.vendedor;
+  if (v && v.vendedorId) { const x = db.vendedores.find(y => y.id === v.vendedorId); if (x) return x; }
+  return vendedorPadrao();
+}
+
+// ---------------------------------------------------------------- formulário reutilizável
+/* Um formulário só, usado pelo comprador, pelo cônjuge, pelo vendedor e pelo representante.
+   O prefixo separa os campos de cada um na mesma tela: vc, vcCj, vdd. */
+function pessoaFormHtml(pre, p, opc) {
+  p = Object.assign(pessoaVazia(), p || {}); opc = opc || {};
+  const pj = ehPJ(p);
+  const idt = s => pre + s;
+  const inp = (s, label, valor, tipo) => `<div class="fg"><label>${label}</label><input type="${tipo || 'text'}" id="${idt(s)}" value="${esc(valor ?? '')}"></div>`;
+  /* Identificação fica sempre à vista; o resto da qualificação pode ficar recolhido, para
+     quem só quer registrar a venda rápido não ter de rolar vinte campos. */
+  /* Quando a pessoa tem cônjuge no mesmo formulário, mudar a concordância dela vira a do
+     cônjuge junto, que é o caso comum. O cônjuge marca que foi mexido à mão e a partir daí
+     não é mais virado sozinho. */
+  const generoOnchange = opc.conjuge ? ` onchange="pessoaGeneroChange('${pre}')"` : opc.soGenero ? ` onchange="this.dataset.tocado='1'"` : '';
+  const generoSel = `<div class="fg" id="${idt('GeneroBox')}" style="${pj ? 'display:none' : ''}"><label>Concordância no contrato</label><select id="${idt('Genero')}"${generoOnchange}><option value="m" ${p.genero === 'f' ? '' : 'selected'}>Masculino — brasileiro, casado</option><option value="f" ${p.genero === 'f' ? 'selected' : ''}>Feminino — brasileira, casada</option></select></div>`;
+  const cabeca = `${opc.soGenero ? `<div class="frow">${generoSel}<div class="fg"></div></div>`
+    : opc.semTipo ? '' : `<div class="frow"><div class="fg"><label>Tipo</label><select id="${idt('Tipo')}" onchange="pessoaTipoChange('${pre}')"><option value="pf" ${pj ? '' : 'selected'}>Pessoa física</option><option value="pj" ${pj ? 'selected' : ''}>Pessoa jurídica</option></select></div>
+    ${generoSel}</div>`}
+    <div class="frow"><div class="fg"><label id="${idt('NomeLbl')}">${pj ? 'Razão social' : 'Nome completo'} *</label><input type="text" id="${idt('Nome')}" value="${esc(p.nome || '')}"></div>
+      <div class="fg"><label id="${idt('DocLbl')}">${pj ? 'CNPJ' : 'CPF'}</label><input type="text" id="${idt('Doc')}" value="${esc(p.cpf || '')}"></div></div>
+    <div class="frow">${inp('Tel', 'Telefone' + (opc.telObrigatorio ? ' *' : ''), p.telefone, 'tel')}${inp('Email', 'E-mail', p.email, 'email')}</div>`;
+  /* O cônjuge não tem estado civil próprio a declarar: ele é casado com quem está do lado. */
+  const civil = opc.semEstadoCivil ? '' : `<div class="fg"><label>Estado civil</label><select id="${idt('EstCivil')}" onchange="pessoaCivilChange('${pre}')"><option value="">—</option>${ESTADOS_CIVIS.map(e => `<option value="${e}" ${p.estadoCivil === e ? 'selected' : ''}>${e.charAt(0).toUpperCase() + e.slice(1)}</option>`).join('')}</select></div>`;
+  const resto = `<div id="${idt('PfBox')}" style="${pj ? 'display:none' : ''}">
+      <div class="${opc.semEstadoCivil ? 'frow' : 'frow3'}">${inp('Nac', 'Nacionalidade', p.nacionalidade || 'brasileiro')}${inp('Prof', 'Profissão', p.profissao)}${civil}</div>
+      ${opc.semEstadoCivil ? '' : `<div class="fg" id="${idt('RegimeBox')}" style="${temConjuge(p) ? '' : 'display:none'}"><label>Regime de bens</label><select id="${idt('Regime')}"><option value="">—</option>${REGIMES_BENS.map(r => `<option value="${r}" ${p.regimeBens === r ? 'selected' : ''}>${r.charAt(0).toUpperCase() + r.slice(1)}</option>`).join('')}</select></div>`}
+      <div class="frow">${inp('Rg', 'RG', p.rg)}${inp('RgOrgao', 'Órgão expedidor', p.rgOrgao)}</div>
+    </div>
+    <div id="${idt('PjBox')}" style="${pj ? '' : 'display:none'}">
+      <div class="frow">${inp('Ie', 'Inscrição estadual', p.inscricaoEstadual)}${inp('RepCargo', 'Cargo de quem assina', (p.representante || {}).cargo)}</div>
+      <div class="frow">${inp('RepNome', 'Quem assina pela empresa', (p.representante || {}).nome)}${inp('RepCpf', 'CPF de quem assina', (p.representante || {}).cpf)}</div>
+    </div>
+    ${opc.semEndereco ? '' : `<div id="${idt('EndBox')}">
+      <div class="frow3">${inp('Cep', 'CEP', p.cep)}<div class="fg" style="grid-column:span 2"><label>Logradouro</label><input type="text" id="${idt('Logr')}" value="${esc(p.logradouro || p.endereco || '')}" placeholder="Rua, avenida, servidão…"></div></div>
+      <div class="frow3">${inp('Num', 'Número', p.numeroEnd)}${inp('Compl', 'Complemento', p.complemento)}${inp('Bairro', 'Bairro', p.bairro)}</div>
+      <div class="frow"><div class="fg"><label>Cidade</label><input type="text" id="${idt('Cidade')}" value="${esc(p.cidade || '')}"></div>
+        <div class="fg"><label>UF</label><select id="${idt('Uf')}"><option value="">—</option>${UFS.map(u => `<option value="${u}" ${p.uf === u ? 'selected' : ''}>${u}</option>`).join('')}</select></div></div></div>`}`;
+  if (!opc.recolher) return cabeca + resto;
+  /* O resumo é recalculado a cada tecla: um aviso do que falta que não some quando você
+     preenche é pior que aviso nenhum. */
+  return `<div oninput="qualifResumo('${pre}')" onchange="qualifResumo('${pre}')">${cabeca}
+    <details class="qualif"><summary>📋 Qualificação completa para o contrato <span id="${idt('Resumo')}">${qualifResumoHtml(p)}</span></summary>${resto}${opc.conjuge ? conjugeFormHtml(pre, p) : ''}</details></div>`;
+}
+
+/* O que ainda falta para o contrato sair qualificado. É a mesma conferência que a
+   declaração fiscal vai pedir depois, então vale mostrar cedo, enquanto o cliente
+   ainda está na sala. */
+function faltaQualificacao(p) {
+  p = p || {}; const f = [];
+  if (!p.nome) f.push('nome');
+  if (!p.cpf) f.push(ehPJ(p) ? 'CNPJ' : 'CPF');
+  if (ehPJ(p)) { if (!(p.representante || {}).nome) f.push('quem assina'); }
+  else {
+    if (!p.profissao) f.push('profissão');
+    if (!p.estadoCivil) f.push('estado civil');
+    else if (temConjuge(p) && !p.regimeBens) f.push('regime de bens');
+    else if (temConjuge(p) && !(p.conjuge || {}).nome) f.push('cônjuge');
+    if (!p.rg) f.push('RG');
+  }
+  if (!p.logradouro && !p.endereco) f.push('endereço');
+  if (!p.cidade) f.push('cidade');
+  return f;
+}
+
+function pessoaTipoChange(pre) {
+  const pj = val(pre + 'Tipo') === 'pj';
+  const mostra = (id, ok) => { const el = $('#' + id); if (el) el.style.display = ok ? '' : 'none'; };
+  mostra(pre + 'PfBox', !pj); mostra(pre + 'PjBox', pj); mostra(pre + 'GeneroBox', !pj);
+  const n = $('#' + pre + 'NomeLbl'), d = $('#' + pre + 'DocLbl');
+  if (n) n.textContent = (pj ? 'Razão social' : 'Nome completo') + ' *';
+  if (d) d.textContent = pj ? 'CNPJ' : 'CPF';
+  if (typeof pessoaCivilChange === 'function') pessoaCivilChange(pre);
+}
+function qualifResumoHtml(p) {
+  const f = faltaQualificacao(p);
+  return f.length ? `<span class="tiny muted">— falta ${esc(f.join(', '))}</span>` : '<span class="tiny ok">— completa</span>';
+}
+function qualifResumo(pre) {
+  const el = document.getElementById(pre + 'Resumo'); if (!el) return;
+  const p = pessoaDoForm(pre, {});
+  p.conjuge = temConjuge(p) && document.getElementById(pre + 'CjNome') ? { nome: val(pre + 'CjNome') } : null;
+  el.innerHTML = qualifResumoHtml(p);
+}
+function pessoaGeneroChange(pre) {
+  const cj = document.getElementById(pre + 'CjGenero');
+  if (cj && !cj.dataset.tocado) cj.value = val(pre + 'Genero') === 'f' ? 'm' : 'f';
+}
+function pessoaCivilChange(pre) {
+  const com = CIVIS_COM_CONJUGE.includes(val(pre + 'EstCivil')) && val(pre + 'Tipo') !== 'pj';
+  const rb = $('#' + pre + 'RegimeBox'); if (rb) rb.style.display = com ? '' : 'none';
+  const cb = $('#' + pre + 'CjBox'); if (cb) cb.style.display = com ? '' : 'none';
+}
+
+/* Lê de volta o que foi digitado. A pessoa antiga entra para não perder campo que a tela
+   atual não mostra — o cônjuge do comprador, por exemplo, quando o formulário é o curto. */
+function pessoaDoForm(pre, antiga) {
+  const tem = id => !!document.getElementById(pre + id);
+  const p = Object.assign({}, antiga || {});
+  if (tem('Tipo')) p.tipo = val(pre + 'Tipo') || 'pf';
+  if (tem('Genero')) p.genero = val(pre + 'Genero') || 'm';
+  p.nome = val(pre + 'Nome');
+  p.cpf = val(pre + 'Doc');
+  if (tem('Nac')) {
+    p.nacionalidade = val(pre + 'Nac'); p.profissao = val(pre + 'Prof');
+    if (document.getElementById(pre + 'EstCivil')) {
+      p.estadoCivil = val(pre + 'EstCivil');
+      p.regimeBens = temConjuge(p) ? val(pre + 'Regime') : '';
+    }
+    p.rg = val(pre + 'Rg'); p.rgOrgao = val(pre + 'RgOrgao');
+  }
+  if (tem('Ie')) {
+    p.inscricaoEstadual = val(pre + 'Ie');
+    const rn = val(pre + 'RepNome');
+    p.representante = rn ? { tipo: 'pf', genero: 'm', nome: rn, cpf: val(pre + 'RepCpf'), cargo: val(pre + 'RepCargo') } : null;
+  }
+  p.telefone = val(pre + 'Tel'); p.email = val(pre + 'Email');
+  if (tem('Logr')) {
+    p.cep = val(pre + 'Cep'); p.logradouro = val(pre + 'Logr'); p.numeroEnd = val(pre + 'Num');
+    p.complemento = val(pre + 'Compl'); p.bairro = val(pre + 'Bairro');
+    p.cidade = val(pre + 'Cidade'); p.uf = val(pre + 'Uf');
+    p.endereco = enderecoLinha(p);
+  }
+  if (!temConjuge(p)) p.conjuge = null;
+  return p;
+}
+
+/* Bloco do cônjuge: aparece sozinho quando o estado civil pede, e por padrão mora no
+   mesmo endereço, que é o caso comum e poupa digitar tudo de novo. */
+function conjugeFormHtml(pre, p) {
+  /* Casal de sexos diferentes é o caso comum, então a concordância do cônjuge já começa
+     oposta à do comprador — evita o contrato sair com "sua esposa JOÃO". Continua um
+     seletor, e quem precisar troca. */
+  const oposto = (p || {}).genero === 'f' ? 'm' : 'f';
+  const cj = Object.assign({ tipo: 'pf', genero: oposto, nacionalidade: 'brasileiro' }, (p || {}).conjuge || {});
+  const mesmo = cj.mesmoEndereco !== false;
+  return `<div id="${pre}CjBox" style="${temConjuge(p) ? '' : 'display:none'}"><div class="fieldset"><span class="lg">💍 Cônjuge / companheiro</span>
+    <p class="help">Quem é casado ou vive em união estável assina o contrato junto. Estes dados entram na qualificação.</p>
+    ${pessoaFormHtml(pre + 'Cj', Object.assign({}, cj, { tipo: 'pf' }), { soGenero: true, semEndereco: true, semEstadoCivil: true })}
+    <label class="check"><input type="checkbox" id="${pre}CjMesmoEnd" ${mesmo ? 'checked' : ''} onchange="pessoaConjugeEnd('${pre}')"> Mora no mesmo endereço</label>
+    <div id="${pre}CjEndBox" style="${mesmo ? 'display:none' : ''}">
+      <div class="frow3"><div class="fg"><label>CEP</label><input type="text" id="${pre}CjCep" value="${esc(cj.cep || '')}"></div>
+        <div class="fg" style="grid-column:span 2"><label>Logradouro</label><input type="text" id="${pre}CjLogr" value="${esc(cj.logradouro || cj.endereco || '')}"></div></div>
+      <div class="frow3"><div class="fg"><label>Número</label><input type="text" id="${pre}CjNum" value="${esc(cj.numeroEnd || '')}"></div>
+        <div class="fg"><label>Complemento</label><input type="text" id="${pre}CjCompl" value="${esc(cj.complemento || '')}"></div>
+        <div class="fg"><label>Bairro</label><input type="text" id="${pre}CjBairro" value="${esc(cj.bairro || '')}"></div></div>
+      <div class="frow"><div class="fg"><label>Cidade</label><input type="text" id="${pre}CjCidade" value="${esc(cj.cidade || '')}"></div>
+        <div class="fg"><label>UF</label><select id="${pre}CjUf"><option value="">—</option>${UFS.map(u => `<option value="${u}" ${cj.uf === u ? 'selected' : ''}>${u}</option>`).join('')}</select></div></div>
+    </div></div></div>`;
+}
+function pessoaConjugeEnd(pre) {
+  const el = $('#' + pre + 'CjEndBox'); const ck = document.getElementById(pre + 'CjMesmoEnd');
+  if (el) el.style.display = ck && ck.checked ? 'none' : '';
+}
+function conjugeDoForm(pre, p, antigo) {
+  if (!temConjuge(p)) return null;
+  const cj = pessoaDoForm(pre + 'Cj', antigo || {});
+  if (!cj.nome) return null;
+  const ck = document.getElementById(pre + 'CjMesmoEnd');
+  cj.mesmoEndereco = !ck || ck.checked;
+  if (cj.mesmoEndereco) {
+    ['cep', 'logradouro', 'numeroEnd', 'complemento', 'bairro', 'cidade', 'uf'].forEach(k => { cj[k] = p[k] || ''; });
+    cj.endereco = enderecoLinha(cj);
+  }
+  return cj;
+}
 function statusLabel(s) {
   return { disponivel: 'Disponível', reservado: 'Reservado', vendido: 'Vendido', bloqueado: 'Indisponível',
     pendente: 'Pendente', aprovada: 'Aprovada', recusada: 'Recusada', cancelada: 'Cancelada', expirada: 'Expirada', convertida: 'Virou venda',
