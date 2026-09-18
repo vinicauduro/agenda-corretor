@@ -235,19 +235,38 @@ const NOSSO_NUMERO_MAX = 9999999999;
    a parcela pode trocar de número (alteração) ou sumir, mas o banco não esquece o antigo. */
 function maiorNossoNumeroUsado(conta) {
   let maior = Math.max(0, Math.round(num(conta.nnMax)));
-  db.recebiveis.forEach(r => { if (r.nossoNumero) maior = Math.max(maior, num(soDigitos(r.nossoNumero).slice(-10))); });
+  /* A unicidade é por convênio, então só contam os títulos desta conta. Parcela que não
+     resolve para conta nenhuma entra assim mesmo, por precaução: é melhor pular um número
+     à toa do que arriscar repetir um que já foi ao banco. */
+  db.recebiveis.forEach(r => {
+    if (!r.nossoNumero) return;
+    /* Vale a conta que numerou o título, gravada na parcela — e não a conta que cobraria essa
+       venda hoje. Mudar a conta de um empreendimento não pode fazer um número emitido por um
+       convênio contar para outro, nem deixar de contar no convênio onde ele realmente está. */
+    const cid = r.contaId || (contaDoRec(r) || {}).id;
+    if (cid && cid !== conta.id) return;
+    maior = Math.max(maior, num(soDigitos(r.nossoNumero).slice(-10)));
+  });
   db.remessas.forEach(r => { if (r.contaId === conta.id && r.ultimoNn) maior = Math.max(maior, num(soDigitos(r.ultimoNn).slice(-10))); });
   return maior;
 }
-/* Onde a numeração começa numa conta nova. Não é sorteado: sorteio repete, e número
-   repetido no mesmo convênio é recusa certa no banco. É uma faixa alta e separada, bem
-   acima da que um sistema antigo estaria usando, para que os dois nunca se cruzem
-   enquanto rodam juntos. São 10 dígitos, quase 10 bilhões de números pela frente. */
-const NN_INICIAL = 1000000;
+/* Onde a numeração começa numa conta nova.
+
+   Sequencial não tem probabilidade de colisão: dois números seguidos nunca se repetem. O
+   que a faixa alta resolve é outra coisa — o sistema antigo, que continua consumindo
+   números enquanto os dois rodam e cujo contador eu não tenho como enxergar. Nos arquivos
+   reais da empresa ele estava na casa dos milhares; começando em dez milhões, ele levaria
+   décadas para chegar aqui, e ainda sobram 9,99 bilhões de números.
+
+   Enquanto a conta não emitiu nada, ela acompanha esta faixa: assim uma conta cadastrada
+   antes de o piso subir não fica para trás. Depois do primeiro boleto, quem manda é o
+   maior número já usado — o contador nunca volta. */
+const NN_INICIAL = 10000000;
 function proximoNossoNumero(conta) {
-  /* Conta que já vem numerando continua de onde está; conta nova começa na faixa alta. */
+  const usado = maiorNossoNumeroUsado(conta);
   const atual = Math.round(num(conta.nossoNumeroAtual) || 0);
-  return Math.max(atual || NN_INICIAL, maiorNossoNumeroUsado(conta) + 1);
+  if (!usado) return Math.max(NN_INICIAL, atual);
+  return Math.max(atual, usado + 1);
 }
 function nossoNumeroEmUso(conta, n) {
   if (n <= maiorNossoNumeroUsado(conta)) return true;
@@ -276,7 +295,7 @@ function emitirRemessa(conta, novas, pendentes) {
     if (acao === 'alterar') {
       proximoLivre();
       itens.push({ comando: '01', nossoNumero: nn, vencimento: r.vencimento, valor: recValor(r), sacado: sacadoDaVenda(v), mensagem: mensagemDoTitulo(conta, r) });
-      atualizar.push(Object.assign({}, r, { nossoNumero: String(nn), remessaEm: todayStr(), bancoValor: recValor(r), bancoVenc: r.vencimento }));
+      atualizar.push(Object.assign({}, r, { nossoNumero: String(nn), contaId: conta.id, remessaEm: todayStr(), bancoValor: recValor(r), bancoVenc: r.vencimento }));
       nn++;
     } else {
       atualizar.push(Object.assign({}, r, { forma: r.forma || 'Boleto', bancoValor: null, bancoVenc: null, remessaEm: null }));
@@ -287,7 +306,7 @@ function emitirRemessa(conta, novas, pendentes) {
     const v = getVenda(r.vendaId);
     proximoLivre();
     itens.push({ comando: '01', nossoNumero: nn, vencimento: r.vencimento, valor: recValor(r), sacado: sacadoDaVenda(v), mensagem: mensagemDoTitulo(conta, r) });
-    atualizar.push(Object.assign({}, r, { nossoNumero: String(nn), remessaEm: todayStr(), bancoValor: recValor(r), bancoVenc: r.vencimento }));
+    atualizar.push(Object.assign({}, r, { nossoNumero: String(nn), contaId: conta.id, remessaEm: todayStr(), bancoValor: recValor(r), bancoVenc: r.vencimento }));
     nn++;
   });
   if (!itens.length) return null;
@@ -502,7 +521,16 @@ function aplicarRetorno() {
      para a próxima remessa mandá-lo de novo com um número novo. */
   r.itens.filter(x => x.efeito === 'recusada' && x.rec).forEach(x => {
     const rec = db.recebiveis.find(y => y.id === x.rec.id); if (!rec) return;
-    upsert('recebiveis', Object.assign({}, rec, { nossoNumero: null, remessaEm: null, bancoValor: null, bancoVenc: null,
+    /* Limpar o nosso número da parcela apagaria a única prova de que ele já foi usado. Antes
+       de soltar a parcela, o número recusado é gravado na marca d'água da conta: se ele foi
+       recusado por já existir no banco, mandá-lo de novo seria recusa garantida. */
+    const conta = contaDoRec(rec);
+    const queimado = num(soDigitos(rec.nossoNumero || x.nossoNumero).slice(-10));
+    if (conta && queimado) {
+      const c = db.contasBanco.find(y => y.id === conta.id);
+      if (c) upsert('contasBanco', Object.assign({}, c, { nnMax: Math.max(num(c.nnMax), queimado) }));
+    }
+    upsert('recebiveis', Object.assign({}, rec, { nossoNumero: null, contaId: null, remessaEm: null, bancoValor: null, bancoVenc: null,
       obsPagamento: `Recusado pelo banco em ${fmtDate(x.data || todayStr())}${x.motivo ? ' (motivo ' + x.motivo + ')' : ''}` }));
     recusados++;
   });

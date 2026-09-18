@@ -429,12 +429,12 @@ explico por quê.
 
 **Banco — dois pedidos que eu resolvi diferente, e o porquê**
 
-- [ ] **Nosso número saiu do cadastro**: o sistema numera sozinho. Você pediu número
-      *aleatório*; não fiz sorteio de propósito. Número sorteado pode repetir, e nosso número
-      repetido no mesmo convênio é **recusa certa** no banco. O que eu fiz atende ao que você
-      quis — você não digita nada — sem esse risco: uma faixa alta e separada, começando em
-      **1000000**, que nunca anda para trás. Conta que já vinha numerando continua de onde
-      estava.
+- [ ] **Nosso número saiu do cadastro**: o sistema numera sozinho, começando em
+      **10.000.000**. Você pediu número *aleatório* e perguntou a chance de repetir; a conta
+      está na seção 7i. Resumo: sequencial não tem probabilidade de colisão nenhuma, e a
+      faixa alta serve para ficar longe do sistema antigo, que estava na casa dos milhares.
+      Conta que já vinha numerando continua de onde estava; conta cadastrada mas que ainda
+      não emitiu boleto acompanha o piso novo.
 - [ ] **Códigos de instrução saíram da tela.** Você perguntou o que fazem: são o comando para
       o banco **agir sozinho** depois do vencimento — protestar em cartório, baixar o título,
       negativar. Cada banco tem os seus códigos. **Zerados, o banco não faz nada por conta
@@ -482,6 +482,47 @@ explico por quê.
       ficar disponível; a segunda pede que você escreva **EXCLUIR**. Se o contrato tiver
       pagamento registrado, o aviso é explícito: esse dinheiro some dos relatórios. Tire um
       backup antes, em Cadastros › Backup.
+
+---
+
+## 7i. Nosso número: a conta que você pediu (18/09)
+
+Você perguntou qual a chance de sortear e repetir. A conta, com os 10 dígitos livres que o
+BB dá no convênio de 7 dígitos (10 bilhões de números):
+
+| Boletos emitidos | Chance de ao menos uma repetição |
+|---|---|
+| 1.000 | 0,005% |
+| 10.000 | 0,5% |
+| 36.000 | 6,3% |
+| 100.000 | 39% |
+| 118.000 | 50% |
+
+Trinta e seis mil boletos é um loteamento de 300 lotes em 120 parcelas — não é cenário
+distante. **Mas isso vale para sorteio cego.** Conferindo na própria base antes de usar, a
+repetição comigo mesmo vira zero. O "recusa certa" que eu disse antes estava mal colocado.
+
+O motivo de verdade para o sequencial é outro: rastreabilidade. Buraco na sequência significa
+alguma coisa, dá para conferir contra a relação de títulos em ser do banco, e reconciliar
+retorno com remessa fica legível. Além disso eu sei que o banco recusa número repetido que
+ainda está **em aberto**; o que ele faz com um já **baixado** anos atrás eu não sei, e
+pagamento indo para o título errado é pior que recusa.
+
+**Decidido por você: faixa alta.** O piso subiu de 1.000.000 para **10.000.000**. O seu ERP
+antigo estava na casa dos milhares nos arquivos que você mandou; nesse ritmo ele levaria
+décadas para chegar aqui, e ainda sobram 9,99 bilhões de números.
+
+**Duas correções que saíram desta conversa** (as duas eram defeitos de verdade):
+
+- A marca d'água somava os números de **todas** as contas bancárias. A unicidade é por
+  convênio: uma conta não pode empurrar a numeração da outra. Agora cada conta tem a sua.
+- O recebível passou a **gravar qual conta o numerou**. Antes, trocar a conta de um
+  empreendimento fazia um número emitido por um convênio contar para outro. Isso pede uma
+  coluna nova no banco (`recebiveis.conta_id`) — **rode o `schema.sql` de novo.**
+- [ ] Título **recusado** pelo banco agora queima o número na marca d'água da conta antes de
+      soltar a parcela: ele nunca volta a ser usado, mesmo que o histórico de remessas seja
+      limpo. A parcela volta a "não registrada" e entra na próxima remessa com número novo.
+      Continua sem teste contra arquivo real — falta um retorno seu com ocorrência 03.
 
 ---
 
