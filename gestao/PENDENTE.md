@@ -526,6 +526,29 @@ décadas para chegar aqui, e ainda sobram 9,99 bilhões de números.
 
 ---
 
+## 7j. Defeito do vídeo de 21/09 — corrigido
+
+**O que você viu:** do painel, clicando no alerta de parcelas em atraso, a tela vai para a
+cobrança; lá, os botões **Em aberto · Atrasados · Pagos · Todos** não respondiam a nada.
+
+**O que era:** o filtro dos recebíveis só era criado quando a *lista* era desenhada. Entrando
+direto na cobrança — que é o que o alerta do painel faz — a lista nunca foi desenhada, então o
+filtro não existia, e o clique tentava mexer num objeto inexistente. O erro acontecia em
+silêncio, dentro do `onclick`, e nada na tela mudava: por isso parecia travado.
+
+**Corrigido:** o filtro passa a nascer numa função só, chamada por todos os caminhos — pela
+lista, pela cobrança e pelo alerta do painel. Os botões dos dois lugares agora usam a mesma
+rota de volta para a lista.
+
+- [ ] Refazer o caminho do vídeo e confirmar: painel › alerta de atraso › cobrança › clicar em
+      cada um dos quatro filtros.
+- [ ] Testar também o contrário: da lista, chip 🔔 Cobrança, e voltar.
+
+O `test24` cobre esses caminhos. Conferi que ele **falha** no código antigo e passa no novo —
+teste que passa nos dois não prova nada.
+
+---
+
 ## 7f. Decisões que só dependem de você
 
 Nenhuma me trava hoje, mas todas mudam o produto:

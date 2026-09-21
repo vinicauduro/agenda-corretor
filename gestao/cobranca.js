@@ -71,7 +71,7 @@ function renderCobranca() {
 
   v.innerHTML = `
     <div class="chips">${[['aberto', 'Em aberto'], ['atrasado', 'Atrasados'], ['pago', 'Pagos'], ['all', 'Todos']].map(([k, l]) =>
-      `<div class="chip" onclick="state.filters.rec.status='${k}';state.sub.rec='lista';renderAdminTab()">${l}</div>`).join('')}
+      `<div class="chip" onclick="mostrarRecebiveis('${k}')">${l}</div>`).join('')}
       <div class="chip active">🔔 Cobrança<span class="n">${todos.length}</span></div></div>
     <div class="kpi-grid">
       <div class="kpi c-red"><div class="lbl">Em atraso</div><div class="val">${fmtMoneyShort(total)}</div><div class="sub">${todos.length} contrato(s)</div></div>
