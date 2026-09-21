@@ -2,14 +2,25 @@
 'use strict';
 
 // ================================================================ RECEBÍVEIS
-function aSetFiltroRec(st) { state.filters.rec = Object.assign(state.filters.rec || {}, { status: st, mes: 'all' }); state.sub.rec = 'lista'; switchTab('recebiveis'); }
-function abrirPainelCobranca() { state.sub.rec = 'cobranca'; switchTab('recebiveis'); }
+/* O filtro dos recebíveis nasce aqui, não dentro da tela. Quem entra direto no painel de
+   cobrança — pelo alerta do painel, por exemplo — nunca passou pela lista, e mexer num
+   filtro que ainda não existia quebrava o clique em silêncio: a tela parecia travada. */
+function filtroRec() {
+  return (state.filters.rec = Object.assign({ status: 'aberto', mes: mesAtual(), busca: '' }, state.filters.rec || {}));
+}
+function mostrarRecebiveis(st) {
+  const f = filtroRec();
+  if (st) f.status = st;
+  state.sub.rec = 'lista';
+  switchTab('recebiveis');
+}
+function abrirPainelCobranca() { filtroRec(); state.sub.rec = 'cobranca'; switchTab('recebiveis'); }
 function renderRecebiveis() {
   const esc0 = escopoAtual(); const v = $('#av-recebiveis');
   /* A tela abre no mês corrente, não na carteira inteira: um loteamento com trezentas
      parcelas vira uma lista que ninguém lê. O extrato completo de um contrato fica na tela
      da venda, e quem quiser tudo aqui escolhe "Todos os meses". */
-  const f = state.filters.rec = state.filters.rec || { status: 'aberto', mes: mesAtual(), busca: '' };
+  const f = filtroRec();
   const all = recebiveisDo(esc0);
   const grupos = { aberto: r => recStatus(r) !== 'pago', atrasado: r => recStatus(r) === 'atrasado', pago: r => recStatus(r) === 'pago', all: () => true };
   const meses = [...new Set(all.map(r => monthKey(r.vencimento)).concat([mesAtual()]))].sort();
@@ -32,13 +43,13 @@ function renderRecebiveis() {
       <div class="kpi c-red"><div class="lbl">Em atraso</div><div class="val">${fmtMoneyShort(atr)}</div><div class="sub">${all.filter(r => recStatus(r) === 'atrasado').length} parcela(s)</div></div>
       <div class="kpi c-blue"><div class="lbl">Vence este mês</div><div class="val">${fmtMoneyShort(mes)}</div><div class="sub">${monthLabel(mesKey)}</div></div>
     </div>
-    <div class="chips">${[['aberto', 'Em aberto'], ['atrasado', 'Atrasados'], ['pago', 'Pagos'], ['all', 'Todos']].map(([k, l]) => `<div class="chip ${f.status === k ? 'active' : ''}" onclick="state.filters.rec.status='${k}';renderRecebiveis()">${l}<span class="n">${all.filter(grupos[k]).length}</span></div>`).join('')}
+    <div class="chips">${[['aberto', 'Em aberto'], ['atrasado', 'Atrasados'], ['pago', 'Pagos'], ['all', 'Todos']].map(([k, l]) => `<div class="chip ${f.status === k ? 'active' : ''}" onclick="mostrarRecebiveis('${k}')">${l}<span class="n">${all.filter(grupos[k]).length}</span></div>`).join('')}
       <div class="chip" onclick="abrirPainelCobranca()">🔔 Cobrança<span class="n">${inadimplentes(esc0).length}</span></div>
       ${contasComLayout().length ? `<div class="chip" onclick="abrirGerarCobrancas()">🧾 Gerar cobranças<span class="n">${parcelasDoMes(esc0, mesAtual()).filter(r => !registradaNoBanco(r) && !bloqueioRemessa(r)).length}</span></div>
       <div class="chip" onclick="abrirRetorno()">📥 Retorno</div>` : ''}</div>
     <div class="filters">
       ${escopoSelectHtml('renderRecebiveis()')}
-      <select onchange="state.filters.rec.mes=this.value;renderRecebiveis()"><option value="all">Todos os meses</option>${meses.map(m => `<option value="${m}" ${f.mes === m ? 'selected' : ''}>${monthLabel(m)}${m === mesAtual() ? ' (mês atual)' : ''}</option>`).join('')}</select>
+      <select onchange="filtroRec().mes=this.value;renderRecebiveis()"><option value="all">Todos os meses</option>${meses.map(m => `<option value="${m}" ${f.mes === m ? 'selected' : ''}>${monthLabel(m)}${m === mesAtual() ? ' (mês atual)' : ''}</option>`).join('')}</select>
       <input type="text" placeholder="🔎 Cliente ou lote" value="${esc(f.busca)}" oninput="aSetFiltro('rec','busca',this.value,renderRecebiveis,this)">
       <button class="btn btn-secondary btn-sm" onclick="exportarRecebiveisCSV()">⬇️ CSV</button>
     </div>
