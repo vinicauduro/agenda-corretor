@@ -549,6 +549,33 @@ teste que passa nos dois não prova nada.
 
 ---
 
+## 7k. Numeração da planta uniforme (22/09)
+
+**O que você viu:** na planta real, os números dos lotes saíam de tamanhos diferentes — lote
+de fundos com número enorme, lote estreito com número quase ilegível.
+
+**O que era:** cada número era dimensionado pelo próprio lote. Nos seus dados isso dava uma
+variação de **9 vezes** entre o menor e o maior número na mesma planta.
+
+**Corrigido:** a planta inteira passa a usar um corpo só, calculado a partir do **lote típico**
+(a mediana), com piso e teto. Metade dos lotes cabe com folga e os menores ficam com o número
+um pouco maior que a testada — que é como o projetista desenha também. Ancorei na mediana e
+não no menor lote de propósito: bastaria um lote residual espremido para deixar a numeração da
+planta inteira ilegível.
+
+Vale para as três telas, porque o desenho da planta é o mesmo código: administração, corretor
+e vitrine.
+
+- [ ] Abrir a planta do Hessen e conferir se a numeração ficou uniforme e legível.
+- [ ] Conferir também na tela do corretor e na vitrine.
+- [ ] Se ficar pequena demais na sua planta, me diga: o piso e o teto são dois números, ajusto
+      na hora.
+
+Em **esquemática** a numeração já era uniforme, porque ali todos os blocos têm o mesmo tamanho.
+O `test25` cobre os dois modos; no modo planta real ele falha no código antigo e passa no novo.
+
+---
+
 ## 7f. Decisões que só dependem de você
 
 Nenhuma me trava hoje, mas todas mudam o produto:

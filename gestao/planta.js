@@ -127,6 +127,33 @@ class PlantaView {
   }
 
   // ------------------------------------------------ render
+  /* Um tamanho só para a numeração da planta inteira.
+
+     Antes cada número era dimensionado pelo próprio lote: lote grande ganhava número grande,
+     lote de esquina ganhava número enorme, e a planta ficava com a numeração desencontrada.
+     Numa planta de loteamento os números são todos do mesmo corpo, como em qualquer desenho
+     de urbanismo.
+
+     O tamanho sai do lote típico — a mediana —, e não do menor: um punhado de lotes
+     residuais espremidos deixaria a numeração da planta inteira ilegível. Metade dos lotes
+     cabe com folga e os menores ficam com o número um pouco maior que a testada, que é como
+     sai no desenho do projetista também. Legibilidade vale mais que folga aqui: número que
+     ninguém lê não serve para nada. */
+  tamanhoDaNumeracao() {
+    const imagem = this.mode === 'imagem';
+    const teto = imagem ? 40 : 24, piso = imagem ? 9 : 8;
+    const cabe = [];
+    this.lotes.forEach(l => {
+      const pts = this.absPts(l); if (!pts) return;
+      const bb = PlantaView.bbox(pts);
+      cabe.push(Math.min(bb.w * (imagem ? 0.30 : 0.34), bb.h * (imagem ? 0.32 : 0.45)));
+    });
+    if (!cabe.length) return Math.min(14, teto);
+    cabe.sort((a, b) => a - b);
+    const tipico = cabe[Math.floor((cabe.length - 1) * 0.5)];
+    return Math.max(piso, Math.min(tipico, teto));
+  }
+
   render() {
     const svg = this.svg;
     this.gBase.innerHTML = ''; this.gLotes.innerHTML = '';
@@ -158,6 +185,7 @@ class PlantaView {
     }
 
     const opacity = this.mode === 'imagem' ? 0.5 : 0.92;
+    const fs = this.tamanhoDaNumeracao();
     this.lotes.forEach(l => {
       const pts = this.absPts(l); if (!pts) return;
       const poly = document.createElementNS(SVG_NS, 'polygon');
@@ -169,8 +197,7 @@ class PlantaView {
       poly.setAttribute('fill-opacity', opacity);
       poly.dataset.id = l.id;
       this.gLotes.appendChild(poly);
-      const bb = PlantaView.bbox(pts); const c = PlantaView.centroid(pts);
-      const fs = Math.max(6, Math.min(bb.w * (this.mode === 'imagem' ? 0.22 : 0.28), bb.h * (this.mode === 'imagem' ? 0.32 : 0.45), this.mode === 'imagem' ? 60 : 26));
+      const c = PlantaView.centroid(pts);
       const t = document.createElementNS(SVG_NS, 'text');
       t.setAttribute('class', 'lote-label'); t.setAttribute('x', c.cx); t.setAttribute('y', c.cy - (this.mode === 'esquema' ? fs * 0.35 : 0)); t.setAttribute('font-size', fs);
       t.textContent = this.mode === 'esquema' ? l.numero : (l.numero);
