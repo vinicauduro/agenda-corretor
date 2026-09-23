@@ -80,14 +80,14 @@ function meuPapel() { return Cloud.active ? (Cloud.papel || 'corretor') : 'dono'
 
 /* Itens do menu lateral e a permissão que cada um pede. */
 const TAB_PERM = {
-  reservas: 'reservas.aprovar', vendas: 'vendas.criar', recebiveis: 'financeiro.ver',
+  reservas: 'reservas.aprovar', vendas: 'vendas.criar', clientes: 'vendas.criar', recebiveis: 'financeiro.ver',
   cobranca: 'cobranca.ver', boletos: 'financeiro.ver', custos: 'custos.ver',
   indices: 'indices.editar', relatorios: 'relatorios.ver'
 };
 function abaPermitida(tab) {
   if (!Cloud.active) return true;
   const chave = TAB_PERM[tab];
-  return !chave || pode(chave) || (tab === 'vendas' && pode('vendas.editar'));
+  return !chave || pode(chave) || ((tab === 'vendas' || tab === 'clientes') && pode('vendas.editar'));
 }
 /* Esconde do menu o que a pessoa não pode ver, e o título do grupo que ficou vazio. */
 function aplicarPermissoesNasAbas() {
