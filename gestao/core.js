@@ -320,7 +320,7 @@ function codigoConvite(n) {
 }
 
 const TABLE_COLS = {
-  loteamentos: ['id', 'nome', 'tipo', 'cidade', 'endereco', 'logradouro', 'numeroEnd', 'bairro', 'cep', 'uf', 'codigoIbge', 'cartorio', 'matriculaMae', 'descricao', 'cond', 'orcamento', 'planta', 'criadoEm'],
+  loteamentos: ['id', 'nome', 'tipo', 'cidade', 'endereco', 'logradouro', 'numeroEnd', 'bairro', 'cep', 'uf', 'codigoIbge', 'cartorio', 'matriculaMae', 'matricula', 'descricaoMatricula', 'area', 'preco', 'descricao', 'cond', 'orcamento', 'planta', 'criadoEm'],
   categorias: ['id', 'nome', 'cor'],
   lotes: ['id', 'loteamentoId', 'quadra', 'numero', 'area', 'frente', 'fundos', 'preco', 'tipo', 'status', 'obs', 'matricula', 'descricaoMatricula', 'logradouro', 'numeroEnd', 'bairro', 'cep', 'pts', 'reservaId', 'vendaId', 'criadoEm'],
   reservas: ['id', 'loteamentoId', 'loteId', 'corretor', 'corretorUserId', 'cliente', 'dataReserva', 'validade', 'status', 'proposta', 'obs', 'motivo', 'aprovadaEm', 'encerradaEm', 'criadoEm'],
@@ -338,7 +338,7 @@ const TABLE_COLS = {
 };
 /* Tabelas criadas depois da primeira versão do schema: se faltarem, o app segue sem elas. */
 const TABELAS_NOVAS = ['clientes'];
-const NULLABLE_EMPTY = new Set(['validade', 'aprovadaEm', 'encerradaEm', 'dataEntrada', 'primeiroVencimento', 'comissaoData', 'distratoEm', 'dataPagamento', 'vencimento', 'reservaId', 'vendaId', 'loteId', 'categoriaId', 'forma', 'frente', 'fundos', 'planta', 'pts', 'proposta', 'corretorUserId']);
+const NULLABLE_EMPTY = new Set(['validade', 'aprovadaEm', 'encerradaEm', 'dataEntrada', 'primeiroVencimento', 'comissaoData', 'distratoEm', 'dataPagamento', 'vencimento', 'reservaId', 'vendaId', 'loteId', 'categoriaId', 'forma', 'frente', 'fundos', 'planta', 'pts', 'proposta', 'corretorUserId', 'preco', 'area']);
 const INT_FIELDS = new Set(['nParcelas', 'numero']);
 function snakeKey(k) { return k.replace(/[A-Z]/g, m => '_' + m.toLowerCase()); }
 /* No aplicativo a coleção é camelCase (contasBanco); no Postgres a tabela é snake_case
@@ -584,7 +584,7 @@ function comEmpreendimento(titulo, ajuda, seguir, filtro) {
   if (lista.length === 1) { setCurLotSilencioso(lista[0].id); seguir(lista[0]); return; }
   window.__seguirEmp = seguir;
   openModal({ title: titulo, body: `<p class="help mb">${esc(ajuda || '')}</p>
-    <div class="fg"><label>Empreendimento</label><select id="ceEmp">${lista.map(l => `<option value="${esc(l.id)}">${esc(l.nome)} — ${esc(empLabel(l))}</option>`).join('')}</select></div>`,
+    <div class="fg"><label>Loteamento ou imóvel</label><select id="ceEmp">${lista.map(l => `<option value="${esc(l.id)}">${esc(l.nome)} — ${esc(empLabel(l))}</option>`).join('')}</select></div>`,
     footer: `<button class="btn btn-secondary" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" onclick="confirmarEmpreendimento()">Continuar</button>` });
 }
 function confirmarEmpreendimento() {
@@ -604,14 +604,28 @@ function getCategoria(id) { return db.categorias.find(c => c.id === id); }
 function loteLabel(l) { return `Quadra ${l.quadra} · Lote ${l.numero}`; }
 function loteShort(l) { return `Q${l.quadra}-L${l.numero}`; }
 
-/* ---- Empreendimentos -------------------------------------------------------------------
-   Um empreendimento é ou um LOTEAMENTO, com planta e lotes numerados, ou uma CARTEIRA, que
-   é só um agrupador de vendas: imóvel avulso, apartamento, sala, o que a empresa vender.
+/* ---- Imóveis -----------------------------------------------------------------------------
+   Um cadastro é ou um LOTEAMENTO, com planta e lotes numerados, ou um IMÓVEL DE TERCEIRO:
+   um só imóvel que a empresa vende para alguém — um lote, uma casa, um apartamento — com
+   o seu valor de venda, a sua matrícula e o seu endereço. No banco o tipo continua se
+   chamando 'carteira', que era o nome antigo; só o que aparece na tela mudou.
    Tudo que vem depois da venda — recebível, índice, antecipação, cobrança, remessa,
    relatório — funciona igual nos dois, porque nada disso depende de lote. */
 function empTipo(lot) { return (lot && lot.tipo) === 'carteira' ? 'carteira' : 'loteamento'; }
 function ehCarteira(lot) { return empTipo(lot) === 'carteira'; }
-function empLabel(lot) { return ehCarteira(lot) ? 'Carteira' : 'Loteamento'; }
+function empLabel(lot) { return ehCarteira(lot) ? 'Imóvel de terceiro' : 'Loteamento'; }
+/* O imóvel de terceiro é um só: vendido enquanto tiver contrato que não virou distrato. */
+function vendaAtivaDoImovel(lot) { return lot ? db.vendas.find(v => v.loteamentoId === lot.id && v.status !== 'distrato') : null; }
+/* Os dados do imóvel de terceiro no formato que a venda guarda, para o contrato já nascer
+   com a descrição, a matrícula e o endereço do cadastro. */
+function imovelDoTerceiro(lot) {
+  lot = lot || {};
+  return {
+    descricao: lot.nome || '', endereco: enderecoLinha(lot) || lot.endereco || '', matricula: lot.matricula || '',
+    descricaoMatricula: lot.descricaoMatricula || '', cartorio: lot.cartorio || '', area: num(lot.area) || null,
+    cep: lot.cep || '', bairro: lot.bairro || '', cidade: lot.cidade || ''
+  };
+}
 
 /* O imóvel de uma venda: o lote, quando existe, ou a descrição livre da venda avulsa. */
 function imovelDaVenda(v) {

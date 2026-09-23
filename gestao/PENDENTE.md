@@ -633,6 +633,39 @@ gaveta no celular sem rolagem lateral. As outras 17 suítes e os testes do banco
 
 ---
 
+## 7o. Imóveis e imóvel de terceiro no singular (24/09)
+
+O que você pediu testando:
+
+- **"Empreendimentos" virou "Imóveis"**, no menu e na tela.
+- **Loteamento não mostra valor na lista.** São centenas de lotes com preços diferentes, e o
+  número aparece quando você abre o loteamento.
+- **"Carteira" virou "Imóvel de terceiro", no singular.** Cada cadastro é um imóvel só: um
+  lote, uma casa, um apartamento. O cadastro pede primeiro **qual é o imóvel** e o **valor de
+  venda**, que é obrigatório. Depois vêm matrícula, área, endereço, cartório e a descrição
+  conforme a matrícula. As condições de pagamento ficaram recolhidas e opcionais: sem preço,
+  condição não serve para nada.
+- **Na lista, o imóvel de terceiro mostra o valor de venda** e a situação: Disponível ou
+  Vendido (com o nome do comprador).
+- **Aberto, ele mostra** o valor de venda, a situação e o botão **💰 Registrar venda**. Se já
+  foi vendido, o botão abre o contrato.
+- **A venda já nasce preenchida** com o valor de venda, a descrição, a matrícula, a área, o
+  endereço e a descrição da matrícula do cadastro. Tudo continua editável no contrato.
+- **Não dá para vender duas vezes o mesmo imóvel.** Ele sai da lista de "Novo contrato"
+  enquanto tiver venda ativa, e volta a ficar disponível depois de um distrato.
+
+Para conferir:
+
+- [ ] Rodar o `schema.sql` (colunas novas de valor de venda, área, matrícula e descrição da
+      matrícula do imóvel).
+- [ ] Abrir o **Lote 15 da Quadra 300** que você cadastrou e informar o valor de venda: ele foi
+      criado antes e está sem preço, então a lista mostra "sem valor de venda".
+- [ ] Cadastrar um apartamento de terceiro e registrar a venda dele.
+
+`test29` cobre tudo isso; `test19` e `test20` foram ajustados para o imóvel no singular.
+
+---
+
 ## 7n. Janela fechando ao trocar um valor — corrigido (23/09)
 
 Você selecionava o valor do imóvel, os juros ou a quantidade de parcelas arrastando o mouse
