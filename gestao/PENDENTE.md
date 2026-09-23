@@ -644,7 +644,7 @@ Agora o fundo só fecha a janela quando o clique começa **e** termina nele. Val
 as janelas do sistema. Clicar de propósito no fundo, o X e a tecla Esc continuam fechando
 como antes.
 
-- [ ] Refazer o gesto no valor, nos juros e nas parcelas e ver que a janela fica.
+- [x] ~~Refazer o gesto no valor, nos juros e nas parcelas~~ — **conferido por você em 23/09.**
 
 O `test28` reproduz o gesto nos três campos: falhava no código antigo e passa no novo.
 
