@@ -345,7 +345,7 @@ function contaAtual() {
 }
 function recDaConta(rec, conta) { const c = contaDoRec(rec); return !!c && !!conta && c.id === conta.id; }
 function avisoSemConta() {
-  openModal({ title: '🏦 Falta a conta de cobrança', body: '<p class="help">Antes de gerar cobranças, cadastre o convênio da empresa em <b>Cadastros › 🏦 Banco</b>: agência, conta, convênio, carteira e as instruções padrão do boleto.</p>', footer: '<button class="btn btn-primary" onclick="closeModal();switchTab(\'cadastros\');state.sub.cad=\'banco\';renderCadastros()">Ir para o cadastro</button>' });
+  openModal({ title: '🏦 Falta a conta de cobrança', body: '<p class="help">Antes de gerar cobranças, cadastre o convênio da empresa em <b>Configurações › 🏦 Contas bancárias</b>: agência, conta, convênio, carteira e as instruções padrão do boleto.</p>', footer: '<button class="btn btn-primary" onclick="closeModal();state.sub.cad=\'banco\';switchTab(\'cadastros\')">Ir para o cadastro</button>' });
 }
 
 // ================================================================ TELA: GERAR COBRANÇAS DO MÊS
@@ -382,7 +382,7 @@ function abrirGerarCobrancas(mes, contaId) {
         <div class="kpi c-amber"><div class="lbl">Prontas para gerar</div><div class="val">${prontas.length}</div><div class="sub">${fmtMoney(total)}</div></div>
       </div>
       ${Object.keys(semIndice).length ? `<div class="card"><h3>⏳ Contratos esperando índice</h3>
-        <p class="help">Estes contratos sofrem correção mensal e o índice que corrige a parcela de ${monthLabel(m)} ainda não foi lançado. Gerar agora mandaria boleto com valor errado, então eles ficam de fora até você lançar em <b>Cadastros › Índices</b>.</p>
+        <p class="help">Estes contratos sofrem correção mensal e o índice que corrige a parcela de ${monthLabel(m)} ainda não foi lançado. Gerar agora mandaria boleto com valor errado, então eles ficam de fora até você lançar em <b>Financeiro › Índices</b>.</p>
         ${Object.keys(semIndice).map(vid => { const v = getVenda(vid); return `<div class="item"><div class="info"><div class="title">${esc(imovelLabel(v))} · ${esc(v.cliente.nome || '')}</div><div class="meta"><span>${esc(semIndice[vid])}</span></div></div></div>`; }).join('')}</div>` : ''}
       ${pend.length ? `<div class="alert warn" style="cursor:default"><span><b>${pend.length} cobrança(s) alterada(s) depois de registrada(s)</b> vão junto nesta remessa, para o banco atualizar: ${pend.filter(x => x.acao === 'alterar').length} alteração(ões) e ${pend.filter(x => x.acao === 'baixar').length} baixa(s).</span></div>` : ''}
       ${prontas.length ? `<div class="card"><h3>O que vai ser gerado</h3>
@@ -560,4 +560,41 @@ function cadRemessasHtml(contaId) {
   return `<div class="table-wrap"><table class="tbl"><thead><tr><th>Arquivo</th><th>Data</th><th>Registrados</th><th>Baixas</th><th class="num">Valor</th><th>Nosso número</th></tr></thead><tbody>
     ${lista.map(r => `<tr><td>${esc(r.arquivo)}</td><td>${fmtDate(r.data)}</td><td>${r.qtd}</td><td>${r.baixas || 0}</td><td class="num">${esc(fmtMoney(r.valor))}</td><td>${r.primeiroNn ? esc(r.primeiroNn) + ' a ' + esc(r.ultimoNn) : '—'}</td></tr>`).join('')}
   </tbody></table></div>`;
+}
+
+// ================================================================ TELA: BOLETOS E BANCO
+/* Tudo o que vai e volta do banco num lugar só: gerar as cobranças do mês, ler o retorno,
+   as alterações que ainda não foram mandadas e o histórico de remessas de cada conta. */
+function renderBoletos() {
+  const el = $('#av-boletos'); if (!el) return;
+  const contas = contasComLayout();
+  const irContas = `state.sub.cad='banco';switchTab('cadastros')`;
+  if (!contas.length) {
+    el.innerHTML = `<div class="empty"><div class="ic">🏦</div><p><b>Nenhuma conta de cobrança cadastrada</b></p>
+      <p class="small">Cadastre agência, conta, convênio e carteira para gerar boletos e ler o retorno do banco.</p>
+      ${pode('config.editar') ? `<button class="btn btn-primary mt" onclick="${irContas}">Cadastrar conta bancária</button>` : ''}</div>`;
+    return;
+  }
+  const m = mesAtual();
+  const doMes = parcelasDoMes('', m).filter(r => contaDoRec(r));
+  const prontas = doMes.filter(r => !registradaNoBanco(r) && !bloqueioRemessa(r));
+  const travadas = doMes.filter(r => !registradaNoBanco(r) && bloqueioRemessa(r));
+  const geradas = doMes.filter(registradaNoBanco);
+  const podeBaixar = pode('financeiro.baixar');
+  el.innerHTML = `
+    ${avisoRemessaHtml('')}
+    <div class="kpi-grid">
+      <div class="kpi c-amber"><div class="lbl">Prontas para gerar em ${monthLabel(m)}</div><div class="val">${prontas.length}</div><div class="sub">${fmtMoney(prontas.reduce((s, r) => s + recValor(r), 0))}</div></div>
+      <div class="kpi c-blue"><div class="lbl">Já registradas no banco</div><div class="val">${geradas.length}</div><div class="sub">neste mês</div></div>
+      <div class="kpi ${travadas.length ? 'c-red' : 'c-green'}"><div class="lbl">Esperando índice</div><div class="val">${travadas.length}</div><div class="sub">${travadas.length ? 'lance o índice do mês' : 'nada travado'}</div></div>
+    </div>
+    <div class="card"><h3>Cobranças do mês</h3>
+      <p class="help mb">Numera o nosso número de cada parcela, gera o arquivo de remessa e marca como registrada. Você confere antes de gerar.</p>
+      <div class="btn-row">
+        ${podeBaixar ? `<button class="btn btn-primary" onclick="abrirGerarCobrancas()">🧾 Gerar cobranças do mês</button>
+        <button class="btn btn-outline" onclick="abrirRetorno()">📥 Ler retorno do banco</button>` : '<p class="help">Seu perfil só consulta. Gerar cobranças e dar baixa pelo retorno dependem da permissão de baixa.</p>'}
+        ${travadas.length && pode('indices.editar') ? `<button class="btn btn-secondary" onclick="switchTab('indices')">📈 Lançar índices</button>` : ''}
+      </div></div>
+    ${contas.map(c => `<div class="card"><h3>🏦 ${esc(contaLabel(c))}</h3>${cadRemessasHtml(c.id)}</div>`).join('')}
+    ${pode('config.editar') ? `<p class="help"><a href="#" onclick="${irContas};return false">Contas bancárias e instruções do boleto ›</a></p>` : ''}`;
 }

@@ -3,11 +3,7 @@
 
 function renderAdminTab() {
   updateTopbars();
-  const pend = db.reservas.filter(r => r.status === 'pendente').length;
-  const b = $('#aBadgeReservas'); b.style.display = pend ? '' : 'none'; b.textContent = pend;
-  const lotAtual = curLot();
-  const novos = lotAtual ? leadsDo(lotAtual.id).filter(l => (l.status || 'novo') === 'novo').length : 0;
-  const bl = $('#aBadgeLeads'); if (bl) { bl.style.display = novos ? '' : 'none'; bl.textContent = novos; }
+  contadoresDoMenu();
   const fab = $('#fab'); fab.classList.remove('show');
   const tab = state.tab;
   if (!db.loteamentos.length && tab !== 'cadastros' && tab !== 'emp') {
@@ -18,29 +14,47 @@ function renderAdminTab() {
   const bloqueia = (chave, oQue) => { if (pode(chave)) return false; $('#av-' + state.tab).innerHTML = semPermissaoHtml(oQue); return true; };
   if (tab === 'painel') renderPainel();
   else if (tab === 'emp') renderEmpreendimentos();
-  else if (tab === 'vendas') { if (!bloqueia('vendas.criar', 'vendas')) { renderAVendas(); if (pode('vendas.criar')) fabShow('novaVendaEscolhendoEmp()'); } }
-  else if (tab === 'recebiveis') { if (!bloqueia('financeiro.ver', 'recebíveis')) { if (state.sub.rec === 'cobranca') renderCobranca(); else renderRecebiveis(); } }
+  else if (tab === 'reservas') { if (!bloqueia('reservas.aprovar', 'reservas')) { renderAReservas(); fabShow('novaReservaEscolhendoEmp()'); } }
+  else if (tab === 'corretores') renderCorretoresAdmin();
+  else if (tab === 'vendas') { if (!bloqueia('vendas.criar', 'contratos')) { renderAVendas(); if (pode('vendas.criar')) fabShow('novaVendaEscolhendoEmp()'); } }
+  else if (tab === 'recebiveis') { if (!bloqueia('financeiro.ver', 'recebíveis')) renderRecebiveis(); }
+  else if (tab === 'cobranca') { if (!bloqueia('cobranca.ver', 'cobrança')) renderCobranca(); }
+  else if (tab === 'boletos') { if (!bloqueia('financeiro.ver', 'boletos')) renderBoletos(); }
+  else if (tab === 'custos') { if (!bloqueia('custos.ver', 'contas a pagar')) { renderCustos(); if (pode('custos.editar')) fabShow('novoCustoEscolhendoEmp()'); } }
+  else if (tab === 'indices') { if (!bloqueia('indices.editar', 'índices')) $('#av-indices').innerHTML = cadIndicesHtml(); }
   else if (tab === 'relatorios') renderRelatorios();
   else if (tab === 'cadastros') renderCadastros();
 }
 
+/* Números ao lado dos itens do menu: o que está esperando alguém. Só aparece para quem pode
+   agir sobre aquilo. */
+function contadoresDoMenu() {
+  const put = (id, n, chave) => {
+    const b = document.getElementById(id); if (!b) return;
+    const mostra = n > 0 && (!chave || pode(chave));
+    b.style.display = mostra ? '' : 'none'; b.textContent = n;
+  };
+  put('aBadgeReservas', db.reservas.filter(r => r.status === 'pendente').length, 'reservas.aprovar');
+  put('aBadgeCobranca', typeof inadimplentes === 'function' ? inadimplentes('').length : 0, 'cobranca.ver');
+  put('aBadgeCustos', db.custos.filter(c => custoStatus(c) === 'atrasado').length, 'custos.ver');
+  put('aBadgeBoletos', typeof pendentesDeRemessa === 'function' ? pendentesDeRemessa('').length : 0, 'financeiro.ver');
+}
+
 /* ================================================================ EMPREENDIMENTOS
-   Aqui mora tudo que é de um empreendimento só: planta, lotes, reservas, obra e vitrine.
+   Aqui mora tudo que é de um empreendimento só: planta, lotes, preços e obra.
    Vendas, recebíveis e relatórios ficam de fora, porque são da empresa inteira. */
 const EMP_SUBS = [
   ['resumo', '📋 Resumo', null],
   ['planta', '🗺️ Planta', 'planta.editar'],
-  ['lotes', '📦 Lotes', 'lotes.editar'],
-  ['reservas', '📝 Reservas', 'reservas.aprovar'],
-  ['custos', '🧾 Obra e custos', 'custos.ver'],
-  ['leads', '🎯 Leads', 'leads.ver']
+  ['lotes', '📦 Lotes e preços', 'lotes.editar'],
+  ['custos', '🧾 Obra e orçamento', 'custos.ver']
 ];
 /* Numa carteira de imóveis de terceiros não existe planta, lote, reserva nem obra: o imóvel
    não é seu, você só administra o recebível. A aba de custos só reaparece se a carteira já
    tiver lançamento, para não esconder dado que alguém já registrou. */
 function empSubsVisiveis(lot) {
   if (!lot) return EMP_SUBS.filter(([, , chave]) => !chave || pode(chave));
-  const fora = ehCarteira(lot) ? ['planta', 'lotes', 'reservas'].concat(custosDo(lot.id).length ? [] : ['custos']) : [];
+  const fora = ehCarteira(lot) ? ['planta', 'lotes'].concat(custosDo(lot.id).length ? [] : ['custos']) : [];
   return EMP_SUBS.filter(([k, , chave]) => (!chave || pode(chave)) && !fora.includes(k));
 }
 function abrirEmpreendimento(id, sub) {
@@ -67,9 +81,7 @@ function renderEmpreendimentos() {
   if (state.empSub === 'resumo') alvo.innerHTML = cadLoteamentoHtml();
   else if (state.empSub === 'planta') renderPlantaEditor(alvo);
   else if (state.empSub === 'lotes') { renderALotes(alvo); fabShow('abrirLoteForm()'); }
-  else if (state.empSub === 'reservas') { renderAReservas(alvo); fabShow('abrirReservaAdminForm()'); }
   else if (state.empSub === 'custos') { renderCustos(alvo); if (pode('custos.editar')) fabShow('abrirCustoForm()'); }
-  else if (state.empSub === 'leads') renderLeads(alvo);
 }
 function listaEmpreendimentosHtml() {
   const podeCriar = pode('config.editar') || pode('lotes.editar');
@@ -118,9 +130,9 @@ function renderPainel() {
   const pctVend = ls.length ? Math.round(cnt('vendido') / ls.length * 100) : 0;
 
   let alerts = '';
-  if (resPend.length) alerts += `<div class="alert warn" onclick="abrirEmpreendimento('${resPend[0].loteamentoId}','reservas')"><span><b>${resPend.length} reserva(s) aguardando aprovação</b></span><span>›</span></div>`;
+  if (resPend.length) alerts += `<div class="alert warn" onclick="switchTab('reservas')"><span><b>${resPend.length} reserva(s) aguardando aprovação</b></span><span>›</span></div>`;
   if (resExp.length) alerts += `<div class="alert" onclick="aSetFiltroRes('expirada')"><span><b>${resExp.length} reserva(s) vencida(s)</b> — libere o lote ou renove</span><span>›</span></div>`;
-  if (resVencendo.length) alerts += `<div class="alert info" onclick="abrirEmpreendimento('${resVencendo[0].loteamentoId}','reservas')"><span><b>${resVencendo.length} reserva(s) vencem em até 2 dias</b></span><span>›</span></div>`;
+  if (resVencendo.length) alerts += `<div class="alert info" onclick="switchTab('reservas')"><span><b>${resVencendo.length} reserva(s) vencem em até 2 dias</b></span><span>›</span></div>`;
   if (atrasados.length) alerts += `<div class="alert" onclick="abrirPainelCobranca()"><span><b>${atrasados.length} parcela(s) em atraso</b> — ${fmtMoney(atrasado)} · cobrar</span><span>›</span></div>`;
   if (custosAtr.length) alerts += `<div class="alert" onclick="aSetFiltroCusto('atrasado')"><span><b>${custosAtr.length} conta(s) a pagar vencida(s)</b> — ${fmtMoney(custosAtr.reduce((s, c) => s + num(c.valor), 0))}</span><span>›</span></div>`;
   const semPreco = ls.filter(l => !num(l.preco)).length;
@@ -486,13 +498,17 @@ function exportarLotesCSV() {
 
 // ================================================================ RESERVAS (admin)
 function aSetFiltroRes(st) { state.filters.ares = { status: st }; switchTab('reservas'); }
+/* Reservas são do Comercial, da empresa inteira: o corretor pede, a empresa aprova. O filtro
+   de empreendimento restringe quando há mais de um. */
 function renderAReservas(alvo) {
-  const lot = curLot(); const v = alvo || alvoDoEmp('av-reservas');
+  const v = alvo || $('#av-reservas');
+  const escopo = escopoAtual();
   const f = state.filters.ares = state.filters.ares || { status: 'ativas' };
-  const all = db.reservas.filter(r => r.loteamentoId === lot.id);
+  const all = db.reservas.filter(r => noEscopo(r, escopo));
   const grupos = { ativas: r => ['pendente', 'aprovada'].includes(reservaStatus(r)), pendente: r => r.status === 'pendente', aprovada: r => reservaStatus(r) === 'aprovada', expirada: r => reservaStatus(r) === 'expirada', historico: r => ['recusada', 'cancelada', 'convertida', 'expirada'].includes(r.status) || (reservaStatus(r) === 'expirada') };
   const list = all.filter(grupos[f.status] || (() => true)).sort((a, b) => (b.criadoEm || '').localeCompare(a.criadoEm || ''));
   v.innerHTML = `
+    ${db.loteamentos.length > 1 ? `<div class="filters">${escopoSelectHtml('renderAReservas()')}</div>` : ''}
     <div class="chips">${[['ativas', 'Ativas'], ['pendente', 'Aguardando'], ['aprovada', 'Aprovadas'], ['expirada', 'Vencidas'], ['historico', 'Histórico']].map(([k, l]) => `<div class="chip ${f.status === k ? 'active' : ''}" onclick="state.filters.ares.status='${k}';renderAReservas()">${l}<span class="n">${all.filter(grupos[k]).length}</span></div>`).join('')}</div>
     ${list.length ? list.map(r => reservaCardHtml(r, true)).join('') : `<div class="empty"><div class="ic">📝</div><p>Nenhuma reserva nesta lista.</p></div>`}`;
 }
@@ -557,6 +573,10 @@ function salvarReservaAdmin(id) {
   });
   upsert('reservas', upd); registrarCorretor(upd.corretor);
   abrirReservaAdmin(id); renderCurrent(); toast('✅', 'Reserva atualizada', '');
+}
+/* Reserva lançada pela própria empresa, a partir da lista geral: primeiro o loteamento. */
+function novaReservaEscolhendoEmp() {
+  comEmpreendimento('📝 Nova reserva', 'Em qual loteamento?', () => abrirReservaAdminForm(), l => !ehCarteira(l));
 }
 function abrirReservaAdminForm(loteId) {
   const lot = curLot();
@@ -696,7 +716,7 @@ function abrirVendaForm(id, loteId, reservaId) {
       <p class="help mt">O primeiro comprador é quem aparece nas telas de venda, recebível e cobrança. Os demais existem para o contrato. Marido e mulher não precisam de dois blocos: use o estado civil e o cônjuge.</p></div>
     <div class="fieldset"><span class="lg">✍️ Vendedor</span>
       ${vendedoresListaHtml('vfVend', vsel)}
-      <p class="help mt">Cadastre outros CNPJs do grupo em Cadastros › Vendedores. O contrato sai com a qualificação de todos os escolhidos aqui.</p></div>
+      <p class="help mt">Cadastre outros CNPJs do grupo em Configurações › Dados da empresa. O contrato sai com a qualificação de todos os escolhidos aqui.</p></div>
     <div class="fieldset"><span class="lg">🤝 Intermediação</span>
       <div class="fg"><label>O negócio foi intermediado por corretor de imóveis?</label>
         <select id="vfTemCorretor" onchange="vfCorretorChange()">
@@ -868,7 +888,7 @@ function excluirVenda(id) {
         <div><div class="k">Já recebido</div><div class="v">${pagos.length ? `<b style="color:var(--danger)">${fmtMoney(totalPago)}</b> em ${pagos.length} pagamento(s)` : 'nada'}</div></div>
         ${l ? `<div class="full"><div class="k">Lote</div><div class="v">${esc(loteLabel(l))} volta a ficar disponível</div></div>` : ''}
       </div>
-      ${pagos.length ? `<div class="alert warn" style="cursor:default"><span>Este contrato tem <b>${fmtMoney(totalPago)}</b> já recebido. Apagando, esse dinheiro some dos relatórios e do caixa. Se o negócio foi desfeito e você precisa do histórico, guarde um backup antes em Cadastros › Backup.</span></div>` : ''}
+      ${pagos.length ? `<div class="alert warn" style="cursor:default"><span>Este contrato tem <b>${fmtMoney(totalPago)}</b> já recebido. Apagando, esse dinheiro some dos relatórios e do caixa. Se o negócio foi desfeito e você precisa do histórico, guarde um backup antes em Configurações › Backup.</span></div>` : ''}
       <div class="fg mt"><label>Para confirmar, escreva <b>EXCLUIR</b></label><input type="text" id="exVenda" placeholder="EXCLUIR" autocomplete="off"></div>`,
     footer: `<button class="btn btn-secondary" onclick="closeModal()">Cancelar</button><button class="btn btn-outline-danger" onclick="confirmarExclusaoVenda('${x.id}')">Excluir contrato</button>`
   });
@@ -890,24 +910,25 @@ function confirmarExclusaoVenda(id) {
 // ================================================================ CADASTROS
 function renderCadastros() {
   const v = $('#av-cadastros');
-  state.sub.cad = state.sub.cad || 'corretores';
-  const todasTabs = [['corretores', Cloud.active ? '👥 Equipe' : '🧑‍💼 Corretores', 'equipe.gerenciar'],
-    ['empresa', '🏢 Dados da empresa', 'config.editar'], ['permissoes', '🔐 Permissões', 'equipe.gerenciar'], ['categorias', '🏷️ Categorias', 'custos.editar'], ['documentos', '📄 Documentos', 'documentos.editar'],
-    ['indices', '📈 Índices', 'indices.editar'], ['cobranca', '🔔 Cobrança', 'cobranca.registrar'], ['banco', '🏦 Banco', 'config.editar'], ['vitrine', '🌐 Vitrine', 'vitrine.gerenciar'],
-    ['config', '⚙️ Configurações', 'config.editar'], ['nuvem', Cloud.active ? '☁️ Conta' : '☁️ Nuvem', null], ['backup', '💾 Backup', 'backup.usar']];
+  state.sub.cad = state.sub.cad || (Cloud.active ? 'corretores' : 'empresa');
+  /* Só o que se ajusta uma vez. Índices, corretores e vitrine saíram daqui: os dois primeiros
+     são rotina e têm lugar no menu; a vitrine saiu do produto. No modo local não existe
+     equipe — os corretores ficam em Comercial › Corretores. */
+  const todasTabs = [...(Cloud.active ? [['corretores', '👥 Equipe', 'equipe.gerenciar']] : []),
+    ['empresa', '🏢 Dados da empresa', 'config.editar'], ['permissoes', '🔐 Permissões', 'equipe.gerenciar'], ['categorias', '🏷️ Categorias', 'custos.editar'], ['documentos', '📄 Modelos de documento', 'documentos.editar'],
+    ['banco', '🏦 Contas bancárias', 'config.editar'], ['cobranca', '🔔 Régua de cobrança', 'cobranca.registrar'],
+    ['config', '⚙️ Geral', 'config.editar'], ['nuvem', Cloud.active ? '☁️ Conta' : '☁️ Nuvem', null], ['backup', '💾 Backup', 'backup.usar']];
   const tabs = todasTabs.filter(t => !t[2] || pode(t[2])).map(t => [t[0], t[1]]);
   if (!tabs.find(t => t[0] === state.sub.cad)) state.sub.cad = tabs.length ? tabs[0][0] : 'config';
   const sub = state.sub.cad;
-  let html = `<div class="subtabs">${tabs.map(([k, l]) => `<div class="chip ${sub === k ? 'active' : ''}" onclick="state.sub.cad='${k}';renderCadastros()">${l}</div>`).join('')}</div>`;
-  if (sub === 'corretores') html += Cloud.active ? cadEquipeHtml() : cadCorretoresHtml();
+  let html = `<div class="subtabs">${tabs.map(([k, l]) => `<div class="chip ${sub === k ? 'active' : ''}" onclick="state.sub.cad='${k}';renderCurrent()">${l}</div>`).join('')}</div>`;
+  if (sub === 'corretores') html += cadEquipeHtml();
   else if (sub === 'empresa') html += cadEmpresaHtml();
   else if (sub === 'categorias') html += cadCategoriasHtml();
   else if (sub === 'documentos') html += cadDocumentosHtml();
-  else if (sub === 'indices') html += cadIndicesHtml();
   else if (sub === 'cobranca') html += cadCobrancaHtml();
   else if (sub === 'banco') html += cadBancoHtml();
   else if (sub === 'permissoes') html += cadPermissoesHtml();
-  else if (sub === 'vitrine') html += cadVitrineHtml();
   else if (sub === 'config') html += cadConfigHtml();
   else if (sub === 'nuvem') html += Cloud.active ? cadContaHtml() : cadNuvemHtml();
   else if (sub === 'backup') html += cadBackupHtml();
@@ -973,7 +994,7 @@ function excluirLoteamento(id) {
 }
 function cadLoteamentosHtml() {
   return `<div class="card"><h3>📋 Loteamentos <span class="h-actions"><button class="btn btn-primary btn-sm" onclick="abrirLoteamentoForm()">＋ Novo</button></span></h3>
-    ${db.loteamentos.map(l => { const ls = lotesDo(l.id); return `<div class="item ${l.id === state.lotId ? '' : 'bloqueado'}" onclick="setCurLot('${l.id}');state.sub.cad='loteamento';renderCadastros()"><div class="info"><div class="title">${esc(l.nome)} ${l.id === state.lotId ? '<span class="badge aprovada">atual</span>' : ''}</div><div class="meta"><span class="badge neutral">${esc(empLabel(l))}</span><span>${esc(l.cidade || '')}</span>${ehCarteira(l) ? `<span>· ${db.vendas.filter(v => v.loteamentoId === l.id && v.status !== 'distrato').length} venda(s)</span>` : `<span>· ${ls.length} lotes</span><span>· ${ls.filter(x => x.status === 'vendido').length} vendidos</span>`}</div></div><div class="side"><button class="btn-icon" onclick="event.stopPropagation();abrirLoteamentoForm('${l.id}')">✏️</button></div></div>`; }).join('') || '<p class="help">Nenhum empreendimento.</p>'}</div>`;
+    ${db.loteamentos.map(l => { const ls = lotesDo(l.id); return `<div class="item ${l.id === state.lotId ? '' : 'bloqueado'}" onclick="setCurLot('${l.id}');state.sub.cad='loteamento';renderCurrent()"><div class="info"><div class="title">${esc(l.nome)} ${l.id === state.lotId ? '<span class="badge aprovada">atual</span>' : ''}</div><div class="meta"><span class="badge neutral">${esc(empLabel(l))}</span><span>${esc(l.cidade || '')}</span>${ehCarteira(l) ? `<span>· ${db.vendas.filter(v => v.loteamentoId === l.id && v.status !== 'distrato').length} venda(s)</span>` : `<span>· ${ls.length} lotes</span><span>· ${ls.filter(x => x.status === 'vendido').length} vendidos</span>`}</div></div><div class="side"><button class="btn-icon" onclick="event.stopPropagation();abrirLoteamentoForm('${l.id}')">✏️</button></div></div>`; }).join('') || '<p class="help">Nenhum empreendimento.</p>'}</div>`;
 }
 function abrirOrcamentoForm() {
   const lot = curLot(); const orc = lot.orcamento || {};
@@ -983,7 +1004,18 @@ function abrirOrcamentoForm() {
 function salvarOrcamento() {
   const lot = curLot(); const orc = {};
   db.categorias.forEach(c => { const v = num(val('orc_' + c.id)); if (v > 0) orc[c.id] = v; });
-  upsert('loteamentos', Object.assign({}, lot, { orcamento: orc })); closeModal(); renderCadastros(); toast('✅', 'Orçamento salvo', '');
+  upsert('loteamentos', Object.assign({}, lot, { orcamento: orc })); closeModal(); renderCurrent(); toast('✅', 'Orçamento salvo', '');
+}
+/* Comercial › Corretores. No modo local o cadastro é daqui mesmo. Na nuvem o corretor entra
+   por convite e vira membro da equipe, então a lista é a mesma de sempre e o botão leva ao
+   convite, em Configurações › Equipe. */
+function renderCorretoresAdmin() {
+  const v = $('#av-corretores');
+  if (!Cloud.active) { v.innerHTML = cadCorretoresHtml(); return; }
+  const stats = c => { const m = x => (onlyDigits(x.telefone) && onlyDigits(x.telefone) === onlyDigits(c.telefone)) || (x.creci && c.creci && x.creci.toLowerCase() === c.creci.toLowerCase()) || (c.userId && x.userId === c.userId); return { res: db.reservas.filter(r => m(r.corretor)).length, vend: db.vendas.filter(v2 => v2.status !== 'distrato' && m(v2.corretor)) }; };
+  v.innerHTML = `<div class="card"><h3>🧑‍💼 Corretores ${pode('equipe.gerenciar') ? `<span class="h-actions"><button class="btn btn-primary btn-sm" onclick="state.sub.cad='corretores';switchTab('cadastros')">＋ Convidar corretor</button></span>` : ''}</h3>
+    <p class="help mb">Os corretores entram por convite e usam o portal deles para ver a planta, simular e pedir reserva.</p>
+    ${db.corretores.slice().sort((a, b) => naturalCmp(a.nome, b.nome)).map(c => { const st = stats(c); return `<div class="item"><div class="info"><div class="title">${esc(c.nome)}</div><div class="meta"><span>${esc(c.creci || 'sem CRECI')}</span>${c.telefone ? `<span>· ${esc(fmtPhone(c.telefone))}</span>` : ''}${c.imobiliaria ? `<span>· ${esc(c.imobiliaria)}</span>` : ''}<span>· ${st.res} reserva(s) · ${st.vend.length} venda(s) · ${fmtMoneyShort(st.vend.reduce((t, x) => t + num(x.valorTotal), 0))}</span></div></div></div>`; }).join('') || '<p class="help">Nenhum corretor ainda. Convide o primeiro.</p>'}</div>`;
 }
 function cadCorretoresHtml() {
   const stats = c => { const m = x => (onlyDigits(x.telefone) && onlyDigits(x.telefone) === onlyDigits(c.telefone)) || (x.creci && c.creci && x.creci.toLowerCase() === c.creci.toLowerCase()); return { res: db.reservas.filter(r => m(r.corretor)).length, vend: db.vendas.filter(v => v.status !== 'distrato' && m(v.corretor)) }; };
@@ -1029,7 +1061,7 @@ function salvarEmpresa() {
     cep: p.cep || '', logradouro: p.logradouro || '', numeroEnd: p.numeroEnd || '', bairro: p.bairro || '',
     endereco: p.endereco || '', cidade: p.cidade || '', uf: p.uf || '', telefone: p.telefone || '', email: p.email || ''
   });
-  toast('✅', 'Dados da empresa salvos', 'Já valem para os próximos documentos.'); renderCadastros();
+  toast('✅', 'Dados da empresa salvos', 'Já valem para os próximos documentos.'); renderCurrent();
 }
 function salvarSignatarios() {
   const reps = pessoasDoFormLista('sig', db.config.representantes || []);
@@ -1040,7 +1072,7 @@ function salvarSignatarios() {
        usava {{empresa.representante}} segue funcionando. */
     representante: p1.nome || '', repCpf: p1.cpf || '', repCargo: p1.cargo || '', repGenero: p1.genero || 'm'
   });
-  toast('✅', reps.length > 1 ? 'Signatários salvos' : 'Signatário salvo', reps.map(r => r.nome).join(', ')); renderCadastros();
+  toast('✅', reps.length > 1 ? 'Signatários salvos' : 'Signatário salvo', reps.map(r => r.nome).join(', ')); renderCurrent();
 }
 function abrirVendedorForm(id) {
   const v = id ? db.vendedores.find(x => x.id === id) : null;
@@ -1055,12 +1087,12 @@ function salvarVendedor(id) {
   const prev = id ? db.vendedores.find(x => x.id === id) : null;
   const p = pessoaDoForm('vdd', prev || {});
   upsert('vendedores', Object.assign({}, prev || { id: genId(), criadoEm: new Date().toISOString() }, p, { obs: val('vddObs') }));
-  closeModal(); renderCadastros(); toast('✅', 'Vendedor salvo', p.nome);
+  closeModal(); renderCurrent(); toast('✅', 'Vendedor salvo', p.nome);
 }
 function excluirVendedor(id) {
   const usos = db.vendas.filter(v => v.vendedorId === id).length;
   if (usos && !confirm(`Este vendedor está em ${usos} venda(s). Os contratos já emitidos guardam os dados como estavam, mas ele some da lista. Excluir?`)) return;
-  removeRec('vendedores', id); closeModal(); renderCadastros();
+  removeRec('vendedores', id); closeModal(); renderCurrent();
 }
 function abrirCorretorForm(id) {
   const c = id ? db.corretores.find(x => x.id === id) : null;
@@ -1068,13 +1100,13 @@ function abrirCorretorForm(id) {
     <div class="frow"><div class="fg"><label>CRECI</label><input type="text" id="cfCreci" value="${esc(c ? c.creci : '')}"></div><div class="fg"><label>Telefone *</label><input type="tel" id="cfTel" value="${esc(c ? c.telefone : '')}"></div></div>
     <div class="frow"><div class="fg"><label>E-mail</label><input type="email" id="cfEmail" value="${esc(c ? c.email : '')}"></div><div class="fg"><label>Imobiliária</label><input type="text" id="cfImob" value="${esc(c ? c.imobiliaria : '')}"></div></div>
     <label class="check"><input type="checkbox" id="cfAtivo" ${!c || c.ativo !== false ? 'checked' : ''}> Ativo</label>`;
-  openModal({ title: c ? '✏️ Corretor' : '＋ Novo corretor', body, footer: `${c ? `<button class="btn btn-outline-danger" onclick="removeRec('corretores','${c.id}');closeModal();renderCadastros()">Excluir</button>` : ''}<button class="btn btn-secondary" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" onclick="salvarCorretor('${c ? c.id : ''}')">Salvar</button>` });
+  openModal({ title: c ? '✏️ Corretor' : '＋ Novo corretor', body, footer: `${c ? `<button class="btn btn-outline-danger" onclick="removeRec('corretores','${c.id}');closeModal();renderCurrent()">Excluir</button>` : ''}<button class="btn btn-secondary" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" onclick="salvarCorretor('${c ? c.id : ''}')">Salvar</button>` });
 }
 function salvarCorretor(id) {
   if (!val('cfNome') || !val('cfTel')) { toast('⚠️', 'Informe nome e telefone', '', true); return; }
   const prev = id ? db.corretores.find(x => x.id === id) : null;
   upsert('corretores', Object.assign({}, prev || { id: genId(), criadoEm: new Date().toISOString() }, { nome: val('cfNome'), creci: val('cfCreci'), telefone: val('cfTel'), email: val('cfEmail'), imobiliaria: val('cfImob'), ativo: checked('cfAtivo') }));
-  closeModal(); renderCadastros(); toast('✅', 'Corretor salvo', '');
+  closeModal(); renderCurrent(); toast('✅', 'Corretor salvo', '');
 }
 function cadCategoriasHtml() {
   return `<div class="card"><h3>🏷️ Categorias de custo <span class="h-actions"><button class="btn btn-primary btn-sm" onclick="abrirCategoriaForm()">＋ Nova</button></span></h3>
@@ -1088,11 +1120,11 @@ function abrirCategoriaForm(id) {
 function salvarCategoria(id) {
   if (!val('ctNome')) return;
   const prev = id ? getCategoria(id) : null;
-  upsert('categorias', Object.assign({}, prev || { id: genId() }, { nome: val('ctNome'), cor: val('ctCor') })); closeModal(); renderCadastros();
+  upsert('categorias', Object.assign({}, prev || { id: genId() }, { nome: val('ctNome'), cor: val('ctCor') })); closeModal(); renderCurrent();
 }
 function excluirCategoria(id) {
   if (db.custos.some(x => x.categoriaId === id)) { toast('⚠️', 'Categoria em uso por lançamentos', '', true); return; }
-  if (!confirm('Excluir categoria?')) return; removeRec('categorias', id); closeModal(); renderCadastros();
+  if (!confirm('Excluir categoria?')) return; removeRec('categorias', id); closeModal(); renderCurrent();
 }
 function cadConfigHtml() {
   const c = db.config;
@@ -1102,7 +1134,7 @@ function cadConfigHtml() {
     <div class="frow"><div class="fg"><label>Juros de mora (% ao mês)</label><input type="number" id="cgJuros" step="0.01" value="${c.jurosMesPct}"></div><div class="fg"><label>Corretor vê preço de lotes vendidos?</label><select id="cgMostra"><option value="1" ${c.mostrarPrecoVendido ? 'selected' : ''}>Sim</option><option value="0" ${!c.mostrarPrecoVendido ? 'selected' : ''}>Não</option></select></div></div>
     <button class="btn btn-primary" onclick="salvarConfig()">Salvar configurações</button></div>
     <div class="card"><h3>🏢 Dados da empresa</h3>
-    <p class="help">CNPJ, endereço, quem assina e os outros CNPJs do grupo ficam em <b><a href="#" onclick="state.sub.cad='empresa';renderCadastros();return false">Cadastros › Dados da empresa</a></b>.</p></div>
+    <p class="help">CNPJ, endereço, quem assina e os outros CNPJs do grupo ficam em <b><a href="#" onclick="state.sub.cad='empresa';renderCurrent();return false">Configurações › Dados da empresa</a></b>.</p></div>
     ${Cloud.active ? '' : `<div class="card"><h3>🔐 Acesso</h3>
     <div class="frow"><div class="fg"><label>Novo PIN do administrador</label><input type="password" inputmode="numeric" id="cgPin" placeholder="mín. 4 dígitos" autocomplete="new-password"><div class="hint">${c.pinPadrao ? '<b style="color:#b45309">Você ainda usa o PIN padrão 1234. Troque agora.</b>' : 'PIN personalizado ativo.'}</div></div>
       <div class="fg"><label>Código de acesso dos corretores</label><input type="text" id="cgCod" value="${esc(c.codigoCorretor)}" placeholder="vazio = acesso livre"><div class="hint">Se definido, o corretor precisa digitar este código na primeira vez que abrir o app.</div></div></div>
@@ -1111,12 +1143,12 @@ function cadConfigHtml() {
 }
 function salvarConfig() {
   setConfig({ empresa: val('cgEmpresa'), adminWhatsapp: val('cgWa'), reservaDias: Math.max(1, Math.round(num(val('cgDias')) || 7)), comissaoPct: num(val('cgCom')), multaPct: num(val('cgMulta')), jurosMesPct: num(val('cgJuros')), mostrarPrecoVendido: val('cgMostra') === '1' });
-  toast('✅', 'Configurações salvas', ''); renderCadastros();
+  toast('✅', 'Configurações salvas', ''); renderCurrent();
 }
 function salvarAcesso() {
   const pin = val('cgPin'); const patch = { codigoCorretor: val('cgCod') };
   if (pin) { if (pin.length < 4) { toast('⚠️', 'PIN muito curto', '', true); return; } patch.adminPin = hashStr(pin); patch.pinPadrao = false; }
-  setConfig(patch); toast('✅', 'Acesso atualizado', pin ? 'Novo PIN ativo.' : ''); renderCadastros();
+  setConfig(patch); toast('✅', 'Acesso atualizado', pin ? 'Novo PIN ativo.' : ''); renderCurrent();
 }
 function cadNuvemHtml() {
   const link = location.origin + location.pathname + '?modo=corretor';
@@ -1144,126 +1176,3 @@ function cadBackupHtml() {
     <div class="card"><h3>🗑️ Zona de perigo</h3><p class="help mb">Apaga todos os loteamentos, lotes, reservas, vendas e custos. As configurações são mantidas.</p><button class="btn btn-outline-danger" onclick="apagarTudo()">Apagar todos os dados</button></div>`;
 }
 
-// ================================================================ LEADS (vitrine pública)
-function leadsDo(lotId) { return db.leads.filter(l => l.loteamentoId === lotId || !l.loteamentoId); }
-const LEAD_STATUS = { novo: ['🆕', 'Novo'], contatado: ['📞', 'Contatado'], convertido: ['✅', 'Convertido'], descartado: ['🚫', 'Descartado'] };
-
-function renderLeads(alvo) {
-  const lot = curLot(); const v = alvo || alvoDoEmp('av-leads');
-  const f = state.filters.leads = state.filters.leads || { status: 'novo' };
-  const all = leadsDo(lot.id);
-  const list = (f.status === 'todos' ? all : all.filter(l => (l.status || 'novo') === f.status))
-    .sort((a, b) => (b.criadoEm || '').localeCompare(a.criadoEm || ''));
-  const vit = Cloud.active ? Cloud.vitrines.find(x => x.loteamentoId === lot.id) : null;
-  const aviso = !Cloud.active
-    ? `<div class="card"><p class="help">Os leads chegam pela <b>vitrine pública</b>, que funciona na versão em nuvem. Ative a nuvem em Cadastros › Nuvem para publicar o link do loteamento.</p></div>`
-    : !vit || !vit.ativa
-      ? `<div class="card"><p class="help">A vitrine pública deste loteamento ainda não está publicada. <button class="btn btn-primary btn-sm" onclick="state.tab='cadastros';state.sub.cad='vitrine';switchTab('cadastros')">🌐 Publicar agora</button></p></div>` : '';
-  v.innerHTML = aviso + `
-    <div class="chips">${[['novo', 'Novos'], ['contatado', 'Contatados'], ['convertido', 'Convertidos'], ['descartado', 'Descartados'], ['todos', 'Todos']].map(([k, l]) =>
-      `<div class="chip ${f.status === k ? 'active' : ''}" onclick="state.filters.leads.status='${k}';renderLeads()">${l}<span class="n">${k === 'todos' ? all.length : all.filter(x => (x.status || 'novo') === k).length}</span></div>`).join('')}</div>
-    ${list.length ? list.map(leadCardHtml).join('') : `<div class="empty"><div class="ic">🎯</div><p>Nenhum interesse nesta lista.</p><p class="small">Quando alguém preencher o formulário da vitrine, aparece aqui na hora.</p></div>`}`;
-}
-
-function leadCardHtml(l) {
-  const lote = l.loteId ? getLote(l.loteId) : null;
-  const st = l.status || 'novo'; const [ic, lbl] = LEAD_STATUS[st] || LEAD_STATUS.novo;
-  const primeiro = (l.nome || '').split(' ')[0];
-  const texto = `Olá ${primeiro}! Aqui é ${db.config.empresa || 'a equipe de vendas'}. Você demonstrou interesse${lote ? ' no lote ' + loteShort(lote) : ''} no nosso site.`;
-  return `<div class="card">
-    <div class="row-between"><div><b>${esc(l.nome)}</b> <span class="badge ${st === 'convertido' ? 'pago' : st === 'descartado' ? 'neutral' : st === 'contatado' ? 'pendente' : 'atrasado'}">${ic} ${lbl}</span></div>
-      <span class="muted small">${esc(fmtDateTime(l.criadoEm))}</span></div>
-    <div class="small mt">📱 ${esc(fmtPhone(l.telefone))}${l.email ? ' · ✉️ ' + esc(l.email) : ''}${lote ? ' · 📦 ' + esc(loteLabel(lote)) + ' (' + statusLabel(lote.status) + ')' : ''}</div>
-    ${l.msg ? `<div class="small mt" style="background:var(--bg);border-radius:8px;padding:8px 10px">“${esc(l.msg)}”</div>` : ''}
-    <div class="btn-row mt">
-      ${l.telefone ? `<a class="btn btn-wa btn-sm" target="_blank" href="${waLink(l.telefone, texto)}" onclick="marcarLead('${l.id}','contatado',1)">💬 WhatsApp</a>` : ''}
-      ${st !== 'contatado' ? `<button class="btn btn-secondary btn-sm" onclick="marcarLead('${l.id}','contatado')">📞 Contatado</button>` : ''}
-      ${lote && lote.status === 'disponivel' ? `<button class="btn btn-primary btn-sm" onclick="reservarDoLead('${l.id}')">📝 Criar reserva</button>` : ''}
-      ${st !== 'descartado' ? `<button class="btn btn-secondary btn-sm" onclick="marcarLead('${l.id}','descartado')">🚫 Descartar</button>` : ''}
-      <button class="btn btn-outline-danger btn-sm" onclick="excluirLead('${l.id}')">🗑️</button>
-    </div></div>`;
-}
-
-function marcarLead(id, status, silencioso) {
-  const l = db.leads.find(x => x.id === id); if (!l || l.status === status) return;
-  upsert('leads', Object.assign({}, l, { status }));
-  if (!silencioso) { renderCurrent(); toast('✅', 'Lead atualizado', (LEAD_STATUS[status] || [])[1] || ''); }
-  else setTimeout(renderCurrent, 400);
-}
-function excluirLead(id) {
-  const l = db.leads.find(x => x.id === id); if (!l) return;
-  if (!confirm(`Excluir o interesse de ${l.nome}?`)) return;
-  removeRec('leads', id); renderCurrent(); toast('🗑️', 'Interesse excluído', '');
-}
-function reservarDoLead(id) {
-  const l = db.leads.find(x => x.id === id); if (!l) return;
-  abrirReservaAdminForm(l.loteId);
-  setTimeout(() => { setVal('rlNome', l.nome); setVal('rlTel', l.telefone); setVal('rlEmail', l.email); setVal('raObs', 'Veio pela vitrine online'); }, 60);
-  marcarLead(id, 'convertido', 1);
-}
-
-// ================================================================ VITRINE PÚBLICA
-function vitrineSlugSugerido(lot) {
-  const base = (lot.nome || 'loteamento').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40);
-  return base || 'loteamento';
-}
-function vitrineUrl(slug) { return location.origin + location.pathname.replace(/[^/]*$/, '') + 'vitrine.html?l=' + encodeURIComponent(slug); }
-
-function cadVitrineHtml() {
-  const lot = curLot();
-  if (!lot) return `<div class="card"><p class="help">Cadastre um loteamento primeiro.</p></div>`;
-  if (!Cloud.active) return `<div class="card"><h3>🌐 Vitrine pública</h3>
-    <p class="help">A vitrine é uma página aberta, sem login, com a planta e os lotes à venda para você mandar por WhatsApp, Instagram ou anúncio. Quem se interessa preenche um formulário e cai na aba <b>Leads</b>.</p>
-    <p class="help mt">Ela funciona na <b>versão em nuvem</b>, porque a página precisa buscar os dados em um servidor. Configure a nuvem em <b>Cadastros › Nuvem</b> para liberar.</p></div>`;
-  const v = Cloud.vitrines.find(x => x.loteamentoId === lot.id) || null;
-  const ls = lotesDo(lot.id); const disp = ls.filter(l => l.status === 'disponivel').length;
-  const semPreco = ls.filter(l => l.status === 'disponivel' && !num(l.preco)).length;
-  const slug = v ? v.slug : vitrineSlugSugerido(lot);
-  const url = vitrineUrl(slug);
-  return `<div class="card"><h3>🌐 Vitrine pública de ${esc(lot.nome)}</h3>
-    <p class="help">Página aberta, sem login, com a planta e os lotes à venda. Mande o link por WhatsApp, coloque no Instagram ou no anúncio. Quem se interessar preenche o formulário e aparece na aba <b>Leads</b>.</p>
-    ${v && v.ativa ? `<div class="mb mt"><div class="k small">Link para divulgar</div>
-      <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px"><input type="text" id="vitLink" readonly value="${esc(url)}" style="flex:1 1 240px;min-width:0;padding:9px 11px;border:1px solid var(--border);border-radius:9px;background:white;color:var(--text);font-size:0.9rem">
-      <button class="btn btn-secondary btn-sm" style="flex:none" onclick="copiarLinkVitrine()">📋 Copiar</button>
-      <a class="btn btn-secondary btn-sm" style="flex:none;text-decoration:none" target="_blank" href="${esc(url)}">↗ Abrir</a></div>
-      <p class="small mt">${disp} lote(s) aparecem como disponíveis${semPreco ? ` · ${semPreco} sem preço aparecem como “valor sob consulta”` : ''}.</p></div>` : ''}
-    <div class="fieldset"><span class="lg">⚙️ Configuração</span>
-      <div class="fg"><label>Endereço do link (só letras, números e hífen)</label><input type="text" id="vitSlug" value="${esc(slug)}" placeholder="residencial-vista-verde"><div class="hint">Fica assim: ${esc(vitrineUrl('seu-endereco'))}</div></div>
-      <div class="fg"><label>Título da página</label><input type="text" id="vitTitulo" value="${esc(v ? v.titulo : '')}" placeholder="${esc(lot.nome)}"></div>
-      <div class="fg"><label>Chamada de vendas</label><textarea id="vitChamada" placeholder="Lotes prontos para construir, com asfalto, água e luz. Entrada facilitada e parcelamento direto.">${esc(v ? v.chamada : '')}</textarea></div>
-      <div class="frow"><div class="fg"><label>WhatsApp de atendimento</label><input type="tel" id="vitZap" value="${esc(v ? v.whatsapp : (db.config.telefone || ''))}" placeholder="(48) 99999-9999"></div>
-        <div class="fg"><label>Mostrar preços</label><select id="vitPreco"><option value="0" ${!v || !v.mostrarPreco ? 'selected' : ''}>Não, “valor sob consulta”</option><option value="1" ${v && v.mostrarPreco ? 'selected' : ''}>Sim, mostrar os valores</option></select></div></div>
-      <label class="check"><input type="checkbox" id="vitAtiva" ${!v || v.ativa ? 'checked' : ''}> Vitrine no ar</label>
-    </div>
-    <div class="btn-row">
-      <button class="btn btn-primary" onclick="salvarVitrine()">${v ? '💾 Salvar alterações' : '🌐 Publicar vitrine'}</button>
-      ${v ? `<button class="btn btn-outline-danger" onclick="removerVitrine()">Remover do ar</button>` : ''}
-    </div>
-    <p class="help mt">O visitante vê quadra, número, área, situação e o preço (se você quiser). Matrícula, observações internas, reservas, vendas e dados dos corretores <b>nunca</b> aparecem.</p></div>`;
-}
-
-function copiarLinkVitrine() {
-  const el = document.getElementById('vitLink'); if (!el) return;
-  el.select(); el.setSelectionRange(0, 99999);
-  const done = () => toast('📋', 'Link copiado', 'Cole no WhatsApp, no Instagram ou no anúncio.');
-  if (navigator.clipboard) navigator.clipboard.writeText(el.value).then(done, () => { document.execCommand('copy'); done(); });
-  else { document.execCommand('copy'); done(); }
-}
-
-async function salvarVitrine() {
-  const lot = curLot(); if (!lot || !Cloud.active) return;
-  const slug = val('vitSlug').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9-]+/g, '-').replace(/^-|-$/g, '');
-  if (slug.length < 3) { toast('⚠️', 'Endereço muito curto', 'Use ao menos 3 letras.', true); return; }
-  try {
-    await Cloud.salvarVitrine({ loteamentoId: lot.id, slug, ativa: !!$('#vitAtiva').checked, mostrarPreco: val('vitPreco') === '1', titulo: val('vitTitulo'), chamada: val('vitChamada'), whatsapp: val('vitZap') });
-    logAct(`Vitrine pública ${$('#vitAtiva').checked ? 'publicada' : 'despublicada'}: ${lot.nome}`);
-    renderCadastros();
-    toast('✅', 'Vitrine salva', $('#vitAtiva') && $('#vitAtiva').checked ? 'O link já está no ar.' : 'A vitrine ficou fora do ar.');
-  } catch (e) { toast('⚠️', 'Não foi possível salvar', e.message, true); }
-}
-async function removerVitrine() {
-  const lot = curLot(); if (!lot || !Cloud.active) return;
-  if (!confirm('Tirar a vitrine do ar? O link para de funcionar para quem já recebeu.')) return;
-  try { await Cloud.apagarVitrine(lot.id); logAct(`Vitrine pública removida: ${lot.nome}`); renderCadastros(); toast('🌐', 'Vitrine removida', ''); }
-  catch (e) { toast('⚠️', 'Não foi possível remover', e.message, true); }
-}

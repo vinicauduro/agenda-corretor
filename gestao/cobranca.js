@@ -54,7 +54,7 @@ const FAIXAS_DIAS = [['1-15', 1, 15], ['16-30', 16, 30], ['31-60', 31, 60], ['61
 
 // ================================================================ PAINEL
 function renderCobranca() {
-  const esc0 = escopoAtual(); const v = $('#av-recebiveis');
+  const esc0 = escopoAtual(); const v = $('#av-cobranca');
   if (!pode('cobranca.ver')) { v.innerHTML = semPermissaoHtml('cobrança'); return; }
   const f = state.filters.cob = state.filters.cob || { faixa: 'todas', busca: '' };
   const todos = inadimplentes(esc0);
@@ -70,9 +70,7 @@ function renderCobranca() {
   const semCobranca = todos.filter(x => !x.ultima).length;
 
   v.innerHTML = `
-    <div class="chips">${[['aberto', 'Em aberto'], ['atrasado', 'Atrasados'], ['pago', 'Pagos'], ['all', 'Todos']].map(([k, l]) =>
-      `<div class="chip" onclick="mostrarRecebiveis('${k}')">${l}</div>`).join('')}
-      <div class="chip active">🔔 Cobrança<span class="n">${todos.length}</span></div></div>
+    ${db.loteamentos.length > 1 ? `<div class="filters">${escopoSelectHtml('renderCobranca()')}</div>` : ''}
     <div class="kpi-grid">
       <div class="kpi c-red"><div class="lbl">Em atraso</div><div class="val">${fmtMoneyShort(total)}</div><div class="sub">${todos.length} contrato(s)</div></div>
       <div class="kpi c-amber"><div class="lbl">Inadimplência</div><div class="val">${carteira ? fmtNum(total / carteira * 100, 1) : '0,0'}%</div><div class="sub">da carteira a receber</div></div>
@@ -139,7 +137,7 @@ function abrirCobranca(vendaId) {
       <div class="frow"><div class="fg"><label>Etapa da régua</label><select id="cbFaixa" onchange="cbTrocaFaixa('${vendaId}')">${reguaConfig().map(f => `<option value="${f.dias}" ${f.dias === faixa.dias ? 'selected' : ''}>${esc(f.nome)} — a partir de ${f.dias} dias</option>`).join('')}</select></div>
         <div class="fg"><label>Canal</label><select id="cbCanal">${CANAIS.map(([k, l2]) => `<option value="${k}" ${k === 'whatsapp' && !c.telefone ? 'disabled' : ''}>${l2}</option>`).join('')}</select></div></div>
       <div class="fg"><label>Mensagem</label><textarea id="cbTexto" style="min-height:130px">${esc(texto)}</textarea>
-        <div class="hint">Pode editar antes de enviar. O texto padrão de cada etapa fica em Cadastros › Cobrança.</div></div>
+        <div class="hint">Pode editar antes de enviar. O texto padrão de cada etapa fica em Configurações › Régua de cobrança.</div></div>
       <div class="fg"><label>Observação interna (opcional)</label><input type="text" id="cbObs" placeholder="Cliente pediu prazo até dia 20"></div>
       <div class="table-wrap"><table class="tbl"><thead><tr><th>Parcela</th><th>Venceu</th><th class="num">Valor</th><th class="num">Atualizado</th></tr></thead>
       <tbody>${it.parcelas.map(r => `<tr><td>${esc(r.descricao)}</td><td>${fmtDate(r.vencimento)}</td><td class="num">${fmtMoney(recRestante(r))}</td><td class="num">${fmtMoney(recAtualizado(r))}</td></tr>`).join('')}</tbody></table></div>`,
@@ -223,10 +221,10 @@ function salvarRegua(n) {
   }
   if (!regua.length) { toast('⚠️', 'Régua vazia', 'Preencha ao menos uma etapa.', true); return; }
   setConfig({ regua: regua.sort((a, b) => a.dias - b.dias), pix: val('cgPix') });
-  renderCadastros(); toast('✅', 'Régua salva', `${regua.length} etapa(s)`);
+  renderCurrent(); toast('✅', 'Régua salva', `${regua.length} etapa(s)`);
 }
 function restaurarRegua() {
   if (!confirm('Voltar aos textos padrão da régua?')) return;
   setConfig({ regua: REGUA_PADRAO });
-  renderCadastros(); toast('↩️', 'Textos padrão restaurados', '');
+  renderCurrent(); toast('↩️', 'Textos padrão restaurados', '');
 }

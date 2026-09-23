@@ -174,10 +174,10 @@ function abrirConviteForm() {
     footer: `<button class="btn btn-secondary" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" onclick="criarConvite()">Gerar link</button>` });
 }
 async function criarConvite() {
-  try { const cod = await Cloud.criarConvite(val('cvPapel'), val('cvDesc'), { maxUsos: val('cvUsos'), dias: val('cvDias') }); closeModal(); renderCadastros(); toast('✅', 'Convite criado', 'Código ' + cod); }
+  try { const cod = await Cloud.criarConvite(val('cvPapel'), val('cvDesc'), { maxUsos: val('cvUsos'), dias: val('cvDias') }); closeModal(); renderCurrent(); toast('✅', 'Convite criado', 'Código ' + cod); }
   catch (e) { toast('⚠️', 'Falha', e.message, true); }
 }
-async function apagarConvite(id) { if (!confirm('Excluir este convite? Quem já entrou continua na equipe.')) return; try { await Cloud.apagarConvite(id); renderCadastros(); } catch (e) { toast('⚠️', 'Falha', e.message, true); } }
+async function apagarConvite(id) { if (!confirm('Excluir este convite? Quem já entrou continua na equipe.')) return; try { await Cloud.apagarConvite(id); renderCurrent(); } catch (e) { toast('⚠️', 'Falha', e.message, true); } }
 function abrirMembroForm(id) {
   const m = Cloud.membros.find(x => x.id === id); if (!m) return;
   const eu = m.userId === Cloud.user.id;
@@ -192,7 +192,7 @@ function abrirMembroForm(id) {
 async function salvarMembro(id) {
   const m = Cloud.membros.find(x => x.id === id); if (!m) return;
   const upd = Object.assign({}, m, { nome: val('mbNome'), telefone: val('mbTel'), creci: val('mbCreci'), imobiliaria: val('mbImob'), papel: $('#mbPapel').disabled ? m.papel : val('mbPapel'), ativo: $('#mbAtivo').disabled ? m.ativo : checked('mbAtivo') });
-  try { await Cloud.salvarMembro(upd); closeModal(); renderCadastros(); toast('✅', 'Membro atualizado', ''); }
+  try { await Cloud.salvarMembro(upd); closeModal(); renderCurrent(); toast('✅', 'Membro atualizado', ''); }
   catch (e) { toast('⚠️', 'Falha', e.message, true); }
 }
 function cadContaHtml() {
