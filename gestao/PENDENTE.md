@@ -633,6 +633,23 @@ gaveta no celular sem rolagem lateral. As outras 17 suítes e os testes do banco
 
 ---
 
+## 7n. Janela fechando ao trocar um valor — corrigido (23/09)
+
+Você selecionava o valor do imóvel, os juros ou a quantidade de parcelas arrastando o mouse
+para digitar por cima, e a janela fechava. A causa: o fundo escuro fechava a janela com
+qualquer clique que terminasse nele. Ao selecionar arrastando, o mouse passa da borda da
+janela antes de soltar, e o navegador entrega esse clique ao fundo.
+
+Agora o fundo só fecha a janela quando o clique começa **e** termina nele. Vale para todas
+as janelas do sistema. Clicar de propósito no fundo, o X e a tecla Esc continuam fechando
+como antes.
+
+- [ ] Refazer o gesto no valor, nos juros e nas parcelas e ver que a janela fica.
+
+O `test28` reproduz o gesto nos três campos: falhava no código antigo e passa no novo.
+
+---
+
 ## 7m. Contratos › Clientes (23/09)
 
 Pedido seu: dentro de Contratos, uma sub-seção de clientes para listar, cadastrar, editar e

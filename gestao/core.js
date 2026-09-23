@@ -1418,7 +1418,16 @@ async function carregarDemo() {
 // ---------------------------------------------------------------- boot
 document.addEventListener('DOMContentLoaded', async () => {
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('./sw.js').catch(() => {});
-  $('#modalOverlay').addEventListener('click', e => { if (e.target.id === 'modalOverlay') closeModal(); });
+  /* O fundo escuro fecha a janela só quando o clique começa e termina nele. Quem seleciona o
+     valor de um campo arrastando o mouse costuma soltar além da borda da janela, e o
+     navegador entrega esse clique ao fundo: a janela fechava no meio da digitação. */
+  let apertouNoFundo = false, soltouNoFundo = false;
+  $('#modalOverlay').addEventListener('mousedown', e => { apertouNoFundo = e.target.id === 'modalOverlay'; });
+  $('#modalOverlay').addEventListener('mouseup', e => { soltouNoFundo = e.target.id === 'modalOverlay'; });
+  $('#modalOverlay').addEventListener('click', e => {
+    if (e.target.id === 'modalOverlay' && apertouNoFundo && soltouNoFundo) closeModal();
+    apertouNoFundo = soltouNoFundo = false;
+  });
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('#modalOverlay').classList.contains('open')) closeModal(); });
   state.role = 'landing';
   showScreen('landing');
