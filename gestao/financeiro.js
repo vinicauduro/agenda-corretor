@@ -11,10 +11,9 @@ function filtroRec() {
 function mostrarRecebiveis(st) {
   const f = filtroRec();
   if (st) f.status = st;
-  state.sub.rec = 'lista';
   switchTab('recebiveis');
 }
-function abrirPainelCobranca() { filtroRec(); state.sub.rec = 'cobranca'; switchTab('recebiveis'); }
+function abrirPainelCobranca() { filtroRec(); switchTab('cobranca'); }
 function renderRecebiveis() {
   const esc0 = escopoAtual(); const v = $('#av-recebiveis');
   /* A tela abre no mês corrente, não na carteira inteira: um loteamento com trezentas
@@ -44,7 +43,6 @@ function renderRecebiveis() {
       <div class="kpi c-blue"><div class="lbl">Vence este mês</div><div class="val">${fmtMoneyShort(mes)}</div><div class="sub">${monthLabel(mesKey)}</div></div>
     </div>
     <div class="chips">${[['aberto', 'Em aberto'], ['atrasado', 'Atrasados'], ['pago', 'Pagos'], ['all', 'Todos']].map(([k, l]) => `<div class="chip ${f.status === k ? 'active' : ''}" onclick="mostrarRecebiveis('${k}')">${l}<span class="n">${all.filter(grupos[k]).length}</span></div>`).join('')}
-      <div class="chip" onclick="abrirPainelCobranca()">🔔 Cobrança<span class="n">${inadimplentes(esc0).length}</span></div>
       ${contasComLayout().length ? `<div class="chip" onclick="abrirGerarCobrancas()">🧾 Gerar cobranças<span class="n">${parcelasDoMes(esc0, mesAtual()).filter(r => !registradaNoBanco(r) && !bloqueioRemessa(r)).length}</span></div>
       <div class="chip" onclick="abrirRetorno()">📥 Retorno</div>` : ''}</div>
     <div class="filters">
@@ -160,17 +158,24 @@ function imprimirExtrato(vendaId) {
 
 // ================================================================ CUSTOS
 function aSetFiltroCusto(st) { state.filters.custos = Object.assign(state.filters.custos || {}, { status: st }); switchTab('custos'); }
+/* Mesma tela em dois lugares. Dentro do empreendimento é a obra dele, com o orçamento. No
+   menu Financeiro › A pagar é a empresa inteira, com o filtro de empreendimento em cima e o
+   orçado × realizado só quando um empreendimento está escolhido — somar orçamentos de
+   obras diferentes não diz nada. */
 function renderCustos(alvo) {
-  const lot = curLot(); const v = alvo || alvoDoEmp('av-custos');
+  const global = state.tab === 'custos';
+  const escopo = global ? escopoAtual() : curLot().id;
+  const lot = escopo ? getLoteamento(escopo) : null;
+  const v = alvo || alvoDoEmp('av-custos');
   const f = state.filters.custos = state.filters.custos || { status: 'all', cat: 'all', mes: 'all', busca: '' };
-  const all = custosDo(lot.id);
+  const all = custosDo(escopo);
   const meses = [...new Set(all.map(c => monthKey(c.dataCompetencia)))].sort().reverse();
   const list = all.filter(c => (f.status === 'all' || custoStatus(c) === f.status) && (f.cat === 'all' || c.categoriaId === f.cat) && (f.mes === 'all' || monthKey(c.dataCompetencia) === f.mes) && (!f.busca || (c.descricao + ' ' + (c.fornecedor || '')).toLowerCase().includes(f.busca.toLowerCase())))
     .sort((a, b) => (b.dataCompetencia || '').localeCompare(a.dataCompetencia || ''));
   const tot = all.reduce((s, c) => s + num(c.valor), 0), pago = all.filter(c => c.status === 'pago').reduce((s, c) => s + num(c.valor), 0);
   const atr = all.filter(c => custoStatus(c) === 'atrasado').reduce((s, c) => s + num(c.valor), 0);
   const prox = all.filter(c => c.status !== 'pago' && c.vencimento && c.vencimento >= todayStr() && daysBetween(todayStr(), c.vencimento) <= 30).reduce((s, c) => s + num(c.valor), 0);
-  const orcTotal = Object.values(lot.orcamento || {}).reduce((s, x) => s + num(x), 0);
+  const orcTotal = lot ? Object.values(lot.orcamento || {}).reduce((s, x) => s + num(x), 0) : 0;
   const porCat = {}; all.forEach(c => { porCat[c.categoriaId] = (porCat[c.categoriaId] || 0) + num(c.valor); });
   const catData = Object.entries(porCat).map(([id, value]) => { const c = getCategoria(id); return { label: c ? c.nome : 'Sem categoria', color: c ? c.cor : '#94a3b8', value }; }).sort((a, b) => b.value - a.value);
   v.innerHTML = `
@@ -180,17 +185,18 @@ function renderCustos(alvo) {
       <div class="kpi c-amber"><div class="lbl">A pagar</div><div class="val">${fmtMoneyShort(tot - pago)}</div><div class="sub">${fmtMoneyShort(prox)} nos próximos 30 dias</div></div>
       <div class="kpi c-red"><div class="lbl">Vencidos</div><div class="val">${fmtMoneyShort(atr)}</div><div class="sub">${all.filter(c => custoStatus(c) === 'atrasado').length} conta(s)</div></div>
     </div>
+    ${global ? `<div class="filters">${escopoSelectHtml('renderCustos()')}</div>` : ''}
     <div class="grid2">
       <div class="card"><h3>Custos por categoria</h3><canvas class="chart" id="chartCustos" height="190"></canvas><div class="legend-list" id="chartCustosLegend"></div></div>
-      <div class="card"><h3>Orçado × realizado <span class="h-actions"><button class="btn btn-secondary btn-sm" onclick="abrirOrcamentoForm()">✏️</button></span></h3>
-        ${db.categorias.filter(c => num((lot.orcamento || {})[c.id]) > 0).map(c => { const o = lot.orcamento[c.id]; const real = porCat[c.id] || 0; const pct = Math.round(real / o * 100); return `<div class="mb"><div class="row-between small"><span><span class="dot" style="background:${c.cor}"></span> ${esc(c.nome)}</span><span class="muted">${fmtMoneyShort(real)} / ${fmtMoneyShort(o)} · ${pct}%</span></div><div class="progress"><div class="${pct > 100 ? 'over' : pct >= 90 ? 'warn' : ''}" style="width:${Math.min(100, pct)}%"></div></div></div>`; }).join('') || '<p class="help">Defina o orçamento por categoria para acompanhar aqui.</p>'}</div>
+      ${!lot ? `<div class="card"><h3>Orçado × realizado</h3><p class="help">Escolha um empreendimento no filtro acima para comparar com o orçamento da obra dele.</p></div>` : `<div class="card"><h3>Orçado × realizado <span class="h-actions"><button class="btn btn-secondary btn-sm" onclick="setCurLotSilencioso('${lot.id}');abrirOrcamentoForm()">✏️</button></span></h3>
+        ${db.categorias.filter(c => num((lot.orcamento || {})[c.id]) > 0).map(c => { const o = lot.orcamento[c.id]; const real = porCat[c.id] || 0; const pct = Math.round(real / o * 100); return `<div class="mb"><div class="row-between small"><span><span class="dot" style="background:${c.cor}"></span> ${esc(c.nome)}</span><span class="muted">${fmtMoneyShort(real)} / ${fmtMoneyShort(o)} · ${pct}%</span></div><div class="progress"><div class="${pct > 100 ? 'over' : pct >= 90 ? 'warn' : ''}" style="width:${Math.min(100, pct)}%"></div></div></div>`; }).join('') || '<p class="help">Defina o orçamento por categoria para acompanhar aqui.</p>'}</div>`}
     </div>
     <div class="chips">${[['all', 'Todos'], ['pendente', 'A pagar'], ['atrasado', 'Vencidos'], ['pago', 'Pagos']].map(([k, l]) => `<div class="chip ${f.status === k ? 'active' : ''}" onclick="state.filters.custos.status='${k}';renderCustos()">${l}<span class="n">${k === 'all' ? all.length : all.filter(c => custoStatus(c) === k).length}</span></div>`).join('')}</div>
     <div class="filters">
       <select onchange="state.filters.custos.cat=this.value;renderCustos()"><option value="all">Todas as categorias</option>${db.categorias.map(c => `<option value="${c.id}" ${f.cat === c.id ? 'selected' : ''}>${esc(c.nome)}</option>`).join('')}</select>
       <select onchange="state.filters.custos.mes=this.value;renderCustos()"><option value="all">Todos os meses</option>${meses.map(m => `<option value="${m}" ${f.mes === m ? 'selected' : ''}>${monthLabel(m)}</option>`).join('')}</select>
       <input type="text" placeholder="🔎 Descrição ou fornecedor" value="${esc(f.busca)}" oninput="aSetFiltro('custos','busca',this.value,renderCustos,this)">
-      <button class="btn btn-primary btn-sm" onclick="abrirCustoForm()">＋ Lançar</button>
+      <button class="btn btn-primary btn-sm" onclick="${global ? 'novoCustoEscolhendoEmp()' : 'abrirCustoForm()'}">＋ Lançar</button>
     </div>
     <p class="small muted mb">${list.length} lançamento(s) · ${fmtMoney(list.reduce((s, c) => s + num(c.valor), 0))}</p>
     ${list.length ? list.map(c => custoRowHtml(c)).join('') : `<div class="empty"><div class="ic">🧾</div><p>Nenhum custo lançado.<br>Toque em <b>Lançar</b> para registrar despesas da obra, documentação, marketing…</p></div>`}`;
@@ -198,11 +204,17 @@ function renderCustos(alvo) {
 }
 function custoRowHtml(c) {
   const st = custoStatus(c); const cat = getCategoria(c.categoriaId);
-  return `<div class="item ${st}" onclick="abrirCustoForm('${c.id}')">
-    <div class="info"><div class="title">${esc(c.descricao)}</div>
+  const emp = state.tab === 'custos' && !escopoAtual() ? getLoteamento(c.loteamentoId) : null;
+  return `<div class="item ${st}" onclick="setCurLotSilencioso('${c.loteamentoId}');abrirCustoForm('${c.id}')">
+    <div class="info"><div class="title">${esc(c.descricao)}${emp ? ` <span class="tiny muted">· ${esc(emp.nome)}</span>` : ''}</div>
       <div class="meta"><span class="badge" style="background:${cat ? cat.cor : '#94a3b8'};color:white">${cat ? esc(cat.nome) : 'Sem categoria'}</span>${c.fornecedor ? `<span>· ${esc(c.fornecedor)}</span>` : ''}<span>· ${fmtDate(c.dataCompetencia)}</span>${c.vencimento && st !== 'pago' ? `<span ${st === 'atrasado' ? 'style="color:var(--danger)"' : ''}>· vence ${fmtDate(c.vencimento)}</span>` : ''}${st === 'pago' && c.dataPagamento ? `<span>· pago em ${fmtDate(c.dataPagamento)}</span>` : ''}</div></div>
     <div class="side"><div class="value">${fmtMoney(c.valor)}</div><span class="badge ${st}">${statusLabel(st)}</span>
       <div class="btns" onclick="event.stopPropagation()">${st !== 'pago' ? `<button class="btn-icon ok" title="Marcar como pago" onclick="pagarCusto('${c.id}')">💵</button>` : ''}<button class="btn-icon del" onclick="excluirCusto('${c.id}')">🗑️</button></div></div></div>`;
+}
+/* Lançar a partir da lista da empresa: primeiro diz de qual empreendimento é. (A despesa da
+   empresa sem empreendimento entra na próxima fase.) */
+function novoCustoEscolhendoEmp() {
+  comEmpreendimento('🧾 Nova despesa', 'De qual empreendimento é esta despesa?', () => abrirCustoForm());
 }
 function abrirCustoForm(id) {
   const lot = curLot(); const c = id ? db.custos.find(x => x.id === id) : null;

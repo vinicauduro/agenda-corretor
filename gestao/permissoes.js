@@ -29,8 +29,6 @@ const PERMISSOES = [
     ['relatorios.ver', 'Ver os relatórios'],
     ['documentos.editar', 'Editar modelos de proposta e contrato'],
     ['indices.editar', 'Cadastrar índices e lançar valores'],
-    ['vitrine.gerenciar', 'Publicar a vitrine pública'],
-    ['leads.ver', 'Ver e atender os leads'],
     ['equipe.gerenciar', 'Gerenciar a equipe e os convites'],
     ['config.editar', 'Alterar configurações da empresa'],
     ['backup.usar', 'Fazer backup e restaurar dados']
@@ -46,7 +44,7 @@ const PERM_PADRAO = {
     'comissao.gerenciar': true,
     'financeiro.ver': true, 'financeiro.baixar': true, 'financeiro.antecipar': true,
     'cobranca.ver': true, 'cobranca.registrar': true, 'custos.ver': true, 'custos.editar': true,
-    'relatorios.ver': true, 'documentos.editar': false, 'indices.editar': true, 'vitrine.gerenciar': false, 'leads.ver': true,
+    'relatorios.ver': true, 'documentos.editar': false, 'indices.editar': true,
     'equipe.gerenciar': false, 'config.editar': false, 'backup.usar': false
   },
   corretor: { nenhuma: true }   // o corretor usa a área dele, não a administração
@@ -80,17 +78,30 @@ function pode(chave) {
 /* Papel atual por extenso, para as telas. */
 function meuPapel() { return Cloud.active ? (Cloud.papel || 'corretor') : 'dono'; }
 
-/* Abas da administração que a pessoa enxerga. */
-const TAB_PERM = { relatorios: 'relatorios.ver', vendas: 'vendas.criar', recebiveis: 'financeiro.ver' };
-/* Abas que só fazem sentido em loteamento com planta. Numa carteira de imóveis avulsos
-   não existe planta, lote nem reserva de lote — some tudo isso da barra. */
+/* Itens do menu lateral e a permissão que cada um pede. */
+const TAB_PERM = {
+  reservas: 'reservas.aprovar', vendas: 'vendas.criar', recebiveis: 'financeiro.ver',
+  cobranca: 'cobranca.ver', boletos: 'financeiro.ver', custos: 'custos.ver',
+  indices: 'indices.editar', relatorios: 'relatorios.ver'
+};
+function abaPermitida(tab) {
+  if (!Cloud.active) return true;
+  const chave = TAB_PERM[tab];
+  return !chave || pode(chave) || (tab === 'vendas' && pode('vendas.editar'));
+}
+/* Esconde do menu o que a pessoa não pode ver, e o título do grupo que ficou vazio. */
 function aplicarPermissoesNasAbas() {
   let precisaTrocar = false;
   $$('#screen-admin .tab').forEach(t => {
-    const chave = TAB_PERM[t.dataset.tab];
-    const ok = !Cloud.active || !chave || pode(chave) || (t.dataset.tab === 'vendas' && pode('vendas.editar'));
+    const ok = abaPermitida(t.dataset.tab);
     t.style.display = ok ? '' : 'none';
     if (!ok && state.tab === t.dataset.tab) precisaTrocar = true;
+  });
+  const novo = $('#aNovoContrato');
+  if (novo) novo.style.display = pode('vendas.criar') ? '' : 'none';
+  $$('#screen-admin .aside-grupo').forEach(g => {
+    const itens = $$(`#screen-admin [data-g="${g.dataset.grupo}"]`);
+    g.style.display = itens.some(i => i.style.display !== 'none') ? '' : 'none';
   });
   if (precisaTrocar) {
     const primeira = $$('#screen-admin .tab').find(t => t.style.display !== 'none');
@@ -113,7 +124,7 @@ function cadPermissoesHtml() {
   return `<div class="card"><h3>🔐 Permissões por função</h3>
     <p class="help">O <b>papel</b> define o que o banco de dados libera para a pessoa. Aqui você afina, dentro do papel, o que ela vê e pode fazer no aplicativo. O dono sempre pode tudo.</p>
     ${!Cloud.active ? '<div class="alert info" style="cursor:default"><span>No modo só deste dispositivo existe um único administrador, que pode tudo. As permissões valem na versão em nuvem, com login por pessoa.</span></div>' : ''}
-    <div class="subtabs">${papeis.map(([k, l]) => `<div class="chip ${sub === k ? 'active' : ''}" onclick="state.sub.perm='${k}';renderCadastros()">${l}</div>`).join('')}</div>
+    <div class="subtabs">${papeis.map(([k, l]) => `<div class="chip ${sub === k ? 'active' : ''}" onclick="state.sub.perm='${k}';renderCurrent()">${l}</div>`).join('')}</div>
     <p class="help">${sub === 'corretor'
       ? 'O corretor usa a área dele: planta, lotes, as próprias reservas e as próprias comissões. Marque abaixo só o que ele também poderá fazer na administração.'
       : sub === 'financeiro'
@@ -134,13 +145,13 @@ function salvarPermissoes(papel) {
   todas[papel] = mapa;
   setConfig({ permissoes: todas });
   logAct(`Permissões do papel ${papel} atualizadas`);
-  renderCadastros(); renderCurrent();
+  renderCurrent(); renderCurrent();
   toast('✅', 'Permissões salvas', statusLabel(papel));
 }
 function restaurarPermissoes(papel) {
   const todas = Object.assign({}, permsSalvas());
   delete todas[papel];
   setConfig({ permissoes: todas });
-  renderCadastros(); renderCurrent();
+  renderCurrent(); renderCurrent();
   toast('↩️', 'Padrão restaurado', statusLabel(papel));
 }

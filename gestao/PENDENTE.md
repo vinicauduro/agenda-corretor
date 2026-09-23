@@ -1,7 +1,7 @@
 # Pendências para testar no computador
 
 Lista do que foi construído e ainda não foi testado por você, mais as decisões que dependem da
-sua conferência. Atualizada em 17/09/2026, depois da revisão de segurança e da separação do perfil financeiro.
+sua conferência. Atualizada em 23/09/2026, na mudança para o menu lateral (seção 7l).
 
 ---
 
@@ -15,12 +15,12 @@ sua conferência. Atualizada em 17/09/2026, depois da revisão de segurança e d
       coluna em % ao mês, e agora entrou a **tabela de vendedores** e as colunas de
       qualificação do imóvel (descrição da matrícula, endereço do lote, cartório, código
       IBGE). Esta última é necessária: sem rodar, o cadastro de vendedores não sincroniza.
+      Em 23/09 entrou mais uma: o schema agora **apaga as duas funções públicas da vitrine**
+      (`vitrine_dados` e `registrar_lead`). Rodando, o banco deixa de ter qualquer porta aberta
+      para quem não tem login.
 - [ ] Abrir o app e forçar a atualização (Ctrl+Shift+R no computador) para pegar a versão nova.
       Endereço: https://vinicauduro.github.io/agenda-corretor/gestao/
-- [ ] Conferir a barra nova: **Painel · 🏗️ Empreendimentos · Vendas · Recebíveis ·
-      Relatórios · Cadastros**. Planta, lotes, reservas, obra e leads agora ficam dentro do
-      empreendimento; em Cadastros estão Equipe, Permissões, Categorias, Documentos, Índices,
-      Cobrança, Banco, Vitrine, Configurações, Nuvem e Backup — mais **Vendedores**, novo.
+- [ ] Conferir o **menu lateral novo** (seção 7l). A barra de abas em cima saiu.
 
 ---
 
@@ -41,7 +41,7 @@ nos próximos dias, com as alterações do loteamento — quando chegar, eu reim
 ## 2. Nuvem, equipe e corretores
 
 - [ ] Criar conta, criar a empresa e entrar como dono.
-- [ ] Gerar um convite em Cadastros › Equipe e testar em outro celular ou janela anônima.
+- [ ] Gerar um convite em Configurações › Equipe e testar em outro celular ou janela anônima.
 - [ ] Conferir que o corretor vê a planta e os preços, mas não vê recebíveis, custos nem as
       reservas dos outros.
 - [ ] Testar a reserva pelo corretor e a aprovação por você.
@@ -50,9 +50,9 @@ nos próximos dias, com as alterações do loteamento — quando chegar, eu reim
 
 ## 3. Documentos: proposta e contrato
 
-- [ ] Preencher **Cadastros › Configurações › Dados da empresa para documentos**: CNPJ,
+- [ ] Preencher **Configurações › Dados da empresa**: CNPJ,
       endereço, cidade do foro, quem assina e CPF de quem assina.
-- [ ] Em **Cadastros › Documentos**, colar o **seu** contrato de promessa de compra e venda no
+- [ ] Em **Configurações › Modelos de documento**, colar o **seu** contrato de promessa de compra e venda no
       lugar do modelo de exemplo, marcando as partes variáveis com os campos da paleta.
 - [ ] Fazer o mesmo com a **sua** proposta.
 - [ ] Usar o botão **Ver exemplo** para conferir o texto preenchido antes de salvar.
@@ -68,7 +68,7 @@ hora de gerar e ficam guardados para a próxima.
 
 ## 4. Índices de correção
 
-- [ ] Em **Cadastros › Índices**, criar IGP-M, INPC, IPCA e CUB.
+- [ ] Em **Financeiro › Índices**, criar IGP-M, INPC, IPCA e CUB.
 - [ ] Lançar alguns meses de histórico, de preferência colando a lista de uma planilha.
 - [ ] Escolher o índice e o mês base em uma venda.
 - [ ] Conferir nos recebíveis se o valor corrigido bate com a sua planilha.
@@ -117,7 +117,7 @@ o cliente não usou. É o que já está implementado. Sem taxa de antecipação 
 
 ## 6. Inadimplência e cobrança
 
-- [ ] Preencher a **chave PIX** em Cadastros › Cobrança.
+- [ ] Preencher a **chave PIX** em Configurações › Régua de cobrança.
 - [ ] Revisar os cinco textos da régua e ajustar ao seu tom.
 - [ ] Abrir o painel pelo chip **🔔 Cobrança** na aba Recebíveis.
 - [ ] Testar uma cobrança de verdade: escolher etapa, editar a mensagem, abrir o WhatsApp e ver
@@ -126,21 +126,19 @@ o cliente não usou. É o que já está implementado. Sem taxa de antecipação 
 
 ---
 
-## 7. Vitrine pública e leads
+## 7. ~~Vitrine pública e leads~~ — retiradas em 23/09
 
-- [ ] Publicar a vitrine do Hessen em Cadastros › Vitrine e abrir o link no celular.
-- [ ] Mandar um interesse de teste e ver chegar na aba Leads.
-- [x] ~~Decidir se os preços aparecem~~ — **decidido em 17/09: "valor sob consulta"**. A
-      vitrine já nasce assim, e o preço nem sai do banco para quem não tem login. Se um dia
-      quiser mostrar, é um seletor em Cadastros › Vitrine.
-
-**Combinado:** a aba Leads fica em segundo plano. Existe e funciona, mas não é prioridade.
+Decisão sua: a empresa administra o comercial, quem vende são os corretores. Saíram a tela de
+leads, a publicação da vitrine, a página pública (`vitrine.html`) e as duas funções do banco
+que atendiam visitante sem login. Um link de vitrine que já tenha sido mandado para alguém
+deixa de abrir. As tabelas `vitrines` e `leads` continuam no banco, sem uso, para não apagar
+nada que exista; dá para removê-las quando você quiser.
 
 ---
 
 ## 7b. Permissões por função
 
-- [ ] Em **Cadastros › 🔐 Permissões**, revisar o que cada papel pode.
+- [ ] Em **Configurações › 🔐 Permissões**, revisar o que cada papel pode.
 - [ ] Convidar alguém como financeiro e conferir que ele vê recebíveis, despesas, cobrança e
       vendas, mas não vê reservas nem consegue editar lote.
 - [ ] Com o financeiro logado, tentar mudar o preço de um lote (Empreendimentos › o
@@ -204,7 +202,7 @@ e linha digitável idênticos ao boleto impresso.
   para remessa" até você gerar. A remessa de alteração baixa o título antigo e registra um
   novo; a de pagamento por fora só baixa.
 - **📥 Retorno** — lê o arquivo, mostra o que entendeu e só dá baixa depois da confirmação.
-- **Cadastros › 🏦 Banco** — convênio, carteira, instruções padrão (multa, juros ao dia,
+- **Configurações › 🏦 Contas bancárias** — convênio, carteira, instruções padrão (multa, juros ao dia,
   desconto, protesto, baixa, mensagens) e histórico de remessas. Multa é por conta e pode ser
   zero: com zero, o registro de multa nem sai no arquivo.
 
@@ -221,7 +219,7 @@ Pela mesma fonte confirmei as posições do **retorno** (valor recebido 254-266,
 escrito de memória com erro de uma posição em alguns campos.
 
 - [ ] Rodar o `schema.sql` (entraram `remessas` e as colunas `banco_valor`/`banco_venc`).
-- [ ] Ajustar a **multa** em Cadastros › Banco (o arquivo atual é de aluguel, 10%).
+- [ ] Ajustar a **multa** em Configurações › Contas bancárias (o arquivo atual é de aluguel, 10%).
 - [ ] **Escolher a faixa do nosso número — corrigido em 17/09.** Eu tinha dito "comece em
       2637". **Estava errado**: 2636 era só o maior número da única remessa que você mandou, de
       02/09. O boleto que você enviou tem nosso número **1819** e foi processado em 17/09, ou
@@ -260,7 +258,7 @@ conferência, e o sistema agora se recusa a chutar:
 - **Códigos de instrução (protestar, baixar automaticamente).** Sua remessa vem com `00 00`,
   ou seja, sem instrução. Eu estava emitindo códigos que deduzi — e um código errado pode
   fazer o banco **protestar um comprador por engano**. Agora só sai o código que você digitar
-  em Cadastros › Banco, copiado do manual do seu banco. Em branco, o banco não age sozinho.
+  em Configurações › Contas bancárias, copiado do manual do seu banco. Em branco, o banco não age sozinho.
   Os campos "protestar após N dias" continuam valendo para o texto impresso no boleto.
 - **Desconto e abatimento**: os seus arquivos vêm zerados nesses campos.
 - **Ocorrência 03 (recusa)**: nenhum dos quatro retornos tinha recusa. A leitura segue a
@@ -277,6 +275,9 @@ Storage e o link segue na mensagem.
 ---
 
 ## 7e. Empreendimentos e navegação nova
+
+> Substituída pela 7l em 23/09. Continua valendo a ideia de empreendimento e carteira; a barra
+> de seis abas virou o menu lateral, e reservas saíram do empreendimento para o menu.
 
 Reorganizado em 17/09, conforme você propôs. O sistema deixa de girar em torno de um
 loteamento por vez e passa a gerir **a empresa inteira**.
@@ -311,7 +312,7 @@ um arquivo de remessa por convênio — isso nunca teve a ver com empreendimento
 - **O retorno descobre a conta sozinho**, pela agência, conta e convênio do cabeçalho do
   arquivo. Você não escolhe nada.
 
-Em **Cadastros › 🏦 Banco** agora existe uma lista de contas. Cada conta diz o que cobra:
+Em **Configurações › 🏦 Contas bancárias** agora existe uma lista de contas. Cada conta diz o que cobra:
 *todos os empreendimentos* (o normal) ou *só o empreendimento X*. Uma venda é cobrada pela
 conta do empreendimento dela; se o empreendimento não tiver conta própria, cai na conta geral.
 
@@ -364,7 +365,7 @@ mas o formulário nunca coletou esses campos — saía tudo em branco e ninguém
 
 **Atenção, uma coisa que eu não faço sozinho:** o modelo padrão de contrato mudou para usar
 `{{vendedor.qualificacao}}`, `{{comprador.qualificacao}}` e `{{imovel.descricao}}`. **Se você
-já editou o seu modelo em Cadastros › Documentos, o seu texto não é tocado** — ele continua
+já editou o seu modelo em Configurações › Modelos de documento, o seu texto não é tocado** — ele continua
 com os campos antigos, que seguem funcionando. Para aproveitar os novos, entre no modelo e
 troque os parágrafos das partes por esses três campos; a lista de campos à direita já os
 mostra.
@@ -563,16 +564,70 @@ um pouco maior que a testada — que é como o projetista desenha também. Ancor
 não no menor lote de propósito: bastaria um lote residual espremido para deixar a numeração da
 planta inteira ilegível.
 
-Vale para as três telas, porque o desenho da planta é o mesmo código: administração, corretor
-e vitrine.
+Vale para as duas telas, porque o desenho da planta é o mesmo código: administração e corretor.
 
 - [ ] Abrir a planta do Hessen e conferir se a numeração ficou uniforme e legível.
-- [ ] Conferir também na tela do corretor e na vitrine.
+- [ ] Conferir também na tela do corretor.
 - [ ] Se ficar pequena demais na sua planta, me diga: o piso e o teto são dois números, ajusto
       na hora.
 
 Em **esquemática** a numeração já era uniforme, porque ali todos os blocos têm o mesmo tamanho.
 O `test25` cobre os dois modos; no modo planta real ele falha no código antigo e passa no novo.
+
+---
+
+## 7l. Menu lateral e nova organização (23/09) — Fase 1 de 6
+
+A barra de abas em cima virou um **menu lateral**, agrupado pelo que você faz no dia:
+
+| Grupo | Itens |
+|---|---|
+| — | 🏠 Início |
+| Comercial | Empreendimentos · Reservas · Corretores |
+| Contratos | Todos os contratos · ＋ Novo contrato |
+| Financeiro | A receber · Cobrança · Boletos e banco · A pagar · Índices |
+| — | 📊 Relatórios · ⚙️ Configurações |
+
+O que mudou de lugar:
+
+- **Reservas** saíram de dentro do empreendimento e viraram a fila da empresa inteira, com o
+  filtro de empreendimento no topo. O número vermelho no menu é o que espera aprovação.
+- **Cobrança** deixou de ser um chip dentro de Recebíveis e virou tela própria. O alerta de
+  atraso do Início leva direto para ela.
+- **Boletos e banco** é novo: o que está pronto para gerar no mês, os botões de gerar
+  cobranças e ler o retorno, as alterações que ainda não foram ao banco e o histórico de
+  remessas de cada conta.
+- **A pagar** junta as despesas de todos os empreendimentos, com o nome de cada um na linha.
+  Escolhendo um empreendimento no filtro, aparece o orçado × realizado dele. Dentro do
+  empreendimento a aba continua, com o nome **Obra e orçamento**.
+- **Índices** e **Corretores** saíram das configurações e foram para o menu, porque são rotina.
+- **Configurações** ficou só com o que se ajusta uma vez: Equipe, Dados da empresa,
+  Permissões, Categorias, Modelos de documento, Contas bancárias, Régua de cobrança, Geral,
+  Nuvem/Conta e Backup.
+- No topo aparece o nome da **empresa**, não mais o de um empreendimento.
+- No celular o menu vira gaveta (botão ☰) e fecha sozinho ao escolher.
+- O menu já respeita as permissões: item sem permissão some, e o título do grupo some junto
+  quando todos os itens dele somem. **Por enquanto as permissões ainda são por papel**; a Fase 6
+  troca por permissões marcadas pessoa a pessoa, como você pediu.
+- Cores ficam como estão; a identidade visual vem depois.
+
+Para conferir:
+
+- [ ] Passar por cada item do menu e ver se a tela abre no lugar certo.
+- [ ] Aprovar uma reserva pelo item **Reservas**.
+- [ ] Lançar uma despesa por **A pagar** (ele pergunta o empreendimento) e ver ela aparecer
+      também dentro do empreendimento, em Obra e orçamento.
+- [ ] Abrir **Boletos e banco** e gerar as cobranças do mês por ali.
+- [ ] No celular, abrir e fechar a gaveta do menu.
+
+Próximas fases, na ordem combinada: **2** contrato como página própria, com número
+sequencial · **3** cadastro de clientes · **4** despesas da empresa com vínculo opcional
+(empresa, empreendimento ou carteira › imóvel) · **5** Início com a rotina do mês · **6**
+permissões por funcionário, definidas por você e garantidas também no banco.
+
+`test26` cobre o menu: cada item abre só a sua tela, Boletos com e sem conta, A pagar da
+empresa inteira, lançar despesa pelo menu, reservas, permissões escondendo item e grupo, e a
+gaveta no celular sem rolagem lateral. As outras 17 suítes e os testes do banco passam.
 
 ---
 
@@ -584,7 +639,7 @@ Nenhuma me trava hoje, mas todas mudam o produto:
       a carteira perdeu a aba de obra e o orçamento no resumo. Se uma carteira já tiver custo
       lançado, a aba reaparece, para não esconder dado que alguém registrou.
 - [x] ~~Multa e juros padrão~~ — **multa 2% e juros 1% ao mês**, já pré-preenchidos em toda
-      conta nova. O cliente muda como quiser em Cadastros › Banco. O campo de juros agora é em
+      conta nova. O cliente muda como quiser em Configurações › Contas bancárias. O campo de juros agora é em
       **% ao mês**, do jeito que o contrato fala; o sistema converte para o valor por dia que o
       banco pede.
 - [ ] **Divisão dos planos do SaaS** — ainda não definida.
@@ -646,12 +701,8 @@ Revisei o código e o banco em 17/09. Resumo honesto.
 - Todas as 17 tabelas do banco estão com RLS ligado, inclusive as novas (índices, cobranças,
   contas_banco, modelos, vitrines e leads). A proteção está no banco, não na tela: mesmo que
   alguém chame o Supabase por fora do app, só enxerga a própria empresa.
-- O visitante sem login não tem acesso a tabela nenhuma, só a duas funções: a da vitrine e a
-  de registrar interesse. A da vitrine devolve quadra, número, área, medidas, situação e preço
-  (se você mandar mostrar). Nunca CPF, matrícula, observação interna, reserva, venda ou
-  recebível.
-- O envio de interesse tem freio: no máximo 120 por hora por empresa e bloqueio de telefone
-  repetido em 2 minutos.
+- O visitante sem login não tem acesso a nada. Até 23/09 havia duas funções abertas para a
+  vitrine; com a vitrine retirada, o `schema.sql` apaga as duas (vale depois de você rodar).
 - Não existe `eval` nem execução de texto no código, e tudo que vai para a tela passa pelo
   escape. Um nome de cliente ou um lead não consegue injetar script.
 - Nenhuma senha ou chave secreta no repositório. A chave que está no `config.js` é a pública,
@@ -671,7 +722,9 @@ Revisei o código e o banco em 17/09. Resumo honesto.
       ficam travados, e criar ou excluir lote é só do administrador. Ele também deixou de
       convidar gente, publicar vitrine, trocar o modelo de contrato, mexer na configuração da
       empresa e apagar dados — o que fecha o caminho de virar administrador sozinho.
-- [ ] **Bucket das plantas é de leitura pública.** É de propósito, a vitrine precisa. O endereço
+- [ ] **Bucket das plantas é de leitura pública.** Era por causa da vitrine, que saiu; agora
+      dá para fechar, mas as telas usam o link público da imagem, então fechar exige trocar
+      para link assinado. Fica para uma rodada própria. O endereço
       tem o identificador da empresa e é impossível de adivinhar, mas quem tiver o link abre o
       arquivo. Regra: ali só planta. Quando formos anexar documento de cliente, vai em pasta
       privada com link que expira.

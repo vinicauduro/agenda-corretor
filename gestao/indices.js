@@ -149,7 +149,7 @@ function aplicarIndicePendente() {
   if (!p) return;
   upsert('indices', Object.assign({}, p.ind, { valores: p.valores }));
   logAct(p.acao);
-  closeModal(); renderCadastros(); renderCurrent();
+  closeModal(); renderCurrent(); renderCurrent();
   toast('✅', 'Índice atualizado', p.ind.codigo);
 }
 
@@ -194,7 +194,7 @@ function criarIndicesPadrao() {
     if (db.indices.find(i => i.codigo === p.codigo)) return;
     upsert('indices', { id: genId(), codigo: p.codigo, nome: p.nome, tipo: p.tipo, valores: {}, criadoEm: new Date().toISOString() });
   });
-  renderCadastros(); toast('📈', 'Índices criados', 'Agora lance a variação de cada mês.');
+  renderCurrent(); toast('📈', 'Índices criados', 'Agora lance a variação de cada mês.');
 }
 
 function abrirIndiceForm(id) {
@@ -213,13 +213,13 @@ function salvarIndice(id) {
   if (!codigo || !nome) { toast('⚠️', 'Informe sigla e nome', '', true); return; }
   const prev = id ? getIndice(id) : null;
   upsert('indices', Object.assign({}, prev || { id: genId(), valores: {}, criadoEm: new Date().toISOString() }, { codigo, nome, tipo: val('ixTipo') }));
-  closeModal(); renderCadastros(); toast('✅', 'Índice salvo', nome);
+  closeModal(); renderCurrent(); toast('✅', 'Índice salvo', nome);
 }
 function excluirIndice(id) {
   const ind = getIndice(id); if (!ind) return;
   if (db.vendas.some(v => v.indiceId === id)) { toast('⚠️', 'Índice em uso', 'Há contratos usando este índice.', true); return; }
   if (!confirm(`Excluir o índice ${ind.nome} e todos os valores lançados?`)) return;
-  removeRec('indices', id); renderCadastros(); toast('🗑️', 'Índice excluído', '');
+  removeRec('indices', id); renderCurrent(); toast('🗑️', 'Índice excluído', '');
 }
 
 function abrirLancarIndice(id, mes) {
@@ -358,7 +358,7 @@ function indiceSelectHtml(selId, selBase, dataVenda) {
      mandar para a tela certa. */
   if (!db.indices.length) {
     return `<div class="alert info" style="cursor:pointer" onclick="closeModal();irParaIndices()">
-      <span><b>Nenhum índice cadastrado ainda.</b> Para corrigir as parcelas por IGP-M, INPC, IPCA ou CUB, cadastre o índice em Cadastros › Índices. Sem isso a venda fica sem correção monetária.</span><span>›</span></div>`;
+      <span><b>Nenhum índice cadastrado ainda.</b> Para corrigir as parcelas por IGP-M, INPC, IPCA ou CUB, cadastre o índice em Financeiro › Índices. Sem isso a venda fica sem correção monetária.</span><span>›</span></div>`;
   }
   return `<div class="frow"><div class="fg"><label>Índice de correção</label>
       <select id="vfIndice"><option value="">— sem correção —</option>${db.indices.slice().sort((a, b) => a.nome.localeCompare(b.nome)).map(i => `<option value="${i.id}" ${selId === i.id ? 'selected' : ''}>${esc(i.nome)}</option>`).join('')}</select>
@@ -366,7 +366,7 @@ function indiceSelectHtml(selId, selBase, dataVenda) {
     <div class="fg"><label>Mês base da correção</label><input type="month" id="vfIndiceBase" value="${base}"><div class="hint">O índice deste mês é o primeiro a ser aplicado, na parcela do mês seguinte.</div></div></div>`;
 }
 
-function irParaIndices() { state.tab = 'cadastros'; state.sub.cad = 'indices'; renderCurrent(); }
+function irParaIndices() { switchTab('indices'); }
 function correcaoResumoVenda(v) {
   if (!v.indiceId) return '';
   const ind = getIndice(v.indiceId); if (!ind) return '';

@@ -136,13 +136,13 @@ function cadBancoHtml() {
   if (!editandoId && lista.length) return listaContasHtml(lista);
   const c = (editandoId && db.contasBanco.find(x => x.id === editandoId)) || { banco: '001', carteira: '17', variacao: '019', nossoNumeroAtual: 1, remessaSeq: 1, protestoDias: 0, baixaDias: 0, multaPct: num(db.config.multaPct) || 2, jurosMesPct: num(db.config.jurosMesPct) || 1, descontoPct: 0, especie: 'DM', aceite: 'N', mensagem1: '', mensagem2: '' };
   const perfil = BANCOS[pad(c.banco, 3)] || BANCOS['001'];
-  return `<div class="card"><h3>🏦 ${c.id ? 'Editar conta de cobrança' : 'Nova conta de cobrança'} ${lista.length ? '<span class="h-actions"><button class="btn btn-secondary btn-sm" onclick="state.sub.contaEdit=null;renderCadastros()">‹ Voltar</button></span>' : ''}</h3>
+  return `<div class="card"><h3>🏦 ${c.id ? 'Editar conta de cobrança' : 'Nova conta de cobrança'} ${lista.length ? '<span class="h-actions"><button class="btn btn-secondary btn-sm" onclick="state.sub.contaEdit=null;renderCurrent()">‹ Voltar</button></span>' : ''}</h3>
     <p class="help">Dados do convênio de cobrança registrada da empresa. Eles vão no boleto e no arquivo de remessa. Cada empresa preenche os seus; o layout de cada banco é do sistema.</p>
     <div class="fg"><label>Cobra quais vendas?</label><select id="bcEmp">
       <option value="" ${!c.loteamentoId ? 'selected' : ''}>Todos os empreendimentos</option>
       ${db.loteamentos.map(l => `<option value="${esc(l.id)}" ${c.loteamentoId === l.id ? 'selected' : ''}>Só ${esc(l.nome)}</option>`).join('')}
     </select><div class="hint">Com uma conta só, tudo cai nela. Se um empreendimento tiver conta própria, as vendas dele vão para essa; o resto continua na conta geral.</div></div>
-    <div class="frow"><div class="fg"><label>Banco</label><select id="bcBanco" onchange="renderCadastros()">${Object.entries(BANCOS).map(([k, v]) => `<option value="${k}" ${pad(c.banco, 3) === k ? 'selected' : ''}>${k} — ${esc(v.nome)}</option>`).join('')}</select></div>
+    <div class="frow"><div class="fg"><label>Banco</label><select id="bcBanco" onchange="renderCurrent()">${Object.entries(BANCOS).map(([k, v]) => `<option value="${k}" ${pad(c.banco, 3) === k ? 'selected' : ''}>${k} — ${esc(v.nome)}</option>`).join('')}</select></div>
       <div class="fg"><label>Carteira</label><select id="bcCarteira">${perfil.carteiras.map(x => `<option value="${x}" ${c.carteira === x ? 'selected' : ''}>${x}</option>`).join('')}</select></div></div>
     <div class="frow3"><div class="fg"><label>Agência (sem dígito)</label><input type="text" id="bcAgencia" value="${esc(c.agencia || '')}" placeholder="1234"></div>
       <div class="fg"><label>Dígito da agência</label><input type="text" id="bcAgenciaDv" value="${esc(c.agenciaDv || '')}" maxlength="1"></div>
@@ -171,20 +171,20 @@ function cadBancoHtml() {
 }
 
 function listaContasHtml(lista) {
-  return `<div class="card"><h3>🏦 Contas de cobrança <span class="h-actions"><button class="btn btn-primary btn-sm" onclick="state.sub.contaEdit='nova';renderCadastros()">＋ Nova conta</button></span></h3>
+  return `<div class="card"><h3>🏦 Contas de cobrança <span class="h-actions"><button class="btn btn-primary btn-sm" onclick="state.sub.contaEdit='nova';renderCurrent()">＋ Nova conta</button></span></h3>
     <p class="help mb">O banco aceita um arquivo de remessa por convênio, então é por conta que a cobrança se organiza. Com uma conta só, todos os empreendimentos saem juntos.</p>
     ${lista.map(c => { const b = BANCOS[pad(c.banco, 3)]; const emp = c.loteamentoId && getLoteamento(c.loteamentoId);
       const n = db.recebiveis.filter(r => { const x = contaCobranca(r.loteamentoId); return x && x.id === c.id && recStatus(r) !== 'pago'; }).length;
-      return `<div class="item" onclick="state.sub.contaEdit='${c.id}';renderCadastros()"><div class="info">
+      return `<div class="item" onclick="state.sub.contaEdit='${c.id}';renderCurrent()"><div class="info">
         <div class="title">${esc((b || {}).nome || c.banco)} · ag ${esc(c.agencia)}${c.agenciaDv ? '-' + esc(c.agenciaDv) : ''} / conta ${esc(c.conta)}${c.contaDv ? '-' + esc(c.contaDv) : ''} ${b && b.campoLivre ? '' : '<span class="badge neutral">sem layout</span>'}</div>
         <div class="meta"><span>convênio ${esc(c.convenio)}</span><span>· carteira ${esc(c.carteira)}</span><span>· ${emp ? 'só ' + esc(emp.nome) : 'todos os empreendimentos'}</span><span>· ${n} parcela(s) em aberto</span></div>
-      </div><div class="side"><button class="btn-icon" onclick="event.stopPropagation();state.sub.contaEdit='${c.id}';renderCadastros()">✏️</button></div></div>`; }).join('')}</div>`;
+      </div><div class="side"><button class="btn-icon" onclick="event.stopPropagation();state.sub.contaEdit='${c.id}';renderCurrent()">✏️</button></div></div>`; }).join('')}</div>`;
 }
 function excluirContaBanco(id) {
   const c = db.contasBanco.find(x => x.id === id); if (!c) return;
   if (db.remessas.some(r => r.contaId === id)) { toast('⚠️', 'Conta com remessas geradas', 'Não dá para excluir uma conta que já mandou arquivo ao banco.', true); return; }
   if (!confirm('Excluir esta conta de cobrança?')) return;
-  removeRec('contasBanco', id); state.sub.contaEdit = null; renderCadastros();
+  removeRec('contasBanco', id); state.sub.contaEdit = null; renderCurrent();
 }
 function salvarContaBanco(id) {
   const prev = id && id !== 'nova' ? db.contasBanco.find(x => x.id === id) : null;
@@ -206,7 +206,7 @@ function salvarContaBanco(id) {
   upsert('contasBanco', rec);
   logAct(`Conta de cobrança salva: ${(BANCOS[pad(rec.banco, 3)] || {}).nome || rec.banco}`);
   state.sub.contaEdit = null;
-  renderCadastros(); toast('✅', 'Conta salva', 'Já dá para gerar boletos.');
+  renderCurrent(); toast('✅', 'Conta salva', 'Já dá para gerar boletos.');
 }
 
 // ================================================================ BOLETO
@@ -214,7 +214,7 @@ function dadosBoleto(rec) {
   const v = getVenda(rec.vendaId);
   const lot = getLoteamento(rec.loteamentoId);
   const conta = contaCobranca(rec.loteamentoId);
-  if (!conta) throw new Error('Cadastre a conta de cobrança em Cadastros › Banco.');
+  if (!conta) throw new Error('Cadastre a conta de cobrança em Configurações › Contas bancárias.');
   const perfil = BANCOS[pad(conta.banco, 3)];
   if (!perfil || !perfil.campoLivre) throw new Error(`O layout do ${(perfil || {}).nome || 'banco'} ainda não está implementado.`);
   const nn = rec.nossoNumero || String(conta.nossoNumeroAtual || 1);

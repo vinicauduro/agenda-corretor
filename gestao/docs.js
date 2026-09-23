@@ -404,7 +404,7 @@ function gerarContratoVenda(vendaId) {
   openModal({
     title: '📄 Gerar contrato',
     wide: true,
-    body: `<p class="help mb">O contrato usa o modelo cadastrado em <b>Cadastros › Documentos</b>. O que você completar aqui volta para o cadastro da venda.</p>
+    body: `<p class="help mb">O contrato usa o modelo cadastrado em <b>Configurações › Modelos de documento</b>. O que você completar aqui volta para o cadastro da venda.</p>
       ${mods.length > 1 ? `<div class="fg"><label>Modelo</label><select id="ctModelo">${mods.map(m => `<option value="${esc(m.id)}">${esc(m.nome)}</option>`).join('')}</select></div>` : ''}
       ${falta.length ? `<div class="alert warn" style="cursor:default"><span>Para o contrato sair completo ainda falta <b>${esc(falta.join(', '))}</b>. Complete abaixo.</span></div>` : ''}
       <div class="fieldset"><span class="lg">🧑‍🤝‍🧑 Qualificação do comprador</span>
@@ -513,10 +513,10 @@ function salvarModelo(id) {
   const rec = Object.assign({}, prev || { id: id || genId(), criadoEm: new Date().toISOString() }, { nome, tipo: val('mdTipo'), corpo });
   upsert('modelos', rec);
   logAct(`Modelo de ${rec.tipo} salvo: ${nome}`);
-  closeModal(); renderCadastros(); toast('✅', 'Modelo salvo', nome);
+  closeModal(); renderCurrent(); toast('✅', 'Modelo salvo', nome);
 }
 function excluirModelo(id) {
   const m = db.modelos.find(x => x.id === id); if (!m) return;
   if (!confirm(`Excluir o modelo "${m.nome}"?`)) return;
-  removeRec('modelos', id); renderCadastros(); toast('🗑️', 'Modelo excluído', '');
+  removeRec('modelos', id); renderCurrent(); toast('🗑️', 'Modelo excluído', '');
 }

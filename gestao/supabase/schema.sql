@@ -739,61 +739,12 @@ drop policy if exists leads_write on public.leads;
 create policy leads_select on public.leads for select to authenticated using (public.eh_membro(org_id));
 create policy leads_write on public.leads for all to authenticated using (public.eh_admin(org_id)) with check (public.eh_admin(org_id));
 
--- Dados públicos da vitrine (sem login). Devolve só o que o cliente final pode ver:
--- nunca matrícula, observações internas, reservas, vendas ou dados da equipe.
-create or replace function public.vitrine_dados(p_slug text)
-returns jsonb language plpgsql security definer stable set search_path = public as $$
-declare v public.vitrines%rowtype; v_lot public.loteamentos%rowtype; v_org public.organizacoes%rowtype; v_lotes jsonb;
-begin
-  select * into v from public.vitrines where lower(slug) = lower(trim(coalesce(p_slug, ''))) and ativa;
-  if not found then return null; end if;
-  select * into v_lot from public.loteamentos where org_id = v.org_id and id = v.loteamento_id;
-  if not found then return null; end if;
-  select * into v_org from public.organizacoes where id = v.org_id;
-  select coalesce(jsonb_agg(x order by x->>'quadra', lpad(regexp_replace(x->>'numero', '\D', '', 'g'), 6, '0'), x->>'numero'), '[]'::jsonb)
-    into v_lotes
-    from (
-      select jsonb_build_object(
-        'id', l.id, 'quadra', l.quadra, 'numero', l.numero, 'area', l.area,
-        'frente', l.frente, 'fundos', l.fundos, 'tipo', l.tipo, 'pts', l.pts,
-        'status', case when l.status = 'bloqueado' then 'indisponivel' else l.status end,
-        'preco', case when v.mostrar_preco and l.status in ('disponivel', 'reservado') then l.preco else null end
-      ) as x
-      from public.lotes l where l.org_id = v.org_id and l.loteamento_id = v.loteamento_id
-    ) t;
-  return jsonb_build_object(
-    'empresa', v_org.nome,
-    'titulo', coalesce(nullif(v.titulo, ''), v_lot.nome),
-    'chamada', v.chamada,
-    'whatsapp', v.whatsapp,
-    'mostrarPreco', v.mostrar_preco,
-    'loteamento', jsonb_build_object('nome', v_lot.nome, 'cidade', v_lot.cidade, 'endereco', v_lot.endereco, 'descricao', v_lot.descricao, 'planta', v_lot.planta),
-    'lotes', v_lotes);
-end $$;
-
--- Interesse enviado pelo cliente final na vitrine (sem login).
-create or replace function public.registrar_lead(p_slug text, p_dados jsonb)
-returns text language plpgsql security definer set search_path = public as $$
-declare v public.vitrines%rowtype; v_id text; v_n int; v_nome text; v_fone text;
-begin
-  select * into v from public.vitrines where lower(slug) = lower(trim(coalesce(p_slug, ''))) and ativa;
-  if not found then raise exception 'Vitrine indisponível'; end if;
-  v_nome := left(trim(coalesce(p_dados->>'nome', '')), 120);
-  v_fone := left(trim(coalesce(p_dados->>'telefone', '')), 40);
-  if v_nome = '' or v_fone = '' then raise exception 'Informe nome e telefone'; end if;
-  select count(*)::int into v_n from public.leads where org_id = v.org_id and criado_em > now() - interval '1 hour';
-  if v_n >= 120 then raise exception 'Muitas solicitações no momento. Tente novamente mais tarde.'; end if;
-  if exists (select 1 from public.leads where org_id = v.org_id and telefone = v_fone and criado_em > now() - interval '2 minutes') then
-    return 'duplicado';
-  end if;
-  v_id := public.gl_novo_id();
-  insert into public.leads (org_id, id, loteamento_id, lote_id, nome, telefone, email, msg, origem)
-    values (v.org_id, v_id, v.loteamento_id, nullif(trim(coalesce(p_dados->>'loteId', '')), ''), v_nome, v_fone,
-            left(trim(coalesce(p_dados->>'email', '')), 160), left(trim(coalesce(p_dados->>'msg', '')), 600), 'vitrine');
-  insert into public.log (org_id, id, who, msg)
-    values (v.org_id, public.gl_novo_id(), 'Vitrine', 'Novo interesse de ' || v_nome);
-  return v_id;
-end $$;
+-- A vitrine pública saiu do produto em 23/09/2026: a empresa administra o comercial, quem
+-- vende é o corretor. As duas funções que o visitante sem login podia chamar deixam de
+-- existir, e com elas a única porta de entrada anônima no banco. As tabelas vitrines e
+-- leads ficam onde estão, sem uso, para não apagar dado de ninguém.
+drop function if exists public.vitrine_dados(text);
+drop function if exists public.registrar_lead(text, jsonb);
 
 -- ---------------------------------------------------------------------
 -- 6. Permissões de execução
@@ -803,10 +754,6 @@ grant select, insert, update, delete on all tables in schema public to authentic
 grant execute on all functions in schema public to authenticated;
 revoke all on all tables in schema public from anon;
 
--- o visitante anônimo (vitrine pública) só pode chamar estas duas funções
-grant usage on schema public to anon;
-grant execute on function public.vitrine_dados(text) to anon;
-grant execute on function public.registrar_lead(text, jsonb) to anon;
 
 -- ---------------------------------------------------------------------
 -- 7. Tempo real (Supabase Realtime) e Storage (imagem da planta)
