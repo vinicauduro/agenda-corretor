@@ -1,7 +1,7 @@
 # Pendências para testar no computador
 
 Lista do que foi construído e ainda não foi testado por você, mais as decisões que dependem da
-sua conferência. Atualizada em 23/09/2026, na mudança para o menu lateral (seção 7l).
+sua conferência. Atualizada em 23/09/2026: menu lateral (seção 7l) e cadastro de clientes (seção 7m).
 
 ---
 
@@ -17,7 +17,9 @@ sua conferência. Atualizada em 23/09/2026, na mudança para o menu lateral (se�
       IBGE). Esta última é necessária: sem rodar, o cadastro de vendedores não sincroniza.
       Em 23/09 entrou mais uma: o schema agora **apaga as duas funções públicas da vitrine**
       (`vitrine_dados` e `registrar_lead`). Rodando, o banco deixa de ter qualquer porta aberta
-      para quem não tem login.
+      para quem não tem login. E entrou a **tabela de clientes** (seção 7m): sem rodar, o
+      cadastro de clientes funciona só neste computador e não sincroniza, mas o resto do
+      aplicativo segue normal.
 - [ ] Abrir o app e forçar a atualização (Ctrl+Shift+R no computador) para pegar a versão nova.
       Endereço: https://vinicauduro.github.io/agenda-corretor/gestao/
 - [ ] Conferir o **menu lateral novo** (seção 7l). A barra de abas em cima saiu.
@@ -628,6 +630,51 @@ permissões por funcionário, definidas por você e garantidas também no banco.
 `test26` cobre o menu: cada item abre só a sua tela, Boletos com e sem conta, A pagar da
 empresa inteira, lançar despesa pelo menu, reservas, permissões escondendo item e grupo, e a
 gaveta no celular sem rolagem lateral. As outras 17 suítes e os testes do banco passam.
+
+---
+
+## 7m. Contratos › Clientes (23/09)
+
+Pedido seu: dentro de Contratos, uma sub-seção de clientes para listar, cadastrar, editar e
+excluir. Ficou no menu como **Contratos › Clientes**, entre "Todos os contratos" e
+"＋ Novo contrato".
+
+- **A ficha** é a mesma qualificação do comprador no contrato: nome, CPF/CNPJ, RG e órgão,
+  nacionalidade, profissão, estado civil e regime de bens, cônjuge com os dados dele,
+  endereço completo, telefone, e-mail e observações. Pessoa jurídica também.
+- **A lista** busca por nome, parte do CPF, telefone, e-mail ou cidade, mostra quantos
+  contratos cada um tem e avisa o que falta para o contrato sair qualificado.
+- **CPF e CNPJ são conferidos pelo dígito verificador**, e o mesmo CPF não entra duas vezes.
+  Isso já prepara o terreno para a DIMOB, que recusa documento inválido.
+- **Os compradores dos contratos que você já tem** aparecem num aviso no topo: um clique e
+  eles entram no cadastro. Quem comprou mais de uma vez vira uma ficha só, com os dados do
+  contrato mais recente.
+- **No contrato novo**, cada bloco de comprador tem o campo **📇 Puxar do cadastro de
+  clientes**: digite o nome ou o CPF, escolha na lista e o formulário se preenche inteiro,
+  cônjuge incluído.
+- **Ao salvar um contrato**, o comprador entra no cadastro sozinho. Se já existia, a ficha é
+  atualizada com o que foi digitado no contrato. Um campo em branco no contrato não apaga
+  o que a ficha já tinha.
+- **Editar a ficha não mexe em contrato já feito.** O contrato guarda os dados como estavam
+  no dia da assinatura, que é o certo juridicamente. Vale para os próximos.
+- **Excluir** é em dois passos: o primeiro avisa em quantos contratos ele aparece, o segundo
+  apaga. Os contratos continuam intactos.
+- **Quem vê:** no banco, só dono, administrador e financeiro, porque a ficha tem CPF e RG.
+  O corretor não lê o cadastro. No menu, aparece para quem pode criar ou editar contratos.
+
+Para conferir:
+
+- [ ] Rodar o `schema.sql` (cria a tabela de clientes).
+- [ ] Abrir **Contratos › Clientes** e clicar em **Trazer agora** para puxar os compradores
+      dos seus contratos.
+- [ ] Cadastrar um cliente casado, com cônjuge, e depois puxar ele num contrato novo.
+- [ ] Editar e excluir um cliente de teste.
+
+Atenção: um comprador antigo com CPF digitado errado entra no cadastro, mas a ficha só salva
+de novo depois que o CPF for corrigido.
+
+`test27` cobre o fluxo inteiro, mais o caso do banco ainda sem a tabela nova. O teste de
+banco confere que o corretor não lê nem grava clientes.
 
 ---
 

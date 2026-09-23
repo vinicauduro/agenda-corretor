@@ -481,6 +481,7 @@ begin
   delete from public.contas_banco where org_id = p_org;
   delete from public.modelos where org_id = p_org;
   delete from public.vendedores where org_id = p_org;
+  delete from public.clientes where org_id = p_org;
   delete from public.categorias where org_id = p_org;
   delete from public.vitrines where org_id = p_org;
   delete from public.loteamentos where org_id = p_org;
@@ -692,6 +693,49 @@ create policy vendedores_select on public.vendedores for select to authenticated
 create policy vendedores_write on public.vendedores for all to authenticated using (public.eh_admin(org_id)) with check (public.eh_admin(org_id));
 
 -- ---------------------------------------------------------------------
+-- 5a3. Clientes: a ficha de quem compra, com a qualificação completa
+--      Guarda CPF, RG, estado civil e endereço, então é do escritório: dono,
+--      administrador e financeiro. O corretor não lê — ele vê os próprios
+--      clientes pelas reservas e vendas dele, como antes.
+-- ---------------------------------------------------------------------
+create table if not exists public.clientes (
+  org_id             uuid not null references public.organizacoes(id) on delete cascade,
+  id                 text not null,
+  tipo               text not null default 'pf' check (tipo in ('pf','pj')),
+  genero             text not null default 'm',
+  nome               text not null,
+  cpf                text not null default '',
+  rg                 text not null default '',
+  rg_orgao           text not null default '',
+  nacionalidade      text not null default '',
+  profissao          text not null default '',
+  estado_civil       text not null default '',
+  regime_bens        text not null default '',
+  conjuge            jsonb,
+  inscricao_estadual text not null default '',
+  representante      jsonb,
+  telefone           text not null default '',
+  email              text not null default '',
+  cep                text not null default '',
+  logradouro         text not null default '',
+  numero_end         text not null default '',
+  complemento        text not null default '',
+  bairro             text not null default '',
+  cidade             text not null default '',
+  uf                 text not null default '',
+  endereco           text not null default '',
+  obs                text not null default '',
+  criado_em          timestamptz not null default now(),
+  primary key (org_id, id)
+);
+create index if not exists clientes_cpf_idx on public.clientes (org_id, cpf);
+alter table public.clientes enable row level security;
+drop policy if exists clientes_select on public.clientes;
+drop policy if exists clientes_write on public.clientes;
+create policy clientes_select on public.clientes for select to authenticated using (public.eh_financeiro(org_id));
+create policy clientes_write on public.clientes for all to authenticated using (public.eh_financeiro(org_id)) with check (public.eh_financeiro(org_id));
+
+-- ---------------------------------------------------------------------
 -- 5b. Vitrine pública (link do loteamento para o cliente final) e leads
 -- ---------------------------------------------------------------------
 create table if not exists public.vitrines (
@@ -762,7 +806,7 @@ do $$
 declare t text;
 begin
   if exists (select 1 from pg_publication where pubname = 'supabase_realtime') then
-    foreach t in array array['organizacoes','membros','loteamentos','categorias','lotes','reservas','vendas','recebiveis','custos','log','vitrines','leads','modelos','indices','cobrancas','contas_banco','remessas','vendedores'] loop
+    foreach t in array array['organizacoes','membros','loteamentos','categorias','lotes','reservas','vendas','recebiveis','custos','log','vitrines','leads','modelos','indices','cobrancas','contas_banco','remessas','vendedores','clientes'] loop
       if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = t) then
         execute format('alter publication supabase_realtime add table public.%I', t);
       end if;
@@ -781,6 +825,7 @@ alter table public.loteamentos replica identity full;
 alter table public.categorias replica identity full;
 alter table public.log replica identity full;
 alter table public.membros replica identity full;
+alter table public.clientes replica identity full;
 
 do $$
 begin

@@ -16,6 +16,7 @@ function renderAdminTab() {
   else if (tab === 'emp') renderEmpreendimentos();
   else if (tab === 'reservas') { if (!bloqueia('reservas.aprovar', 'reservas')) { renderAReservas(); fabShow('novaReservaEscolhendoEmp()'); } }
   else if (tab === 'corretores') renderCorretoresAdmin();
+  else if (tab === 'clientes') { if (!abaPermitida('clientes')) $('#av-clientes').innerHTML = semPermissaoHtml('clientes'); else { renderClientes(); if (podeEditarClientes()) fabShow('abrirClienteForm()'); } }
   else if (tab === 'vendas') { if (!bloqueia('vendas.criar', 'contratos')) { renderAVendas(); if (pode('vendas.criar')) fabShow('novaVendaEscolhendoEmp()'); } }
   else if (tab === 'recebiveis') { if (!bloqueia('financeiro.ver', 'recebíveis')) renderRecebiveis(); }
   else if (tab === 'cobranca') { if (!bloqueia('cobranca.ver', 'cobrança')) renderCobranca(); }
@@ -712,7 +713,7 @@ function abrirVendaForm(id, loteId, reservaId) {
           <div class="fg"><label>Cidade</label><input type="text" id="vfImCidade" value="${esc(im.cidade || '')}"></div></div></details></div>`
     : `<div class="fg"><label>Lote *</label><select id="vfLote" onchange="vfLoteChange()" ${x ? 'disabled' : ''}>${optionsHtml(lotes, sel, l => `${loteLabel(l)} — ${fmtMoney(l.preco)}`)}</select></div>`}
     <div class="fieldset"><span class="lg">🧑‍🤝‍🧑 Comprador</span>
-      ${pessoasListaHtml('vc', compradores, { recolher: true, conjuge: true, telObrigatorio: true, obrigatorio: true, rotulo: 'Comprador', rotuloBotao: 'Adicionar comprador' })}
+      ${pessoasListaHtml('vc', compradores, { recolher: true, conjuge: true, telObrigatorio: true, obrigatorio: true, cadastro: true, rotulo: 'Comprador', rotuloBotao: 'Adicionar comprador' })}
       <p class="help mt">O primeiro comprador é quem aparece nas telas de venda, recebível e cobrança. Os demais existem para o contrato. Marido e mulher não precisam de dois blocos: use o estado civil e o cônjuge.</p></div>
     <div class="fieldset"><span class="lg">✍️ Vendedor</span>
       ${vendedoresListaHtml('vfVend', vsel)}
@@ -845,6 +846,7 @@ function salvarVenda(id, reservaId) {
     indiceId: aVista ? null : (val('vfIndice') || null), indiceBase: val('vfIndiceBase') || monthKey(val('vfData'))
   });
   upsert('vendas', venda);
+  registrarClientesDaVenda(compradores);
   const temPagos = x && recebiveisDe(x.id).some(r => num(r.valorPago) > 0);
   if (!temPagos) {
     if (x) recebiveisDe(x.id).forEach(r => removeRec('recebiveis', r.id));

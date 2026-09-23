@@ -237,10 +237,10 @@ function defaultDB() {
     meta: { version: 1, createdAt: new Date().toISOString() },
     config: defaultConfig(),
     loteamentos: [], lotes: [], reservas: [], vendas: [], recebiveis: [], custos: [],
-    categorias: defaultCategorias(), corretores: [], vendedores: [], modelos: [], indices: [], cobrancas: [], contasBanco: [], remessas: [], log: []
+    categorias: defaultCategorias(), corretores: [], vendedores: [], clientes: [], modelos: [], indices: [], cobrancas: [], contasBanco: [], remessas: [], log: []
   };
 }
-const COLLECTIONS = ['loteamentos', 'lotes', 'reservas', 'vendas', 'recebiveis', 'custos', 'categorias', 'corretores', 'vendedores', 'modelos', 'indices', 'cobrancas', 'contasBanco', 'remessas', 'log'];
+const COLLECTIONS = ['loteamentos', 'lotes', 'reservas', 'vendas', 'recebiveis', 'custos', 'categorias', 'corretores', 'vendedores', 'clientes', 'modelos', 'indices', 'cobrancas', 'contasBanco', 'remessas', 'log'];
 function normalizeDB(data) {
   const d = data && typeof data === 'object' ? data : {};
   d.meta = d.meta || { version: 1 };
@@ -325,6 +325,7 @@ const TABLE_COLS = {
   lotes: ['id', 'loteamentoId', 'quadra', 'numero', 'area', 'frente', 'fundos', 'preco', 'tipo', 'status', 'obs', 'matricula', 'descricaoMatricula', 'logradouro', 'numeroEnd', 'bairro', 'cep', 'pts', 'reservaId', 'vendaId', 'criadoEm'],
   reservas: ['id', 'loteamentoId', 'loteId', 'corretor', 'corretorUserId', 'cliente', 'dataReserva', 'validade', 'status', 'proposta', 'obs', 'motivo', 'aprovadaEm', 'encerradaEm', 'criadoEm'],
   vendedores: ['id', 'tipo', 'nome', 'cpf', 'inscricaoEstadual', 'representante', 'telefone', 'email', 'cep', 'logradouro', 'numeroEnd', 'complemento', 'bairro', 'cidade', 'uf', 'endereco', 'obs', 'criadoEm'],
+  clientes: ['id', 'tipo', 'genero', 'nome', 'cpf', 'rg', 'rgOrgao', 'nacionalidade', 'profissao', 'estadoCivil', 'regimeBens', 'conjuge', 'inscricaoEstadual', 'representante', 'telefone', 'email', 'cep', 'logradouro', 'numeroEnd', 'complemento', 'bairro', 'cidade', 'uf', 'endereco', 'obs', 'criadoEm'],
   vendas: ['id', 'loteamentoId', 'loteId', 'imovel', 'vendedorId', 'vendedor', 'vendedoresExtras', 'reservaId', 'cliente', 'compradoresExtras', 'corretor', 'corretorUserId', 'dataVenda', 'valorTotal', 'entrada', 'dataEntrada', 'nParcelas', 'jurosMes', 'valorParcela', 'primeiroVencimento', 'baloes', 'indiceId', 'indiceBase', 'comissaoPct', 'comissaoValor', 'comissaoPaga', 'comissaoData', 'status', 'obs', 'motivo', 'distratoEm', 'criadoEm'],
   recebiveis: ['id', 'loteamentoId', 'vendaId', 'tipo', 'numero', 'descricao', 'vencimento', 'valor', 'valorPago', 'valorCorrigido', 'nossoNumero', 'contaId', 'remessaEm', 'bancoValor', 'bancoVenc', 'dataPagamento', 'forma', 'obsPagamento'],
   custos: ['id', 'loteamentoId', 'loteId', 'descricao', 'categoriaId', 'fornecedor', 'valor', 'formaPagamento', 'dataCompetencia', 'vencimento', 'status', 'dataPagamento', 'obs', 'criadoEm'],
@@ -335,6 +336,8 @@ const TABLE_COLS = {
   remessas: ['id', 'loteamentoId', 'contaId', 'sequencial', 'data', 'arquivo', 'qtd', 'baixas', 'valor', 'recIds', 'primeiroNn', 'ultimoNn', 'criadoEm'],
   log: ['id', 'ts', 'who', 'msg']
 };
+/* Tabelas criadas depois da primeira versão do schema: se faltarem, o app segue sem elas. */
+const TABELAS_NOVAS = ['clientes'];
 const NULLABLE_EMPTY = new Set(['validade', 'aprovadaEm', 'encerradaEm', 'dataEntrada', 'primeiroVencimento', 'comissaoData', 'distratoEm', 'dataPagamento', 'vencimento', 'reservaId', 'vendaId', 'loteId', 'categoriaId', 'forma', 'frente', 'fundos', 'planta', 'pts', 'proposta', 'corretorUserId']);
 const INT_FIELDS = new Set(['nParcelas', 'numero']);
 function snakeKey(k) { return k.replace(/[A-Z]/g, m => '_' + m.toLowerCase()); }
@@ -436,7 +439,15 @@ const Cloud = {
     const org = this.org.id;
     const tabs = Object.keys(TABLE_COLS);
     const results = await Promise.all(tabs.map(t => this.client.from(tabelaDe(t)).select('*').eq('org_id', org).limit(t === 'log' ? 400 : 20000).order(t === 'log' ? 'ts' : 'id', { ascending: true })));
-    tabs.forEach((t, i) => { if (results[i].error) throw new Error(t + ': ' + results[i].error.message); db[t] = (results[i].data || []).map(r => fromRow(t, r)); });
+    /* Tabela nova que ainda não existe no banco (o schema.sql não foi rodado de novo) não
+       derruba o aplicativo inteiro: aquela parte fica vazia e o resto funciona. */
+    this.tabelasFaltando = [];
+    tabs.forEach((t, i) => {
+      const e = results[i].error;
+      if (e && TABELAS_NOVAS.includes(t) && /does not exist|schema cache|not find the table/i.test(e.message || '')) { this.tabelasFaltando.push(t); db[t] = []; return; }
+      if (e) throw new Error(t + ': ' + e.message);
+      db[t] = (results[i].data || []).map(r => fromRow(t, r));
+    });
     if (!db.categorias.length) db.categorias = defaultCategorias();
     migrarCategorias();
     await this.loadEquipe();
@@ -816,7 +827,7 @@ function pessoasListaHtml(base, lista, opc) {
   const arr = (lista && lista.length) ? lista : [null];
   window.__pessoasN = window.__pessoasN || {}; window.__pessoasOpc = window.__pessoasOpc || {};
   window.__pessoasN[base] = arr.length; window.__pessoasOpc[base] = opc;
-  return `<div id="${base}Lista">${arr.map((p, i) => pessoaBlocoHtml(base, p, i, opc)).join('')}</div>
+  return `${opc.cadastro && typeof clientesDatalistHtml === 'function' ? clientesDatalistHtml() : ''}<div id="${base}Lista">${arr.map((p, i) => pessoaBlocoHtml(base, p, i, opc)).join('')}</div>
     <button type="button" class="btn btn-secondary btn-sm" onclick="addPessoa('${base}')">＋ ${esc(opc.rotuloBotao || 'Adicionar')}</button>`;
 }
 function pessoaBlocoHtml(base, p, i, opc) {
@@ -824,7 +835,8 @@ function pessoaBlocoHtml(base, p, i, opc) {
   const cab = i ? `<div class="row-between" style="margin-bottom:6px"><b class="tiny">${esc(opc.rotulo || 'Pessoa')} ${i + 1}</b><button type="button" class="btn-icon del" onclick="delPessoa('${pre}')">🗑</button></div>` : '';
   /* Só o primeiro precisa de telefone: é por ele que o sistema fala com a venda. */
   const o = i ? Object.assign({}, opc, { telObrigatorio: false }) : opc;
-  return `<div class="pessoa-bloco" id="${pre}Bloco">${cab}${pessoaFormHtml(pre, p, o)}</div>`;
+  const busca = opc.cadastro && typeof buscaClienteHtml === 'function' ? buscaClienteHtml(base, i) : '';
+  return `<div class="pessoa-bloco" id="${pre}Bloco">${cab}${busca}${pessoaFormHtml(pre, p, o)}</div>`;
 }
 function addPessoa(base) {
   const box = $('#' + base + 'Lista'); if (!box) return;
