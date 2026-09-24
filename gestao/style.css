@@ -467,3 +467,4 @@ details.qualif[open] > summary { margin-bottom: 10px; }
   #screen-admin .view { padding: 14px 14px 96px; }
 }
 @media (prefers-reduced-motion: reduce) { #screen-admin .aside { transition: none; } }
+.sync-pendentes:not(:empty) { padding: 12px 16px 0; max-width: 1200px; }

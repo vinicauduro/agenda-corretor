@@ -633,6 +633,40 @@ gaveta no celular sem rolagem lateral. As outras 17 suítes e os testes do banco
 
 ---
 
+## 7p. Alteração perdida quando a nuvem recusa — corrigido (24/09)
+
+Seu relato: cadastrou 2 imóveis, editou o valor de um, deu erro e tudo que foi alterado na
+sessão sumiu.
+
+**Causa.** Quando o banco recusava uma gravação, o app mostrava "Falha ao salvar na nuvem"
+e a alteração ficava só na memória do navegador. Ao recarregar, o app baixa tudo do banco de
+novo, e o que não tinha chegado lá sumia. A recusa, quase certamente, foi porque o
+`schema.sql` desta versão ainda não tinha sido rodado: o cadastro do imóvel manda os campos
+novos (valor de venda, área, matrícula), o banco ainda não os conhecia e recusava a gravação.
+Reproduzi exatamente isso no teste.
+
+**Correção**, que vale para qualquer recusa, não só esta:
+
+- A alteração recusada fica guardada no navegador, numa lista de pendentes da empresa, e
+  continua aparecendo na tela mesmo depois de recarregar.
+- Um **aviso fixo no topo** diz quantas alterações não foram, quais são e o motivo em
+  português. Por exemplo: "O banco está sem os campos novos desta versão: rode o schema.sql
+  no Supabase e depois clique em Tentar de novo".
+- O botão **Tentar de novo** reenvia tudo. Ao entrar no sistema, o app também tenta sozinho.
+  Quando o banco aceita, o aviso some.
+- Exclusão recusada também fica pendente: o registro apagado não volta ao recarregar.
+
+O que você perdeu naquela sessão não dá para recuperar. Por isso, **rode o `schema.sql`
+antes de continuar os testes** e cadastre os dois imóveis de novo.
+
+- [ ] Rodar o `schema.sql`.
+- [ ] Recadastrar os dois imóveis e editar o valor de um, recarregando a página no fim.
+
+`test30` simula o banco sem as colunas novas e cobre todos os passos: falhava no código
+antigo e passa no novo.
+
+---
+
 ## 7o. Imóveis e imóvel de terceiro no singular (24/09)
 
 O que você pediu testando:
