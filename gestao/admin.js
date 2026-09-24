@@ -695,8 +695,7 @@ function novaVendaEscolhendoEmp() {
   const pre = lista.find(l => l.id === escopoAtual()) ? escopoAtual() : (lista[0] || {}).id;
   const botao = podeNovo ? `<button type="button" class="btn btn-secondary" style="flex:none" onclick="novoImovelParaContrato()">＋ Novo imóvel</button>` : '';
   openModal({ title: '💰 Novo contrato',
-    body: `<p class="help mb">Qual imóvel está sendo vendido? Se ele ainda não está no sistema — uma venda antiga que você está trazendo, um imóvel que já entrou vendido — cadastre aqui mesmo${podeNovo ? '' : ' (peça ao administrador)'}.</p>
-      ${lista.length ? `<div class="fg"><label>Loteamento ou imóvel</label><div class="row-between" style="gap:8px"><select id="ceEmp" style="flex:1">${lista.map(l => `<option value="${esc(l.id)}" ${l.id === pre ? 'selected' : ''}>${esc(l.nome)} — ${esc(empLabel(l))}${ehCarteira(l) && num(l.preco) ? ' · ' + esc(fmtMoney(l.preco)) : ''}</option>`).join('')}</select>${botao}</div>
+    body: `${lista.length ? `<div class="fg"><label>Loteamento ou imóvel</label><div class="row-between" style="gap:8px"><select id="ceEmp" style="flex:1">${lista.map(l => `<option value="${esc(l.id)}" ${l.id === pre ? 'selected' : ''}>${esc(l.nome)} — ${esc(empLabel(l))}${ehCarteira(l) && num(l.preco) ? ' · ' + esc(fmtMoney(l.preco)) : ''}</option>`).join('')}</select>${botao}</div>
         <div class="hint">Num loteamento, se o lote ainda não foi cadastrado, dá para cadastrar ele no próprio contrato.</div></div>`
         : `<div class="empty"><div class="ic">🏠</div><p><b>Nenhum imóvel disponível para vender.</b></p><div class="btn-row" style="justify-content:center">${botao}</div></div>`}`,
     footer: `<button class="btn btn-secondary" onclick="closeModal()">Cancelar</button>${lista.length ? '<button class="btn btn-primary" onclick="continuarNovoContrato()">Continuar</button>' : ''}` });
