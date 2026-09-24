@@ -658,6 +658,11 @@ venda antiga sendo trazida para cá, imóvel que entrou e saiu vendido sem passa
 `test31` cobre os dois caminhos, o "Voltar", o lote repetido, o contrato recusado sem lote
 solto, o lote vendido sem contrato e a permissão.
 
+De quebra, corrigi um defeito que o teste pegou: ao abrir o cadastro do imóvel ou da despesa,
+o sistema põe o cursor no primeiro campo logo depois da abertura. Se você já tinha clicado
+em outro campo e começado a digitar, o cursor era puxado de volta e o texto caía no campo
+errado. Agora ele não mexe no cursor de quem já está digitando (`test32`).
+
 ---
 
 ## 7p. Alteração perdida quando a nuvem recusa — corrigido (24/09)
