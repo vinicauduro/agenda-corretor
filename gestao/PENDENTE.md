@@ -633,6 +633,38 @@ gaveta no celular sem rolagem lateral. As outras 17 suítes e os testes do banco
 
 ---
 
+## 7q. Cadastrar o imóvel no próprio contrato (24/09)
+
+Pedido seu: dar para registrar um contrato mesmo que o imóvel ainda não esteja no sistema —
+venda antiga sendo trazida para cá, imóvel que entrou e saiu vendido sem passar pelo estoque.
+
+- **＋ Novo contrato** agora sempre pergunta qual é o imóvel, mesmo quando só existe um, e
+  tem o botão **＋ Novo imóvel** ao lado da lista. Ele abre o cadastro do imóvel de terceiro
+  (valor de venda, matrícula, endereço…) ou do loteamento. **Salvar e abrir o contrato** já
+  leva para o contrato com os dados preenchidos. **‹ Voltar** retorna à escolha sem criar nada.
+- **No contrato de loteamento**, ao lado da lista de lotes, tem o botão **＋ Novo lote**. Os
+  campos do lote (quadra, número, área, frente, fundos, matrícula e preço de tabela) abrem
+  dentro do próprio contrato, sem perder o que já foi digitado. O lote só é gravado junto
+  com o contrato, já como vendido; se o contrato for recusado, não fica lote solto. A posição
+  na planta você marca depois.
+- **Venda antiga de lote**: um lote marcado como vendido que não tem contrato no sistema
+  aparece na lista ("marcado vendido, sem contrato"), para lançar o contrato dele.
+- Quem vê os botões: só dono e administrador, que são quem o banco deixa criar imóvel e lote.
+  O financeiro registra o contrato de um imóvel já cadastrado.
+
+- [ ] Lançar uma venda antiga de um imóvel de terceiro direto pelo **＋ Novo contrato**.
+- [ ] Lançar um contrato de um lote que ainda não estava cadastrado.
+
+`test31` cobre os dois caminhos, o "Voltar", o lote repetido, o contrato recusado sem lote
+solto, o lote vendido sem contrato e a permissão.
+
+De quebra, corrigi um defeito que o teste pegou: ao abrir o cadastro do imóvel ou da despesa,
+o sistema põe o cursor no primeiro campo logo depois da abertura. Se você já tinha clicado
+em outro campo e começado a digitar, o cursor era puxado de volta e o texto caía no campo
+errado. Agora ele não mexe no cursor de quem já está digitando (`test32`).
+
+---
+
 ## 7p. Alteração perdida quando a nuvem recusa — corrigido (24/09)
 
 Seu relato: cadastrou 2 imóveis, editou o valor de um, deu erro e tudo que foi alterado na

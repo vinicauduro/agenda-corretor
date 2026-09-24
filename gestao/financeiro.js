@@ -227,7 +227,7 @@ function abrirCustoForm(id) {
     <div class="fg"><label>Lote (opcional)</label><select id="cuLote"><option value="">— Custo geral do loteamento —</option>${optionsHtml(lotesDo(lot.id), c ? c.loteId || '' : '', l => loteLabel(l))}</select></div>
     <div class="fg"><label>Observações</label><textarea id="cuObs">${esc(c ? c.obs || '' : '')}</textarea></div>`;
   openModal({ title: c ? '✏️ Editar custo' : '🧾 Lançar custo', body, footer: `${c ? `<button class="btn btn-outline-danger" onclick="excluirCusto('${c.id}')">Excluir</button>` : ''}<button class="btn btn-secondary" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" onclick="salvarCusto('${c ? c.id : ''}')">Salvar</button>` });
-  setTimeout(() => $('#cuDesc').focus(), 60);
+  focarSeLivre('cuDesc');
 }
 function salvarCusto(id) {
   const lot = curLot(); const prev = id ? db.custos.find(x => x.id === id) : null;

@@ -121,6 +121,16 @@ function openModal({ title, body, footer = '', wide = false, full = false, onClo
   state.modalOnClose = onClose;
   document.body.style.overflow = 'hidden';
 }
+/* Põe o cursor no primeiro campo logo depois de a janela abrir, mas só se a pessoa ainda
+   não começou a digitar em outro: o foco atrasado roubava o cursor no meio da digitação e o
+   texto caía no campo errado. */
+function focarSeLivre(id) {
+  setTimeout(() => {
+    const a = document.activeElement, corpo = document.getElementById('modalBody');
+    if (a && corpo && corpo.contains(a) && a !== document.getElementById(id)) return;
+    const el = document.getElementById(id); if (el) el.focus();
+  }, 60);
+}
 function closeModal() {
   $('#modalOverlay').classList.remove('open');
   document.body.style.overflow = '';
