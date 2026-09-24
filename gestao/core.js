@@ -450,8 +450,18 @@ const Cloud = {
     });
     if (!db.categorias.length) db.categorias = defaultCategorias();
     migrarCategorias();
+    /* O que a nuvem recusou antes continua valendo neste navegador: reaplica por cima do que
+       veio do banco, para nada sumir ao recarregar, e tenta mandar de novo. */
+    this.carregarPendentes();
+    this.pendentes.forEach(p => {
+      if (!db[p.col]) return;
+      db[p.col] = db[p.col].filter(r => r.id !== p.id);
+      if (p.op === 'upsert' && p.rec) db[p.col].push(p.rec);
+    });
     await this.loadEquipe();
     saveLocal();
+    renderPendentes();
+    if (this.pendentes.length) setTimeout(() => this.reenviarPendentes(true), 0);
   },
   async loadEquipe() {
     const org = this.org.id;
@@ -483,18 +493,63 @@ const Cloud = {
     saveLocal(); this.agendarRender();
   },
   agendarRender() { clearTimeout(this._renderTimer); this._renderTimer = setTimeout(() => { if (!$('#modalOverlay').classList.contains('open')) renderCurrent(); else updateTopbars(); }, 250); },
-  erro(e, oque) { console.error(oque, e); toast('⚠️', 'Falha ao salvar na nuvem', (e && e.message) || String(e), true); },
+  erro(e, oque) { console.error(oque, e); toast('⚠️', 'Falha ao salvar na nuvem', motivoFalhaNuvem((e && e.message) || String(e)), true); },
+
+  // --- alterações que a nuvem recusou ---
+  /* Antes, uma gravação recusada ficava só na memória do navegador e sumia ao recarregar,
+     porque o app baixa tudo do banco de novo. Agora ela entra nesta lista, guardada no
+     navegador por empresa, até o banco aceitar. */
+  pendentes: [], _seq: {},
+  chavePendentes() { return this.org ? 'gl_pend_' + this.org.id : null; },
+  carregarPendentes() {
+    const k = this.chavePendentes();
+    try { this.pendentes = k ? JSON.parse(localStorage.getItem(k) || '[]') : []; } catch (e) { this.pendentes = []; }
+  },
+  gravarPendentes() {
+    const k = this.chavePendentes();
+    if (k) { try { if (this.pendentes.length) localStorage.setItem(k, JSON.stringify(this.pendentes)); else localStorage.removeItem(k); } catch (e) {} }
+    renderPendentes();
+  },
+  marcarPendente(op, col, id, rec, erro) {
+    this.pendentes = this.pendentes.filter(p => !(p.col === col && p.id === id));
+    this.pendentes.push({ op, col, id, rec: rec || null, erro: String(erro || ''), em: new Date().toISOString() });
+    this.gravarPendentes();
+  },
+  limparPendente(col, id) {
+    const n = this.pendentes.length;
+    this.pendentes = this.pendentes.filter(p => !(p.col === col && p.id === id));
+    if (n !== this.pendentes.length) this.gravarPendentes();
+  },
+  async reenviarPendentes(silencioso) {
+    const lista = this.pendentes.slice(); if (!lista.length) return;
+    for (const p of lista) {
+      if (p.op === 'remove') await this.remove(p.col, p.id, true);
+      else await this.upsert(p.col, p.rec, true);
+    }
+    const n = this.pendentes.length;
+    if (!silencioso) toast(n ? '⚠️' : '✅', n ? `${n} alteração(ões) ainda não foram para a nuvem` : 'Tudo enviado para a nuvem', n ? motivoFalhaNuvem(this.pendentes[0].erro) : '', !!n);
+  },
 
   // --- escrita ---
-  async upsert(col, rec) {
+  /* Cada gravação leva um número por registro: se duas saem seguidas e a resposta da mais
+     antiga chega por último, ela não desfaz o resultado da mais nova. */
+  async upsert(col, rec, quieto) {
     if (!TABLE_COLS[col]) return;
-    const { error } = await this.client.from(tabelaDe(col)).upsert(toRow(col, rec), { onConflict: 'org_id,id' });
-    if (error) this.erro(error, col);
+    const k = col + ':' + rec.id, seq = this._seq[k] = (this._seq[k] || 0) + 1;
+    let error;
+    try { ({ error } = await this.client.from(tabelaDe(col)).upsert(toRow(col, rec), { onConflict: 'org_id,id' })); } catch (e) { error = e; }
+    if (this._seq[k] !== seq) return;
+    if (error) { this.marcarPendente('upsert', col, rec.id, rec, error.message || error); if (!quieto) this.erro(error, col); }
+    else this.limparPendente(col, rec.id);
   },
-  async remove(col, id) {
+  async remove(col, id, quieto) {
     if (!TABLE_COLS[col]) return;
-    const { error } = await this.client.from(tabelaDe(col)).delete().eq('org_id', this.org.id).eq('id', id);
-    if (error) this.erro(error, col);
+    const k = col + ':' + id, seq = this._seq[k] = (this._seq[k] || 0) + 1;
+    let error;
+    try { ({ error } = await this.client.from(tabelaDe(col)).delete().eq('org_id', this.org.id).eq('id', id)); } catch (e) { error = e; }
+    if (this._seq[k] !== seq) return;
+    if (error) { this.marcarPendente('remove', col, id, null, error.message || error); if (!quieto) this.erro(error, col); }
+    else this.limparPendente(col, id);
   },
   async saveConfig() {
     const cfg = Object.assign({}, db.config); delete cfg.adminPin; delete cfg.pinPadrao; delete cfg.codigoCorretor;
@@ -544,6 +599,27 @@ const Cloud = {
   },
   async apagarConvite(id) { const { error } = await this.client.from('convites').delete().eq('id', id); if (error) throw new Error(error.message); await this.loadEquipe(); }
 };
+/* O motivo em português, com o que fazer. O caso mais comum é o banco ainda sem as colunas de
+   uma versão nova do aplicativo, porque o schema.sql não foi rodado de novo. */
+function motivoFalhaNuvem(msg) {
+  const m = String(msg || '');
+  if (/column|schema cache|does not exist|relation/i.test(m)) return 'O banco está sem os campos novos desta versão: rode o schema.sql no Supabase e depois clique em Tentar de novo.';
+  if (/row-level security|permission|42501/i.test(m)) return 'O banco recusou por falta de permissão do seu perfil.';
+  if (/fetch|network|rede|timeout|offline/i.test(m)) return 'Sem conexão com a nuvem. Assim que a internet voltar, clique em Tentar de novo.';
+  return m;
+}
+const COL_NOMES = { loteamentos: 'Imóvel', lotes: 'Lote', reservas: 'Reserva', vendas: 'Contrato', recebiveis: 'Parcela', custos: 'Despesa', clientes: 'Cliente', vendedores: 'Vendedor', categorias: 'Categoria', modelos: 'Modelo de documento', indices: 'Índice', cobrancas: 'Cobrança', contasBanco: 'Conta bancária', remessas: 'Remessa', log: 'Histórico' };
+function renderPendentes() {
+  const ps = (Cloud.active && Cloud.pendentes) || [];
+  const itens = ps.filter(p => p.col !== 'log');
+  $$('.sync-pendentes').forEach(el => {
+    if (!ps.length) { el.innerHTML = ''; return; }
+    const rot = p => { const r = p.rec || {}; const nome = r.nome || r.descricao || (r.cliente && r.cliente.nome) || ''; return `${COL_NOMES[p.col] || p.col}${nome ? ' “' + nome + '”' : ''}${p.op === 'remove' ? ' (exclusão)' : ''}`; };
+    el.innerHTML = `<div class="alert warn" style="cursor:default;align-items:center;gap:10px"><span><b>${ps.length} alteração(ões) não chegaram à nuvem</b> e estão guardadas só neste navegador. ${esc(motivoFalhaNuvem(ps[0].erro))}
+      ${itens.length ? `<br><span class="tiny">${esc(itens.slice(0, 4).map(rot).join(' · '))}${itens.length > 4 ? ` e mais ${itens.length - 4}` : ''}</span>` : ''}</span>
+      <button class="btn btn-primary btn-sm" style="flex:none" onclick="Cloud.reenviarPendentes()">Tentar de novo</button></div>`;
+  });
+}
 function renderSyncStatus() {
   const on = Cloud.enabled;
   $$('.sync-pill').forEach(el => {

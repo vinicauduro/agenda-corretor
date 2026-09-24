@@ -42,6 +42,7 @@
     <div class="brand"><span>🏘️</span><div><h1 class="lot-name">Loteamento</h1><div class="role">Área do corretor</div></div></div>
     <div class="right"><span class="user-name small" style="display:none;opacity:.85"></span><select class="lot-select" onchange="setCurLot(this.value)"></select><button class="top-link btn-voltar-admin" style="display:none" onclick="voltarAdmin()" title="Voltar à administração">🔐 Admin</button><button class="top-link" onclick="sair()">Sair</button></div>
   </div>
+  <div class="sync-pendentes" id="syncPendentesCorretor"></div>
   <div class="tabs">
     <div class="tab active" data-tab="planta" onclick="switchTab('planta')">🗺️ Planta</div>
     <div class="tab" data-tab="lotes" onclick="switchTab('lotes')">📋 Lotes</div>
@@ -92,6 +93,7 @@
       <div class="brand"><button class="aside-burger" onclick="document.body.classList.add('aside-aberto')" aria-label="Abrir menu">☰</button><span>🔐</span><div><h1 class="lot-name">Loteamento</h1><div class="role">Administração</div></div></div>
       <div class="right"><span class="user-name small" style="display:none;opacity:.85"></span><button class="top-link btn-ver-corretor" onclick="startRole('corretor')" title="Ver como o corretor vê">👁️</button><button class="top-link" onclick="sair()">Sair</button></div>
     </div>
+    <div class="sync-pendentes" id="syncPendentes"></div>
     <div class="view active" id="av-painel"></div>
     <div class="view" id="av-emp"></div>
     <div class="view" id="av-reservas"></div>

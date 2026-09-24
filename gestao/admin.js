@@ -968,12 +968,12 @@ function terceiroResumoHtml(lot) {
   const vd = vendaAtivaDoImovel(lot); const c = lot.cond || {};
   const temCond = ['entradaMinPct', 'maxParcelas', 'jurosMes', 'descontoVistaPct'].some(k => num(c[k]));
   const end = enderecoLinha(lot) || lot.endereco || '';
-  return `<div class="card"><h3>🏠 ${esc(lot.nome)} <span class="badge neutral">Imóvel de terceiro</span> <span class="badge ${vd ? 'vendido' : 'disponivel'}">${vd ? 'Vendido' : 'Disponível'}</span>
+  return `<div class="card"><h3><span>🏠 ${esc(lot.nome)} <span class="badge neutral">Imóvel de terceiro</span> <span class="badge ${vd ? 'vendido' : 'disponivel'}">${vd ? 'Vendido' : 'Disponível'}</span></span>
       ${pode('config.editar') || pode('lotes.editar') ? `<span class="h-actions"><button class="btn btn-secondary btn-sm" onclick="abrirLoteamentoForm('${lot.id}')">✏️ Editar</button></span>` : ''}</h3>
     <div class="row-between mb" style="flex-wrap:wrap;gap:10px">
       <div><div class="price-big">${num(lot.preco) ? fmtMoney(lot.preco) : '—'}</div><div class="price-sub">${num(lot.preco) ? 'valor de venda' : 'valor de venda ainda não informado'}</div></div>
-      ${vd ? `<button class="btn btn-secondary" onclick="abrirVendaAdmin('${vd.id}')">📄 Contrato de ${esc(vd.cliente.nome)} · ${fmtMoney(vd.valorTotal)}</button>`
-        : pode('vendas.criar') ? `<button class="btn btn-primary" onclick="setCurLotSilencioso('${lot.id}');abrirVendaForm()">💰 Registrar venda</button>` : ''}
+      ${vd ? `<button class="btn btn-secondary" style="flex:none" onclick="abrirVendaAdmin('${vd.id}')">📄 Contrato de ${esc(vd.cliente.nome)} · ${fmtMoney(vd.valorTotal)}</button>`
+        : pode('vendas.criar') ? `<button class="btn btn-primary" style="flex:none" onclick="setCurLotSilencioso('${lot.id}');abrirVendaForm()">💰 Registrar venda</button>` : ''}
     </div>
     <div class="detail-grid">
       <div><div class="k">Matrícula</div><div class="v">${esc(lot.matricula) || '—'}</div></div><div><div class="k">Área</div><div class="v">${num(lot.area) ? fmtNum(lot.area, 2) + ' m²' : '—'}</div></div>
@@ -1044,7 +1044,7 @@ function salvarLoteamento(id) {
   const rec = Object.assign({}, prev || { id: genId(), criadoEm: new Date().toISOString(), orcamento: {}, tipo: val('lmTipo') === 'carteira' ? 'carteira' : 'loteamento' }, { nome, cidade: val('lmCidade'), endereco: val('lmEnd'), descricao: val('lmDesc'),
     cep: val('lmCep'), logradouro: val('lmLogr'), numeroEnd: val('lmNum'), bairro: val('lmBairro'), uf: val('lmUf'),
     cartorio: val('lmCartorio'), matriculaMae: val('lmMatMae'), codigoIbge: onlyDigits(val('lmIbge')),
-    ...(terc ? { preco: num(val('lmPreco')), matricula: val('lmMat'), area: num(val('lmArea')) || null, descricaoMatricula: val('lmDescMat') } : {}), cond: { entradaMinPct: num(val('lmEntrada')), maxParcelas: Math.round(num(val('lmMaxP'))) || 120, jurosMes: num(val('lmJuros')), descontoVistaPct: num(val('lmDesc2')) } });
+    ...(terc ? { preco: num(val('lmPreco')), matricula: val('lmMat'), area: num(val('lmArea')) || null, descricaoMatricula: val('lmDescMat') } : {}), cond: terc && !$('#lmCondBox').open ? ((prev && prev.cond) || {}) : { entradaMinPct: num(val('lmEntrada')), maxParcelas: Math.round(num(val('lmMaxP'))) || 120, jurosMes: num(val('lmJuros')), descontoVistaPct: num(val('lmDesc2')) } });
   upsert('loteamentos', rec);
   if (!prev) { logAct(`${empLabel(rec)} cadastrado: ${nome}`); state.empAberto = rec.id; state.empSub = 'resumo'; setCurLotSilencioso(rec.id); state.tab = 'emp'; }
   closeModal(); renderCurrent(); toast('✅', `${empLabel(rec)} salvo`, nome);
