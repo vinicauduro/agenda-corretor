@@ -633,6 +633,36 @@ gaveta no celular sem rolagem lateral. As outras 17 suítes e os testes do banco
 
 ---
 
+## 7r. Tipos de imóvel (25/09)
+
+Pedido seu: em vez de "Loteamento" e "Imóvel de terceiro", o tipo diz o que o imóvel é.
+
+O seletor de tipo agora tem **Empreendimento** no topo e, logo abaixo, os imóveis avulsos
+em ordem alfabética: **Apartamento, Casa, Galpão, Lote, Sala comercial e Sítio**. Deixei o
+Empreendimento separado porque ele funciona diferente: tem planta, quadras e muitos lotes.
+Os outros são um imóvel só, com valor de venda.
+
+- **O tipo começa sem escolha** e é obrigatório, para uma casa não ser cadastrada como
+  apartamento por descuido.
+- **O exemplo do campo muda com o tipo**: "Apartamento 302 do Ed. Aurora", "Casa na Rua das
+  Flores, 120", "Sítio Boa Vista"…
+- **Na lista e no resumo** aparece o tipo com o ícone dele: 🏘️ Empreendimento, 🏢
+  Apartamento, 🏠 Casa, 🏭 Galpão, 📐 Lote, 🏬 Sala comercial, 🌳 Sítio.
+- **Editando um avulso**, dá para trocar entre os tipos avulsos (casa → sítio, por exemplo),
+  mas ele não vira empreendimento, e empreendimento não vira avulso.
+- **O que já está cadastrado continua funcionando.** Um avulso criado antes desta mudança
+  aparece como "Imóvel" até você abrir, escolher o tipo e salvar.
+- **O contrato continua dizendo "Lote 3 da Quadra A do Loteamento Tal"**, que é o nome
+  jurídico. "Empreendimento" é só como aparece na tela.
+
+- [ ] Rodar o `schema.sql` (coluna nova `categoria` em loteamentos).
+- [ ] Abrir o Lote 15 da Quadra 300, escolher **Lote** e salvar.
+
+`test33` cobre a ordem da lista, o tipo obrigatório, os exemplos por tipo, a troca entre
+avulsos, o imóvel antigo sem tipo e a redação do contrato.
+
+---
+
 ## 7q. Cadastrar o imóvel no próprio contrato (24/09)
 
 Pedido seu: dar para registrar um contrato mesmo que o imóvel ainda não esteja no sistema —

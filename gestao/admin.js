@@ -85,27 +85,27 @@ function renderEmpreendimentos() {
   else if (state.empSub === 'custos') { renderCustos(alvo); if (pode('custos.editar')) fabShow('abrirCustoForm()'); }
 }
 /* A lista não mostra valor de loteamento: são centenas de lotes com preços diferentes, e o
-   número que importa aparece quando você abre. O imóvel de terceiro é um só, então o valor
+   número que importa aparece quando você abre. O imóvel avulso é um só, então o valor
    de venda dele é a informação principal e fica à vista. */
 function listaEmpreendimentosHtml() {
   const podeCriar = pode('config.editar') || pode('lotes.editar');
   return `<div class="card"><h3>🏠 Imóveis ${podeCriar ? '<span class="h-actions"><button class="btn btn-primary btn-sm" onclick="abrirLoteamentoForm()">＋ Novo</button></span>' : ''}</h3>
-    <p class="help mb">Os loteamentos, com planta e lotes, e cada imóvel de terceiro que você vende — um lote, uma casa, um apartamento. Abra um para ver preços e situação. Contratos, recebíveis e relatórios ficam no menu, com todos juntos.</p>
+    <p class="help mb">Os empreendimentos, com planta e lotes, e cada imóvel avulso que você vende — apartamento, casa, lote, sala… Abra um para ver preços e situação. Contratos, recebíveis e relatórios ficam no menu, com todos juntos.</p>
     ${db.loteamentos.slice().sort((a, b) => (ehCarteira(a) - ehCarteira(b)) || naturalCmp(a.nome, b.nome)).map(l => {
       if (ehCarteira(l)) {
         const vd = vendaAtivaDoImovel(l);
         return `<div class="item" onclick="abrirEmpreendimento('${l.id}')"><div class="info">
-          <div class="title">🏠 ${esc(l.nome)} <span class="badge neutral">Imóvel de terceiro</span></div>
+          <div class="title">${empIcone(l)} ${esc(l.nome)} <span class="badge neutral">${esc(empLabel(l))}</span></div>
           <div class="meta">${esc(l.cidade || '')}${l.matricula ? `<span>· matrícula ${esc(l.matricula)}</span>` : ''}${num(l.area) ? `<span>· ${fmtNum(l.area, 2)} m²</span>` : ''}${vd ? `<span>· vendido para ${esc(vd.cliente.nome)}</span>` : ''}</div>
         </div><div class="side">${num(l.preco) ? `<div class="value">${fmtMoney(l.preco)}</div>` : '<div class="tiny muted">sem valor de venda</div>'}<span class="badge ${vd ? 'vendido' : 'disponivel'}">${vd ? 'Vendido' : 'Disponível'}</span></div></div>`;
       }
       const ls = lotesDo(l.id);
       const pend = db.reservas.filter(r => r.loteamentoId === l.id && reservaStatus(r) === 'pendente').length;
       return `<div class="item" onclick="abrirEmpreendimento('${l.id}')"><div class="info">
-        <div class="title">🏘️ ${esc(l.nome)} <span class="badge neutral">Loteamento</span>${pend ? ` <span class="badge pendente">${pend} reserva(s) a aprovar</span>` : ''}</div>
+        <div class="title">🏘️ ${esc(l.nome)} <span class="badge neutral">Empreendimento</span>${pend ? ` <span class="badge pendente">${pend} reserva(s) a aprovar</span>` : ''}</div>
         <div class="meta">${esc(l.cidade || '')}<span>· ${ls.length} lotes</span><span>· ${ls.filter(x => x.status === 'vendido').length} vendidos</span><span>· ${ls.filter(x => x.status === 'disponivel').length} disponíveis</span></div>
       </div><div class="side"><span class="muted">›</span></div></div>`;
-    }).join('') || `<div class="empty"><div class="ic">🏠</div><p><b>Nenhum imóvel cadastrado ainda.</b></p><p class="small">Cadastre um loteamento, com planta e lotes, ou um imóvel de terceiro que você vai vender.</p></div>`}</div>`;
+    }).join('') || `<div class="empty"><div class="ic">🏠</div><p><b>Nenhum imóvel cadastrado ainda.</b></p><p class="small">Cadastre um empreendimento, com planta e lotes, ou um imóvel avulso — apartamento, casa, lote — que você vai vender.</p></div>`}</div>`;
 }
 function fabShow(action) { const f = $('#fab'); f.classList.add('show'); f.setAttribute('onclick', action); }
 
@@ -686,7 +686,7 @@ function podeCriarLote() { return ehAdminDaEmpresa() && pode('lotes.editar'); }
 /* Novo contrato: primeiro o imóvel. A escolha aparece sempre, mesmo com um só, porque o
    imóvel pode ainda não estar no sistema — uma venda antiga que está sendo trazida, um
    imóvel que entrou e saiu vendido sem passar pelo estoque. Aí ele é cadastrado aqui mesmo
-   e o contrato segue com ele. Imóvel de terceiro já vendido não entra: ele é um só. */
+   e o contrato segue com ele. Imóvel avulso já vendido não entra: ele é um só. */
 function novaVendaEscolhendoEmp() {
   const lista = db.loteamentos.filter(l => !ehCarteira(l) || !vendaAtivaDoImovel(l))
     .sort((a, b) => (ehCarteira(a) - ehCarteira(b)) || naturalCmp(a.nome, b.nome));
@@ -695,8 +695,8 @@ function novaVendaEscolhendoEmp() {
   const pre = lista.find(l => l.id === escopoAtual()) ? escopoAtual() : (lista[0] || {}).id;
   const botao = podeNovo ? `<button type="button" class="btn btn-secondary" style="flex:none" onclick="novoImovelParaContrato()">＋ Novo imóvel</button>` : '';
   openModal({ title: '💰 Novo contrato',
-    body: `${lista.length ? `<div class="fg"><label>Loteamento ou imóvel</label><div class="row-between" style="gap:8px"><select id="ceEmp" style="flex:1">${lista.map(l => `<option value="${esc(l.id)}" ${l.id === pre ? 'selected' : ''}>${esc(l.nome)} — ${esc(empLabel(l))}${ehCarteira(l) && num(l.preco) ? ' · ' + esc(fmtMoney(l.preco)) : ''}</option>`).join('')}</select>${botao}</div>
-        <div class="hint">Num loteamento, se o lote ainda não foi cadastrado, dá para cadastrar ele no próprio contrato.</div></div>`
+    body: `${lista.length ? `<div class="fg"><label>Imóvel</label><div class="row-between" style="gap:8px"><select id="ceEmp" style="flex:1">${lista.map(l => `<option value="${esc(l.id)}" ${l.id === pre ? 'selected' : ''}>${esc(l.nome)} — ${esc(empLabel(l))}${ehCarteira(l) && num(l.preco) ? ' · ' + esc(fmtMoney(l.preco)) : ''}</option>`).join('')}</select>${botao}</div>
+        <div class="hint">Num empreendimento, se o lote ainda não foi cadastrado, dá para cadastrar ele no próprio contrato.</div></div>`
         : `<div class="empty"><div class="ic">🏠</div><p><b>Nenhum imóvel disponível para vender.</b></p><div class="btn-row" style="justify-content:center">${botao}</div></div>`}`,
     footer: `<button class="btn btn-secondary" onclick="closeModal()">Cancelar</button>${lista.length ? '<button class="btn btn-primary" onclick="continuarNovoContrato()">Continuar</button>' : ''}` });
 }
@@ -706,7 +706,7 @@ function continuarNovoContrato() {
 }
 function novoImovelParaContrato() {
   if (!podeCadastrarImovel()) { toast('🔒', 'Sem permissão', 'Cadastrar imóvel é do dono ou do administrador.', true); return; }
-  closeModal(); abrirLoteamentoForm(null, { tipo: 'carteira', paraContrato: true });
+  closeModal(); abrirLoteamentoForm(null, { paraContrato: true });
 }
 function abrirVendaForm(id, loteId, reservaId) {
   const lot = curLot(); const x = id ? getVenda(id) : null;
@@ -1011,7 +1011,7 @@ function cadLoteamentoHtml() {
   const lot = curLot(); if (!lot) return `<div class="card"><p class="help">Nenhum loteamento. <button class="btn btn-primary btn-sm" onclick="abrirLoteamentoForm()">＋ Cadastrar</button></p></div>`;
   if (ehCarteira(lot)) return terceiroResumoHtml(lot) + (custosDo(lot.id).length ? orcamentoCardHtml(lot) : '');
   const c = lot.cond || {};
-  return `<div class="card"><h3>🏘️ ${esc(lot.nome)} <span class="badge neutral">Loteamento</span> <span class="h-actions"><button class="btn btn-secondary btn-sm" onclick="abrirLoteamentoForm('${lot.id}')">✏️ Editar</button></span></h3>
+  return `<div class="card"><h3>🏘️ ${esc(lot.nome)} <span class="badge neutral">Empreendimento</span> <span class="h-actions"><button class="btn btn-secondary btn-sm" onclick="abrirLoteamentoForm('${lot.id}')">✏️ Editar</button></span></h3>
       <div class="detail-grid"><div><div class="k">Cidade</div><div class="v">${esc(lot.cidade) || '—'}</div></div><div><div class="k">Endereço</div><div class="v">${esc(lot.endereco) || '—'}</div></div><div class="full"><div class="k">Descrição (aparece para os corretores)</div><div class="v">${esc(lot.descricao) || '—'}</div></div>
       <div><div class="k">Entrada mínima</div><div class="v">${fmtNum(c.entradaMinPct || 0, 0)}%</div></div><div><div class="k">Parcelas máx.</div><div class="v">${c.maxParcelas || '—'}</div></div><div><div class="k">Juros</div><div class="v">${c.jurosMes ? fmtNum(c.jurosMes, 2) + '% a.m.' : 'sem juros'}</div></div><div><div class="k">Desconto à vista</div><div class="v">${fmtNum(c.descontoVistaPct || 0, 0)}%</div></div></div></div>
     ${orcamentoCardHtml(lot)}`;
@@ -1027,7 +1027,7 @@ function terceiroResumoHtml(lot) {
   const vd = vendaAtivaDoImovel(lot); const c = lot.cond || {};
   const temCond = ['entradaMinPct', 'maxParcelas', 'jurosMes', 'descontoVistaPct'].some(k => num(c[k]));
   const end = enderecoLinha(lot) || lot.endereco || '';
-  return `<div class="card"><h3><span>🏠 ${esc(lot.nome)} <span class="badge neutral">Imóvel de terceiro</span> <span class="badge ${vd ? 'vendido' : 'disponivel'}">${vd ? 'Vendido' : 'Disponível'}</span></span>
+  return `<div class="card"><h3><span>${empIcone(lot)} ${esc(lot.nome)} <span class="badge neutral">${esc(empLabel(lot))}</span> <span class="badge ${vd ? 'vendido' : 'disponivel'}">${vd ? 'Vendido' : 'Disponível'}</span></span>
       ${pode('config.editar') || pode('lotes.editar') ? `<span class="h-actions"><button class="btn btn-secondary btn-sm" onclick="abrirLoteamentoForm('${lot.id}')">✏️ Editar</button></span>` : ''}</h3>
     <div class="row-between mb" style="flex-wrap:wrap;gap:10px">
       <div><div class="price-big">${num(lot.preco) ? fmtMoney(lot.preco) : '—'}</div><div class="price-sub">${num(lot.preco) ? 'valor de venda' : 'valor de venda ainda não informado'}</div></div>
@@ -1046,13 +1046,19 @@ function terceiroResumoHtml(lot) {
 function abrirLoteamentoForm(id, opc) {
   opc = opc || {};
   const l = id ? getLoteamento(id) : null;
-  const tipo = l ? empTipo(l) : (opc.tipo === 'carteira' ? 'carteira' : 'loteamento'); const terc = tipo === 'carteira';
+  const terc = !!l && ehCarteira(l);
+  const cat = categoriaImovel(l);
+  /* Imóvel novo começa sem tipo escolhido: um apartamento cadastrado como casa por descuido
+     sai errado no contrato. Empreendimento e imóvel avulso não se trocam depois de criados;
+     entre os avulsos dá para corrigir (casa → sobrado não existe, mas casa → sítio sim). */
+  const semTipo = !l || (terc && !cat);
   const c = (l && l.cond) || { entradaMinPct: 10, maxParcelas: 120, jurosMes: 0, descontoVistaPct: 5 };
   const mostra = ok => ok ? '' : 'display:none';
-  const body = `${opc.paraContrato ? '<input type="hidden" id="lmParaContrato" value="1"><div class="alert info" style="cursor:default"><span>Depois de salvar, o contrato abre com este imóvel.</span></div>' : ''}<div class="fg"><label>Tipo *</label><select id="lmTipo" ${l ? 'disabled' : ''} onchange="lmTipoChange()">
-      <option value="loteamento" ${terc ? '' : 'selected'}>Loteamento — com planta e lotes numerados</option>
-      <option value="carteira" ${terc ? 'selected' : ''}>Imóvel de terceiro — um lote, uma casa, um apartamento</option></select>
-      <div class="hint" id="lmHint">${l ? 'O tipo não muda depois de criado.' : lmHint(terc)}</div></div>
+  const body = `${opc.paraContrato ? '<input type="hidden" id="lmParaContrato" value="1"><div class="alert info" style="cursor:default"><span>Depois de salvar, o contrato abre com este imóvel.</span></div>' : ''}<div class="fg"><label>Tipo *</label><select id="lmTipo" ${l && !terc ? 'disabled' : ''} onchange="lmTipoChange()">
+      ${semTipo ? '<option value="" selected disabled>— Escolha o tipo —</option>' : ''}
+      ${!terc ? `<option value="loteamento" ${l ? 'selected' : ''}>Empreendimento — com planta e lotes</option>` : ''}
+      ${!l || terc ? `<optgroup label="Imóvel avulso">${CATEGORIAS_IMOVEL.map(c => `<option value="carteira:${c[0]}" ${cat && cat[0] === c[0] ? 'selected' : ''}>${c[1]}</option>`).join('')}</optgroup>` : ''}</select>
+      <div class="hint" id="lmHint"></div></div>
     <div class="fg"><label id="lmNomeLbl">${terc ? 'Qual é o imóvel *' : 'Nome do loteamento *'}</label><input type="text" id="lmNome" value="${esc(l ? l.nome : '')}" placeholder="${terc ? 'Ex.: Lote 15 da Quadra 300 · Apartamento 302 do Ed. Aurora' : 'Ex.: Residencial Vista Verde'}"></div>
     <div id="lmBoxTerceiro" style="${mostra(terc)}">
       <div class="frow3"><div class="fg"><label>Valor de venda (R$) *</label><input type="number" id="lmPreco" step="0.01" value="${l && num(l.preco) ? l.preco : ''}" placeholder="0,00"></div>
@@ -1076,45 +1082,52 @@ function abrirLoteamentoForm(id, opc) {
       <div class="frow"><div class="fg"><label>Entrada mínima (%)</label><input type="number" id="lmEntrada" step="0.1" value="${c.entradaMinPct ?? 10}"></div><div class="fg"><label>Máximo de parcelas</label><input type="number" id="lmMaxP" value="${c.maxParcelas ?? 120}"></div></div>
       <div class="frow"><div class="fg"><label>Juros do parcelamento (% a.m.)</label><input type="number" id="lmJuros" step="0.01" value="${c.jurosMes ?? 0}"><div class="hint">0 = sem juros (parcelas lineares)</div></div><div class="fg"><label>Desconto à vista (%)</label><input type="number" id="lmDesc2" step="0.1" value="${c.descontoVistaPct ?? 0}"></div></div></details>`;
   openModal({ title: l ? `✏️ Editar ${empLabel(l).toLowerCase()}` : '＋ Novo imóvel', body, footer: `${l && db.loteamentos.length > 1 ? `<button class="btn btn-outline-danger" onclick="excluirLoteamento('${l.id}')">Excluir</button>` : ''}<button class="btn btn-secondary" onclick="${opc.paraContrato ? 'novaVendaEscolhendoEmp()' : 'closeModal()'}">${opc.paraContrato ? '‹ Voltar' : 'Cancelar'}</button><button class="btn btn-primary" onclick="salvarLoteamento('${l ? l.id : ''}')">${opc.paraContrato ? 'Salvar e abrir o contrato' : 'Salvar'}</button>` });
+  lmTipoChange(true);
   focarSeLivre('lmNome');
 }
-function lmHint(terc) {
-  return terc
-    ? 'Um imóvel só, que você vende para o proprietário: lote, casa, apartamento, sala. Não tem planta nem lotes; tem valor de venda, matrícula e endereço, e o contrato já sai com esses dados.'
-    : 'Tem planta, lotes numerados com preço cada um e reservas pelos corretores.';
+/* O que está escolhido no seletor de tipo: '' (nada ainda), 'loteamento' ou 'carteira:casa'. */
+function lmTipoSel() {
+  const v = val('lmTipo');
+  return { vazio: !v, terc: v.startsWith('carteira'), cat: CATEGORIAS_IMOVEL.find(c => 'carteira:' + c[0] === v) || null };
 }
-function lmTipoChange() {
-  const terc = val('lmTipo') === 'carteira';
+function lmTipoChange(abrindo) {
+  const { vazio, terc, cat } = lmTipoSel();
+  const editando = !!$('#lmTipo').disabled || (abrindo && !vazio);
   const mostra = (id, ok) => { const el = document.getElementById(id); if (el) el.style.display = ok ? '' : 'none'; };
-  mostra('lmBoxTerceiro', terc); mostra('lmDescMatBox', terc); mostra('lmMatMaeBox', !terc);
-  $('#lmNomeLbl').textContent = terc ? 'Qual é o imóvel *' : 'Nome do loteamento *';
-  $('#lmNome').placeholder = terc ? 'Ex.: Lote 15 da Quadra 300 · Apartamento 302 do Ed. Aurora' : 'Ex.: Residencial Vista Verde';
+  mostra('lmBoxTerceiro', terc); mostra('lmDescMatBox', terc); mostra('lmMatMaeBox', !terc && !vazio);
+  $('#lmNomeLbl').textContent = terc ? 'Qual é o imóvel *' : vazio ? 'Nome *' : 'Nome do empreendimento *';
+  $('#lmNome').placeholder = terc ? (cat ? cat[3] : 'Ex.: Apartamento 302 do Ed. Aurora') : 'Ex.: Residencial Vista Verde';
   $('#lmDescLbl').textContent = terc ? 'Observações' : 'Descrição para os corretores';
   $('#lmDesc').placeholder = terc ? 'Quem é o proprietário, chaves, o que for útil…' : 'Infraestrutura, diferenciais, área de lazer…';
-  $('#lmHint').textContent = lmHint(terc);
+  $('#lmHint').textContent = vazio ? 'Empreendimento tem planta e lotes; os outros são um imóvel só, com valor de venda, matrícula e endereço.'
+    : terc ? `Um imóvel só: valor de venda, matrícula e endereço, e o contrato já sai com esses dados.${editando ? ' Dá para trocar entre os tipos de imóvel avulso.' : ''}`
+    : editando ? 'O tipo não muda depois de criado.' : 'Tem planta, lotes numerados com preço cada um e reservas pelos corretores.';
   $('#lmCondOpc').textContent = terc ? '— opcional' : '';
-  $('#lmCondBox').open = !terc;
+  if (!abrindo || !editando) $('#lmCondBox').open = !terc && !vazio;
 }
 function salvarLoteamento(id) {
   const prev = id ? getLoteamento(id) : null;
-  const terc = prev ? ehCarteira(prev) : val('lmTipo') === 'carteira';
+  const sel = lmTipoSel();
+  if (!prev && sel.vazio) { toast('⚠️', 'Escolha o tipo do imóvel', 'Empreendimento, apartamento, casa, lote…', true); return; }
+  const terc = prev ? ehCarteira(prev) : sel.terc;
+  if (terc && !sel.cat) { toast('⚠️', 'Escolha o tipo do imóvel', 'Apartamento, casa, galpão, lote, sala comercial ou sítio.', true); return; }
   const nome = val('lmNome'); if (!nome) { toast('⚠️', terc ? 'Informe qual é o imóvel' : 'Informe o nome', terc ? 'Ex.: Lote 15 da Quadra 300' : '', true); return; }
   /* Sem preço não há o que vender: as condições de pagamento dependem dele. */
   if (terc && !(num(val('lmPreco')) > 0)) { toast('⚠️', 'Informe o valor de venda', 'É por ele que a venda e as condições começam.', true); const p = $('#lmPreco'); if (p) p.focus(); return; }
-  const rec = Object.assign({}, prev || { id: genId(), criadoEm: new Date().toISOString(), orcamento: {}, tipo: val('lmTipo') === 'carteira' ? 'carteira' : 'loteamento' }, { nome, cidade: val('lmCidade'), endereco: val('lmEnd'), descricao: val('lmDesc'),
+  const rec = Object.assign({}, prev || { id: genId(), criadoEm: new Date().toISOString(), orcamento: {}, tipo: terc ? 'carteira' : 'loteamento' }, { nome, cidade: val('lmCidade'), endereco: val('lmEnd'), descricao: val('lmDesc'),
     cep: val('lmCep'), logradouro: val('lmLogr'), numeroEnd: val('lmNum'), bairro: val('lmBairro'), uf: val('lmUf'),
     cartorio: val('lmCartorio'), matriculaMae: val('lmMatMae'), codigoIbge: onlyDigits(val('lmIbge')),
-    ...(terc ? { preco: num(val('lmPreco')), matricula: val('lmMat'), area: num(val('lmArea')) || null, descricaoMatricula: val('lmDescMat') } : {}), cond: terc && !$('#lmCondBox').open ? ((prev && prev.cond) || {}) : { entradaMinPct: num(val('lmEntrada')), maxParcelas: Math.round(num(val('lmMaxP'))) || 120, jurosMes: num(val('lmJuros')), descontoVistaPct: num(val('lmDesc2')) } });
+    ...(terc ? { categoria: sel.cat[0], preco: num(val('lmPreco')), matricula: val('lmMat'), area: num(val('lmArea')) || null, descricaoMatricula: val('lmDescMat') } : {}), cond: terc && !$('#lmCondBox').open ? ((prev && prev.cond) || {}) : { entradaMinPct: num(val('lmEntrada')), maxParcelas: Math.round(num(val('lmMaxP'))) || 120, jurosMes: num(val('lmJuros')), descontoVistaPct: num(val('lmDesc2')) } });
   const paraContrato = !prev && val('lmParaContrato') === '1';
   upsert('loteamentos', rec);
   if (paraContrato) {
-    logAct(`${empLabel(rec)} cadastrado no contrato: ${nome}`);
+    logAct(`Imóvel cadastrado no contrato: ${empLabel(rec)} — ${nome}`);
     closeModal(); setCurLotSilencioso(rec.id); abrirVendaForm();
-    toast('✅', `${empLabel(rec)} cadastrado`, 'Agora preencha o contrato.');
+    toast('✅', 'Imóvel cadastrado', 'Agora preencha o contrato.');
     return;
   }
-  if (!prev) { logAct(`${empLabel(rec)} cadastrado: ${nome}`); state.empAberto = rec.id; state.empSub = 'resumo'; setCurLotSilencioso(rec.id); state.tab = 'emp'; }
-  closeModal(); renderCurrent(); toast('✅', `${empLabel(rec)} salvo`, nome);
+  if (!prev) { logAct(`Imóvel cadastrado: ${empLabel(rec)} — ${nome}`); state.empAberto = rec.id; state.empSub = 'resumo'; setCurLotSilencioso(rec.id); state.tab = 'emp'; }
+  closeModal(); renderCurrent(); toast('✅', prev ? 'Alterações salvas' : 'Imóvel cadastrado', `${empLabel(rec)} · ${nome}`);
 }
 function excluirLoteamento(id) {
   const l = getLoteamento(id); if (!l) return;
@@ -1124,7 +1137,7 @@ function excluirLoteamento(id) {
   db.vendas.filter(x => x.loteamentoId === id).forEach(x => { recebiveisDe(x.id).forEach(r => removeRec('recebiveis', r.id)); removeRec('vendas', x.id); });
   db.custos.filter(x => x.loteamentoId === id).forEach(x => removeRec('custos', x.id));
   removeRec('loteamentos', id); state.lotId = null; state.plantaAdmin = null; state.plantaCorretor = null;
-  closeModal(); renderCurrent(); toast('🗑️', `${empLabel(l)} excluído`, l.nome);
+  closeModal(); renderCurrent(); toast('🗑️', 'Imóvel excluído', `${empLabel(l)} · ${l.nome}`);
 }
 function cadLoteamentosHtml() {
   return `<div class="card"><h3>📋 Loteamentos <span class="h-actions"><button class="btn btn-primary btn-sm" onclick="abrirLoteamentoForm()">＋ Novo</button></span></h3>
