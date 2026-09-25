@@ -587,6 +587,7 @@ alter table public.loteamentos add column if not exists codigo_ibge text not nul
 alter table public.loteamentos add column if not exists cartorio text not null default '';
 alter table public.loteamentos add column if not exists matricula_mae text not null default '';
 -- Imóvel de terceiro (tipo 'carteira'): um imóvel só, com valor de venda e registro próprios
+alter table public.loteamentos add column if not exists categoria text not null default '';  -- apartamento, casa, galpao, lote, sala, sitio
 alter table public.loteamentos add column if not exists preco numeric(14,2);
 alter table public.loteamentos add column if not exists area numeric(12,2);
 alter table public.loteamentos add column if not exists matricula text not null default '';

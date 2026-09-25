@@ -330,7 +330,7 @@ function codigoConvite(n) {
 }
 
 const TABLE_COLS = {
-  loteamentos: ['id', 'nome', 'tipo', 'cidade', 'endereco', 'logradouro', 'numeroEnd', 'bairro', 'cep', 'uf', 'codigoIbge', 'cartorio', 'matriculaMae', 'matricula', 'descricaoMatricula', 'area', 'preco', 'descricao', 'cond', 'orcamento', 'planta', 'criadoEm'],
+  loteamentos: ['id', 'nome', 'tipo', 'cidade', 'endereco', 'logradouro', 'numeroEnd', 'bairro', 'cep', 'uf', 'codigoIbge', 'cartorio', 'matriculaMae', 'categoria', 'matricula', 'descricaoMatricula', 'area', 'preco', 'descricao', 'cond', 'orcamento', 'planta', 'criadoEm'],
   categorias: ['id', 'nome', 'cor'],
   lotes: ['id', 'loteamentoId', 'quadra', 'numero', 'area', 'frente', 'fundos', 'preco', 'tipo', 'status', 'obs', 'matricula', 'descricaoMatricula', 'logradouro', 'numeroEnd', 'bairro', 'cep', 'pts', 'reservaId', 'vendaId', 'criadoEm'],
   reservas: ['id', 'loteamentoId', 'loteId', 'corretor', 'corretorUserId', 'cliente', 'dataReserva', 'validade', 'status', 'proposta', 'obs', 'motivo', 'aprovadaEm', 'encerradaEm', 'criadoEm'],
@@ -670,7 +670,7 @@ function comEmpreendimento(titulo, ajuda, seguir, filtro) {
   if (lista.length === 1) { setCurLotSilencioso(lista[0].id); seguir(lista[0]); return; }
   window.__seguirEmp = seguir;
   openModal({ title: titulo, body: `<p class="help mb">${esc(ajuda || '')}</p>
-    <div class="fg"><label>Loteamento ou imóvel</label><select id="ceEmp">${lista.map(l => `<option value="${esc(l.id)}">${esc(l.nome)} — ${esc(empLabel(l))}</option>`).join('')}</select></div>`,
+    <div class="fg"><label>Imóvel</label><select id="ceEmp">${lista.map(l => `<option value="${esc(l.id)}">${esc(l.nome)} — ${esc(empLabel(l))}</option>`).join('')}</select></div>`,
     footer: `<button class="btn btn-secondary" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" onclick="confirmarEmpreendimento()">Continuar</button>` });
 }
 function confirmarEmpreendimento() {
@@ -699,7 +699,20 @@ function loteShort(l) { return `Q${l.quadra}-L${l.numero}`; }
    relatório — funciona igual nos dois, porque nada disso depende de lote. */
 function empTipo(lot) { return (lot && lot.tipo) === 'carteira' ? 'carteira' : 'loteamento'; }
 function ehCarteira(lot) { return empTipo(lot) === 'carteira'; }
-function empLabel(lot) { return ehCarteira(lot) ? 'Imóvel de terceiro' : 'Loteamento'; }
+/* O imóvel avulso diz o que é. Em ordem alfabética, que é como aparecem no cadastro:
+   [chave, nome, ícone, exemplo de descrição]. */
+const CATEGORIAS_IMOVEL = [
+  ['apartamento', 'Apartamento', '🏢', 'Ex.: Apartamento 302 do Ed. Aurora'],
+  ['casa', 'Casa', '🏠', 'Ex.: Casa na Rua das Flores, 120'],
+  ['galpao', 'Galpão', '🏭', 'Ex.: Galpão no Distrito Industrial'],
+  ['lote', 'Lote', '📐', 'Ex.: Lote 15 da Quadra 300'],
+  ['sala', 'Sala comercial', '🏬', 'Ex.: Sala 5 do Centro Empresarial'],
+  ['sitio', 'Sítio', '🌳', 'Ex.: Sítio Boa Vista, Linha Tigre']
+];
+function categoriaImovel(lot) { return CATEGORIAS_IMOVEL.find(c => c[0] === (lot || {}).categoria) || null; }
+/* Imóvel avulso cadastrado antes das categorias aparece só como "Imóvel" até alguém escolher. */
+function empLabel(lot) { if (!ehCarteira(lot)) return 'Empreendimento'; const c = categoriaImovel(lot); return c ? c[1] : 'Imóvel'; }
+function empIcone(lot) { if (!ehCarteira(lot)) return '🏘️'; const c = categoriaImovel(lot); return c ? c[2] : '🏠'; }
 /* O imóvel de terceiro é um só: vendido enquanto tiver contrato que não virou distrato. */
 function vendaAtivaDoImovel(lot) { return lot ? db.vendas.find(v => v.loteamentoId === lot.id && v.status !== 'distrato') : null; }
 /* Os dados do imóvel de terceiro no formato que a venda guarda, para o contrato já nascer
@@ -734,7 +747,7 @@ function imovelDados(o) {
   const l = o.lote || null, lot = o.loteamento || null, im = o.imovel || {};
   if (l) {
     const medidas = [l.area ? `área de ${fmtNum(l.area, 2)} m²` : '', l.frente ? `frente de ${fmtNum(l.frente, 2)} m` : '', l.fundos ? `fundos de ${fmtNum(l.fundos, 2)} m` : ''].filter(Boolean).join(', ');
-    const ident = `Lote ${l.numero} da Quadra ${l.quadra}${lot ? ` do ${empLabel(lot)} ${lot.nome}` : ''}`;
+    const ident = `Lote ${l.numero} da Quadra ${l.quadra}${lot ? ` do Loteamento ${lot.nome}` : ''}`;
     const end = enderecoLinha({
       logradouro: l.logradouro || (lot || {}).logradouro, numeroEnd: l.numeroEnd || (lot || {}).numeroEnd,
       bairro: l.bairro || (lot || {}).bairro, cep: l.cep || (lot || {}).cep,
