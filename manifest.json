@@ -1,7 +1,7 @@
 {
   "name": "Agenda Corretor",
   "short_name": "Agenda",
-  "description": "Agenda pessoal para corretor de imóveis",
+  "description": "Agenda e CRM de leads para corretor de imóveis",
   "start_url": "/agenda-corretor/",
   "display": "standalone",
   "background_color": "#f0f4ff",
