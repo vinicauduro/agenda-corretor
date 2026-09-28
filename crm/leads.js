@@ -1,4 +1,4 @@
-// Leads: o funil do corretor (Novo → Negociando → Fechado → Perdido), a ficha do
+// Leads: o funil do corretor (Novo → Visita → Negociando → Fechado → Perdido), a ficha do
 // lead com o que ele procura, e a tela "Minha conta" com a equipe.
 let leads = [];
 let editingLeadId = null;
@@ -8,6 +8,7 @@ let buscaLead = '';
 
 const ETAPAS = [
   { id: 'novo', nome: 'Novo', cor: '#0ea5e9' },
+  { id: 'visita', nome: 'Visita', cor: '#8b5cf6' },
   { id: 'negociando', nome: 'Negociando', cor: '#f59e0b' },
   { id: 'fechado', nome: 'Fechado', cor: '#22c55e' },
   { id: 'perdido', nome: 'Perdido', cor: '#94a3b8' }
@@ -139,7 +140,7 @@ function renderLeadsLista(lista) {
     return;
   }
 
-  const ativos = lista.filter(l => l.etapa === 'novo' || l.etapa === 'negociando');
+  const ativos = lista.filter(l => l.etapa !== 'fechado' && l.etapa !== 'perdido');
   const chips = [['ativos', 'Ativos', ativos.length], ...ETAPAS.map(e => [e.id, e.nome, por(e.id).length]), ['todos', 'Todos', lista.length]];
   const mostrados = filtroEtapa === 'ativos' ? ativos : filtroEtapa === 'todos' ? lista : por(filtroEtapa);
   el.innerHTML = `<div class="chips">${chips.map(([id, nome, n]) =>

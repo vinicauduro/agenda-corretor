@@ -437,7 +437,7 @@
   .etapa-tag { color: white; font-weight: 700; font-size: 0.68rem; padding: 1px 7px; border-radius: 999px; }
   .btn-wa { background: #dcfce7; color: #15803d; text-decoration: none; flex-shrink: 0; }
   .btn-wa:hover { background: #bbf7d0; }
-  .kanban { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; align-items: start; }
+  .kanban { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; align-items: start; }
   .kanban-col { background: #e5ecfb; border-radius: 12px; padding: 10px; min-height: 240px; }
   .kanban-col.over { outline: 2px dashed var(--primary); }
   .kanban-titulo {
@@ -670,6 +670,7 @@
         <label>Etapa</label>
         <select id="ldEtapa" onchange="alternarMotivo()">
           <option value="novo">Novo</option>
+          <option value="visita">Visita</option>
           <option value="negociando">Negociando</option>
           <option value="fechado">Fechado</option>
           <option value="perdido">Perdido</option>

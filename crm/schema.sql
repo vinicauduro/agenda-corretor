@@ -151,6 +151,7 @@ end $$;
 
 -- ---------------------------------------------------------------------
 -- 2. Leads (da equipe). O id é gerado pelo aplicativo.
+--    Funil: novo → visita → negociando → fechado / perdido.
 --    Corretor: vê, cadastra e edita só os leads dele; exclui só os que ele
 --    mesmo cadastrou. Admin: vê e edita todos e distribui (corretor_id).
 -- ---------------------------------------------------------------------
@@ -161,7 +162,7 @@ create table if not exists public.leads (
   nome           text not null,
   telefone       text not null default '',
   email          text not null default '',
-  etapa          text not null default 'novo' check (etapa in ('novo','negociando','fechado','perdido')),
+  etapa          text not null default 'novo',
   motivo_perda   text not null default '',
   finalidade     text not null default 'compra' check (finalidade in ('compra','locacao')),
   tipo_imovel    text not null default '',
@@ -176,6 +177,12 @@ create table if not exists public.leads (
   primary key (equipe_id, id)
 );
 create index if not exists leads_corretor_idx on public.leads (equipe_id, corretor_id);
+
+-- Etapas do funil. Fica fora do create table para valer também em bancos já
+-- criados (a etapa Visita entrou depois).
+alter table public.leads drop constraint if exists leads_etapa_check;
+alter table public.leads add constraint leads_etapa_check
+  check (etapa in ('novo','visita','negociando','fechado','perdido'));
 
 -- Quem cadastrou e quando não mudam depois; a data de atualização é do banco.
 create or replace function public.leads_carimbo()
