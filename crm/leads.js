@@ -408,9 +408,60 @@ function renderConta() {
         <div id="conviteBox"></div>`;
     }
   }
+  html += `<h3 class="conta-secao">Avisos no celular</h3><div id="pushBox"></div>`;
   html += `<div class="btn-row"><button class="btn btn-secondary" onclick="closeContaModal()">Fechar</button>
     <button class="btn btn-danger" onclick="Nuvem.sair()">Sair</button></div>`;
   el.innerHTML = html;
+  renderPush();
+}
+
+// ===== avisos no celular (push) =====
+const TEXTO_PUSH = {
+  ativo: '✅ Ativados neste aparelho: lembretes e compromissos chegam mesmo com o app fechado.',
+  inativo: 'Receba lembretes e compromissos na hora, mesmo com o app fechado.',
+  instalar: 'No iPhone, primeiro adicione o app à Tela de Início (Safari › Compartilhar › Adicionar à Tela de Início) e abra por lá para ativar os avisos.',
+  bloqueado: 'As notificações estão bloqueadas. Libere em Ajustes › Notificações › Agenda e volte aqui.',
+  'sem-suporte': 'Este navegador não recebe avisos com o app fechado. No iPhone, é preciso iOS 16.4 ou mais novo.'
+};
+
+async function renderPush() {
+  const el = document.getElementById('pushBox');
+  if (!el) return;
+  const estado = await Nuvem.estadoPush();
+  el.innerHTML = `<p class="conta-nota">${TEXTO_PUSH[estado] || ''}</p>` +
+    (estado === 'inativo' ? `<button class="btn btn-primary btn-convite" onclick="ativarPushUI(this)">🔔 Ativar avisos neste aparelho</button>` : '') +
+    (estado === 'ativo' ? `<button class="btn btn-secondary btn-convite" onclick="desativarPushUI(this)">Desativar avisos neste aparelho</button>` : '');
+}
+
+// cartão no topo da aba Lembretes enquanto os avisos não estão ligados
+async function renderPushAviso() {
+  const el = document.getElementById('pushAviso');
+  if (!el) return;
+  const estado = Nuvem.ativa ? await Nuvem.estadoPush() : 'indisponivel';
+  if (estado !== 'inativo' && estado !== 'instalar') { el.innerHTML = ''; return; }
+  el.innerHTML = `<div class="card push-card"><div>🔔 <b>Avisos com o app fechado</b><p>${TEXTO_PUSH[estado]}</p></div>
+    ${estado === 'inativo' ? '<button class="btn btn-primary" onclick="ativarPushUI(this)">Ativar</button>' : ''}</div>`;
+}
+
+async function ativarPushUI(btn) {
+  btn.disabled = true;
+  try {
+    await Nuvem.ativarPush();
+    showToast('🔔', 'Avisos ativados!', 'Você será avisado mesmo com o app fechado');
+  } catch (e) {
+    alert(e.message);
+  }
+  btn.disabled = false;
+  renderPush();
+  renderPushAviso();
+}
+
+async function desativarPushUI(btn) {
+  btn.disabled = true;
+  await Nuvem.desativarPush();
+  showToast('🔕', 'Avisos desativados neste aparelho', '');
+  renderPush();
+  renderPushAviso();
 }
 
 async function salvarContaUI() {
@@ -451,5 +502,6 @@ async function gerarConviteUI() {
 
 function aoMudarEquipe() {
   renderLeads();
+  renderPushAviso();
   if (document.getElementById('contaModal').classList.contains('open')) renderConta();
 }

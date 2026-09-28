@@ -297,3 +297,127 @@ revoke execute on function public.eh_membro(uuid), public.eh_admin(uuid),
 grant execute on function public.eh_membro(uuid), public.eh_admin(uuid),
   public.crm_criar_equipe(text, text, text), public.crm_criar_convite(text),
   public.crm_aceitar_convite(text, text, text) to authenticated;
+
+-- ---------------------------------------------------------------------
+-- 5. Avisos no celular (push), mesmo com o app fechado.
+--    O aparelho se inscreve (crm_salvar_inscricao); a função "avisos" do
+--    Supabase roda a cada minuto (crm/avisos.sql), pede aqui o que venceu
+--    (crm_avisos_a_enviar) e manda o push. Horário do lembrete sem hora:
+--    9h do dia. Cada aviso sai uma vez só (avisos_enviados).
+-- ---------------------------------------------------------------------
+create table if not exists public.push_inscricoes (
+  endpoint    text primary key,
+  user_id     uuid not null references auth.users(id) on delete cascade,
+  p256dh      text not null,
+  auth        text not null,
+  fuso        text not null default 'America/Sao_Paulo',
+  criado_em   timestamptz not null default now()
+);
+create index if not exists push_inscricoes_user_idx on public.push_inscricoes (user_id);
+
+create table if not exists public.avisos_enviados (
+  user_id     uuid not null,
+  tipo        text not null,
+  item_id     text not null,
+  quando      timestamptz not null,
+  enviado_em  timestamptz not null default now(),
+  primary key (user_id, tipo, item_id, quando)
+);
+
+-- Chaves do push (geradas pela função "avisos" no primeiro uso) e o segredo
+-- que o agendador usa para chamar a função. Só o servidor lê.
+create table if not exists public.crm_config (
+  chave  text primary key,
+  valor  jsonb not null
+);
+insert into public.crm_config (chave, valor)
+  values ('cron', jsonb_build_object('segredo', md5(gen_random_uuid()::text) || md5(gen_random_uuid()::text)))
+  on conflict (chave) do nothing;
+
+alter table public.push_inscricoes enable row level security;
+alter table public.avisos_enviados enable row level security;
+alter table public.crm_config      enable row level security;
+revoke all on public.push_inscricoes, public.avisos_enviados, public.crm_config from anon, authenticated;
+-- a função "avisos" usa a chave de serviço: lê/cria as chaves e limpa inscrições vencidas
+grant select, insert on public.crm_config to service_role;
+grant select, delete on public.push_inscricoes to service_role;
+
+create or replace function public.crm_salvar_inscricao(p_endpoint text, p_p256dh text, p_auth text, p_fuso text default 'America/Sao_Paulo')
+returns void language plpgsql security definer set search_path = public as $$
+declare v_fuso text;
+begin
+  if auth.uid() is null then raise exception 'Faça login primeiro'; end if;
+  v_fuso := case when exists (select 1 from pg_timezone_names where name = p_fuso) then p_fuso else 'America/Sao_Paulo' end;
+  insert into public.push_inscricoes (endpoint, user_id, p256dh, auth, fuso)
+    values (p_endpoint, auth.uid(), p_p256dh, p_auth, v_fuso)
+    on conflict (endpoint) do update
+      set user_id = excluded.user_id, p256dh = excluded.p256dh, auth = excluded.auth, fuso = excluded.fuso, criado_em = now();
+end $$;
+
+create or replace function public.crm_remover_inscricao(p_endpoint text)
+returns void language sql security definer set search_path = public as $$
+  delete from public.push_inscricoes where endpoint = p_endpoint and user_id = auth.uid()
+$$;
+
+create or replace function public.crm_vapid_publica()
+returns text language sql stable security definer set search_path = public as $$
+  select valor->>'publica' from public.crm_config where chave = 'vapid'
+$$;
+
+-- data 'AAAA-MM-DD' + hora 'HH:MM' no fuso do usuário; null se a data for inválida
+create or replace function public.crm_momento(p_data text, p_hora text, p_fuso text)
+returns timestamptz language plpgsql stable set search_path = public as $$
+begin
+  if p_data !~ '^\d{4}-\d{2}-\d{2}$' or coalesce(p_hora, '') !~ '^(\d{2}:\d{2})?$' then return null; end if;
+  return (p_data || ' ' || coalesce(nullif(p_hora, ''), '09:00'))::timestamp at time zone p_fuso;
+exception when others then
+  return null;
+end $$;
+
+create or replace function public.crm_avisos_a_enviar()
+returns table (endpoint text, p256dh text, auth text, titulo text, corpo text, tag text)
+language sql volatile security definer set search_path = public as $$
+  with fusos as (
+    select distinct on (i.user_id) i.user_id, i.fuso
+    from public.push_inscricoes i order by i.user_id, i.criado_em desc
+  ),
+  itens as (
+    select l.user_id, 'lembrete'::text as tipo, l.id as item_id,
+           public.crm_momento(l.data, l.hora, f.fuso) as quando,
+           '🔔 ' || l.titulo as titulo,
+           case when l.hora <> '' then 'Lembrete das ' || l.hora else 'Lembrete de hoje' end as corpo
+    from public.lembretes l join fusos f on f.user_id = l.user_id
+    where not l.feito
+    union all
+    select e.user_id, 'evento', e.id,
+           public.crm_momento(e.data, e.hora, f.fuso) - make_interval(mins => e.lembrar_min::int),
+           '📅 ' || e.titulo,
+           case when e.hora <> '' then 'Às ' || e.hora || ' de ' || to_char(e.data::date, 'DD/MM')
+                else 'Dia ' || to_char(e.data::date, 'DD/MM') end
+    from public.eventos e join fusos f on f.user_id = e.user_id
+    where e.lembrar_min ~ '^\d{1,5}$' and public.crm_momento(e.data, e.hora, f.fuso) is not null
+  ),
+  devidos as (
+    select it.* from itens it
+    where it.quando <= now() and it.quando > now() - interval '15 minutes'
+      and not exists (select 1 from public.avisos_enviados a
+                      where a.user_id = it.user_id and a.tipo = it.tipo and a.item_id = it.item_id and a.quando = it.quando)
+  ),
+  marcados as (
+    insert into public.avisos_enviados (user_id, tipo, item_id, quando)
+      select d.user_id, d.tipo, d.item_id, d.quando from devidos d
+      on conflict do nothing
+      returning avisos_enviados.user_id, avisos_enviados.tipo, avisos_enviados.item_id, avisos_enviados.quando
+  )
+  select i.endpoint, i.p256dh, i.auth, d.titulo, d.corpo, d.tipo || ':' || d.item_id
+  from marcados m
+  join devidos d on d.user_id = m.user_id and d.tipo = m.tipo and d.item_id = m.item_id and d.quando = m.quando
+  join public.push_inscricoes i on i.user_id = m.user_id
+$$;
+
+revoke execute on function public.crm_salvar_inscricao(text, text, text, text), public.crm_remover_inscricao(text),
+  public.crm_vapid_publica(), public.crm_avisos_a_enviar() from public, anon;
+grant execute on function public.crm_salvar_inscricao(text, text, text, text), public.crm_remover_inscricao(text),
+  public.crm_vapid_publica() to authenticated;
+revoke execute on function public.crm_avisos_a_enviar() from authenticated;
+grant execute on function public.crm_avisos_a_enviar() to service_role;
