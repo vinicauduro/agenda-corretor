@@ -407,10 +407,6 @@
   }
   .sync-badge { display: none; margin-left: 4px; font-size: 0.7rem; }
   .header-acoes { display: flex; align-items: center; gap: 10px; }
-  .header-link {
-    color: white; text-decoration: none; font-size: 0.78rem; opacity: 0.9; border: 1px solid rgba(255,255,255,0.5);
-    padding: 5px 10px; border-radius: 999px; white-space: nowrap;
-  }
 
   /* Leads */
   #view-leads { padding-bottom: 90px; }
@@ -512,10 +508,8 @@
     .tab { font-size: 0.74rem; padding: 12px 4px; }
   }
   @media (max-width: 600px) {
-    .header-date, .header-link .rotulo { display: none; }
+    .header-date { display: none; }
     .header { padding: 14px 16px; }
-    .header-acoes { gap: 6px; }
-    .header-link { padding: 5px 8px; }
   }
 </style>
 </head>
@@ -527,9 +521,6 @@
 <div class="header">
   <h1>🏢 Agenda Corretor</h1>
   <div class="header-acoes">
-    <a href="gestao/index.html" class="header-link" title="Lotes">🏘️<span class="rotulo"> Lotes</span></a>
-    <a href="loteamento/index.html" class="header-link" title="Custos">🏗️<span class="rotulo"> Custos</span></a>
-    <a href="planta/index.html" class="header-link" title="Planta">📐<span class="rotulo"> Planta</span></a>
     <div class="header-date" id="headerDate"></div>
     <button class="btn-conta" id="btnConta" onclick="openContaModal()" style="display:none" title="Minha conta">👤<span class="sync-badge" id="syncBadge"></span></button>
   </div>
