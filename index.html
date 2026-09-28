@@ -400,9 +400,122 @@
   }
   .transcript-bubble strong { display: block; margin-bottom: 2px; font-size: 0.72rem; color: #15803d; }
 
+  /* Conta / sincronização */
+  .btn-conta {
+    background: rgba(255,255,255,0.15); color: white; border: 1px solid rgba(255,255,255,0.5);
+    border-radius: 999px; padding: 5px 10px; font-size: 0.78rem; cursor: pointer; white-space: nowrap;
+  }
+  .sync-badge { display: none; margin-left: 4px; font-size: 0.7rem; }
+  .header-acoes { display: flex; align-items: center; gap: 10px; }
+  .header-link {
+    color: white; text-decoration: none; font-size: 0.78rem; opacity: 0.9; border: 1px solid rgba(255,255,255,0.5);
+    padding: 5px 10px; border-radius: 999px; white-space: nowrap;
+  }
+
+  /* Leads */
+  #view-leads { padding-bottom: 90px; }
+  .leads-toolbar { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+  .leads-busca, .leads-filtro {
+    padding: 9px 12px; border: 1.5px solid var(--border); border-radius: 8px;
+    font-size: 0.88rem; font-family: inherit; background: white; color: var(--text);
+  }
+  .leads-busca { flex: 1; min-width: 180px; }
+  .leads-busca:focus, .leads-filtro:focus { outline: none; border-color: var(--primary); }
+  .chips { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 6px; margin-bottom: 8px; }
+  .chip {
+    border: 1.5px solid var(--border); background: white; border-radius: 999px; padding: 6px 12px;
+    font-size: 0.8rem; font-weight: 600; color: var(--muted); white-space: nowrap; cursor: pointer; font-family: inherit;
+  }
+  .chip.active { background: var(--primary); border-color: var(--primary); color: white; }
+  .chip .n { opacity: 0.75; margin-left: 5px; }
+  .lead-card {
+    background: var(--card); border-radius: var(--radius); padding: 12px 14px; margin-bottom: 8px;
+    border-left: 4px solid var(--primary); box-shadow: 0 1px 6px rgba(0,0,0,0.07);
+    display: flex; align-items: flex-start; gap: 10px; cursor: pointer; transition: transform 0.15s, box-shadow 0.15s;
+  }
+  .lead-card:hover { transform: translateX(2px); box-shadow: 0 3px 12px rgba(0,0,0,0.1); }
+  .lead-info { flex: 1; min-width: 0; }
+  .lead-nome { font-size: 0.95rem; font-weight: 600; }
+  .lead-resumo { font-size: 0.8rem; color: var(--text); margin-top: 2px; }
+  .lead-meta { font-size: 0.74rem; color: var(--muted); margin-top: 4px; }
+  .etapa-tag { color: white; font-weight: 700; font-size: 0.68rem; padding: 1px 7px; border-radius: 999px; }
+  .btn-wa { background: #dcfce7; color: #15803d; text-decoration: none; flex-shrink: 0; }
+  .btn-wa:hover { background: #bbf7d0; }
+  .kanban { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; align-items: start; }
+  .kanban-col { background: #e5ecfb; border-radius: 12px; padding: 10px; min-height: 240px; }
+  .kanban-col.over { outline: 2px dashed var(--primary); }
+  .kanban-titulo {
+    font-size: 0.8rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text);
+    border-bottom: 3px solid; padding: 2px 2px 8px; margin-bottom: 10px; display: flex; justify-content: space-between;
+  }
+  .kanban-titulo span { color: var(--muted); }
+  .kanban-vazio { text-align: center; color: #94a3b8; padding: 16px 0; }
+  .kanban .lead-card { padding: 10px 12px; }
+  .setup-card { text-align: center; padding: 28px 20px; }
+  .setup-card .icon { font-size: 2.6rem; margin-bottom: 8px; }
+  .setup-card h3 { margin-bottom: 8px; }
+  .setup-card p { font-size: 0.88rem; color: var(--muted); margin-bottom: 16px; line-height: 1.45; }
+  .setup-card .form-group { text-align: left; }
+  .form-secao { font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--primary); margin: 20px 0 10px; }
+  .checks { display: flex; flex-wrap: wrap; gap: 6px 14px; }
+  .check { display: flex; align-items: center; gap: 6px; font-size: 0.86rem; cursor: pointer; }
+  .check input { width: 16px; height: 16px; }
+  .lead-acoes { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+  .acao {
+    flex: 1; min-width: 100px; text-align: center; padding: 9px 10px; border-radius: 8px; border: 1.5px solid var(--border);
+    background: white; color: var(--text); font-size: 0.84rem; font-weight: 600; cursor: pointer; text-decoration: none; font-family: inherit;
+  }
+  .acao:hover { background: #f8fafc; }
+  .acao-wa { background: #dcfce7; border-color: #bbf7d0; color: #15803d; }
+  .lead-compromisso { font-size: 0.84rem; padding: 7px 10px; background: #f8fafc; border-radius: 8px; margin-bottom: 6px; cursor: pointer; }
+  .lead-compromisso:hover { background: #eff6ff; }
+  .lead-vinculo { font-size: 0.82rem; color: var(--primary); background: #eff6ff; padding: 7px 10px; border-radius: 8px; margin-bottom: 14px; cursor: pointer; }
+  .reminder-lead { font-size: 0.74rem; color: var(--primary); margin-top: 2px; }
+  .btn-excluir { flex: 0 0 auto; background: #fff5f5; color: var(--danger); }
+
+  /* Minha conta */
+  .conta-secao { font-size: 0.95rem; margin: 22px 0 8px; }
+  .conta-nota { font-size: 0.84rem; color: var(--muted); margin-bottom: 10px; line-height: 1.4; }
+  .membros { margin-bottom: 12px; }
+  .membro { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+  .membro.inativo { opacity: 0.5; }
+  .membro-info { flex: 1; min-width: 0; font-size: 0.86rem; }
+  .membro-info span { display: block; font-size: 0.75rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; }
+  .membro select { padding: 5px 6px; border: 1.5px solid var(--border); border-radius: 6px; font-size: 0.8rem; font-family: inherit; }
+  .btn-convite { width: 100%; }
+  .convite-link { margin-top: 10px; }
+  .convite-link input { width: 100%; padding: 9px 10px; border: 1.5px solid var(--border); border-radius: 8px; font-size: 0.8rem; }
+  .convite-link .btn-row { margin: 8px 0; }
+  .btn-link { text-decoration: none; text-align: center; }
+
+  /* Login */
+  .tela-login {
+    position: fixed; inset: 0; z-index: 500; display: none; align-items: center; justify-content: center; padding: 16px;
+    background: linear-gradient(135deg, var(--primary) 0%, #3b82f6 100%);
+  }
+  .tela-login.open { display: flex; }
+  .tela-login .modal { max-width: 400px; }
+  .login-marca { text-align: center; margin-bottom: 18px; }
+  .login-marca .icon { font-size: 2.4rem; }
+  .login-marca h1 { font-size: 1.25rem; color: var(--text); }
+  .login-convite { background: #eff6ff; color: var(--primary); border-radius: 8px; padding: 9px 12px; font-size: 0.84rem; margin-bottom: 14px; }
+  .login-msg { font-size: 0.84rem; margin-top: 12px; min-height: 1em; line-height: 1.4; }
+  .login-alternar { font-size: 0.84rem; color: var(--muted); text-align: center; margin-top: 14px; }
+  .login-alternar a { color: var(--primary); font-weight: 600; }
+
+  @media (min-width: 900px) {
+    #view-leads { max-width: 1280px; }
+  }
   @media (max-width: 480px) {
     .form-row { grid-template-columns: 1fr; }
     .modal { padding: 18px; }
+    .tab { font-size: 0.74rem; padding: 12px 4px; }
+  }
+  @media (max-width: 600px) {
+    .header-date, .header-link .rotulo { display: none; }
+    .header { padding: 14px 16px; }
+    .header-acoes { gap: 6px; }
+    .header-link { padding: 5px 8px; }
   }
 </style>
 </head>
@@ -413,17 +526,19 @@
 <!-- Header -->
 <div class="header">
   <h1>🏢 Agenda Corretor</h1>
-  <div style="display:flex;align-items:center;gap:10px">
-    <a href="gestao/index.html" style="color:white;text-decoration:none;font-size:0.78rem;opacity:0.9;border:1px solid rgba(255,255,255,0.5);padding:5px 10px;border-radius:999px;white-space:nowrap;">🏘️ Lotes</a>
-    <a href="loteamento/index.html" style="color:white;text-decoration:none;font-size:0.78rem;opacity:0.9;border:1px solid rgba(255,255,255,0.5);padding:5px 10px;border-radius:999px;white-space:nowrap;">🏗️ Custos</a>
-    <a href="planta/index.html" style="color:white;text-decoration:none;font-size:0.78rem;opacity:0.9;border:1px solid rgba(255,255,255,0.5);padding:5px 10px;border-radius:999px;white-space:nowrap;">📐 Planta</a>
+  <div class="header-acoes">
+    <a href="gestao/index.html" class="header-link" title="Lotes">🏘️<span class="rotulo"> Lotes</span></a>
+    <a href="loteamento/index.html" class="header-link" title="Custos">🏗️<span class="rotulo"> Custos</span></a>
+    <a href="planta/index.html" class="header-link" title="Planta">📐<span class="rotulo"> Planta</span></a>
     <div class="header-date" id="headerDate"></div>
+    <button class="btn-conta" id="btnConta" onclick="openContaModal()" style="display:none" title="Minha conta">👤<span class="sync-badge" id="syncBadge"></span></button>
   </div>
 </div>
 
 <!-- Tabs -->
 <div class="tabs">
   <div class="tab active" onclick="switchTab('agenda')" id="tab-agenda">📅 Agenda</div>
+  <div class="tab" onclick="switchTab('leads')" id="tab-leads">🎯 Leads</div>
   <div class="tab" onclick="switchTab('mensagens')" id="tab-mensagens">💬 Mensagens</div>
   <div class="tab" onclick="switchTab('lembretes')" id="tab-lembretes">🔔 Lembretes <span class="tab-badge" id="reminderBadge" style="display:none">0</span></div>
 </div>
@@ -435,6 +550,11 @@
     <button onclick="exportMonthIcs()" style="background:#f0fdf4;color:#16a34a;border:1.5px solid #bbf7d0;border-radius:8px;padding:7px 14px;font-size:0.82rem;font-weight:600;cursor:pointer;">📆 Exportar mês p/ Apple Calendar</button>
   </div>
   <div id="agendaList"></div>
+</div>
+
+<!-- LEADS VIEW -->
+<div class="view" id="view-leads">
+  <div id="leadsArea"></div>
 </div>
 
 <!-- MENSAGENS VIEW -->
@@ -461,6 +581,7 @@
 <div class="modal-overlay" id="eventModal">
   <div class="modal">
     <h2 id="modalTitle">Novo Evento</h2>
+    <div class="lead-vinculo" id="evLeadInfo" style="display:none"></div>
     <div class="form-group">
       <label>Título *</label>
       <input type="text" id="evTitle" placeholder="Ex: Visita ao imóvel na Rua das Flores">
@@ -534,12 +655,149 @@
   </div>
 </div>
 
+<!-- LEAD MODAL -->
+<div class="modal-overlay" id="leadModal">
+  <div class="modal">
+    <h2 id="leadModalTitle">Novo lead</h2>
+    <div id="ldAcoes"></div>
+    <div class="form-group">
+      <label>Nome *</label>
+      <input type="text" id="ldNome" placeholder="Nome do cliente">
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Telefone / WhatsApp</label>
+        <input type="tel" id="ldTelefone" placeholder="(48) 99999-9999">
+      </div>
+      <div class="form-group">
+        <label>E-mail</label>
+        <input type="email" id="ldEmail">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Etapa</label>
+        <select id="ldEtapa" onchange="alternarMotivo()">
+          <option value="novo">Novo</option>
+          <option value="negociando">Negociando</option>
+          <option value="fechado">Fechado</option>
+          <option value="perdido">Perdido</option>
+        </select>
+      </div>
+      <div class="form-group" id="ldCorretorGrupo">
+        <label>Corretor responsável</label>
+        <select id="ldCorretor"></select>
+      </div>
+    </div>
+    <div class="form-group" id="ldMotivoGrupo">
+      <label>Motivo da perda</label>
+      <input type="text" id="ldMotivo" placeholder="Ex: comprou com outro, desistiu, sem crédito…">
+    </div>
+
+    <div class="form-secao">O que procura</div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Finalidade</label>
+        <select id="ldFinalidade">
+          <option value="compra">Compra</option>
+          <option value="locacao">Locação</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Tipo de imóvel</label>
+        <select id="ldTipo">
+          <option value="">—</option>
+          <option>Apartamento</option>
+          <option>Casa</option>
+          <option>Casa em condomínio</option>
+          <option>Terreno / Lote</option>
+          <option>Sala comercial</option>
+          <option>Loja</option>
+          <option>Galpão</option>
+          <option>Chácara / Sítio</option>
+          <option>Outro</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Bairro / cidade</label>
+      <input type="text" id="ldRegiao" placeholder="Ex: Centro, Cocal do Sul">
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Valor de (R$)</label>
+        <input type="text" inputmode="numeric" id="ldValorMin" placeholder="0" oninput="formatarCampoValor(this)">
+      </div>
+      <div class="form-group">
+        <label>Valor até (R$)</label>
+        <input type="text" inputmode="numeric" id="ldValorMax" placeholder="0" oninput="formatarCampoValor(this)">
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Forma de pagamento</label>
+      <div class="checks" id="ldPagamento"></div>
+    </div>
+    <div class="form-group">
+      <label>Observações</label>
+      <textarea id="ldObs" placeholder="Detalhes do que o cliente quer, como chegou até você…"></textarea>
+    </div>
+    <div id="ldCompromissos"></div>
+    <div class="btn-row">
+      <button class="btn btn-excluir" id="ldExcluir" onclick="deleteLead()" title="Excluir lead">🗑️</button>
+      <button class="btn btn-secondary" onclick="closeLeadModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveLead()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- CONTA MODAL -->
+<div class="modal-overlay" id="contaModal">
+  <div class="modal">
+    <h2>👤 Minha conta</h2>
+    <div id="contaConteudo"></div>
+  </div>
+</div>
+
+<!-- LOGIN -->
+<div class="tela-login" id="telaLogin">
+  <form class="modal" onsubmit="event.preventDefault();Nuvem.enviarLogin()">
+    <div class="login-marca"><div class="icon">🏢</div><h1>Agenda Corretor</h1></div>
+    <div class="login-convite" id="loginConvite" style="display:none">🤝 Você recebeu um convite para uma equipe. Entre ou crie sua conta para aceitar.</div>
+    <h2 id="loginTitulo">Entrar</h2>
+    <div class="form-group" id="loginNomeGrupo">
+      <label>Seu nome</label>
+      <input type="text" id="loginNome" autocomplete="name">
+    </div>
+    <div class="form-group" id="loginEmailGrupo">
+      <label>E-mail</label>
+      <input type="email" id="loginEmail" autocomplete="email">
+    </div>
+    <div class="form-group">
+      <label id="loginSenhaLabel">Senha</label>
+      <input type="password" id="loginSenha" autocomplete="current-password">
+    </div>
+    <button type="submit" class="btn btn-primary" id="loginBotao" style="width:100%">Entrar</button>
+    <div class="login-msg" id="loginMsg"></div>
+    <div class="login-alternar" id="loginAlternar"></div>
+  </form>
+</div>
+
+<script src="crm/supabase.js"></script>
+<script src="crm/config.js"></script>
+<script src="crm/nuvem.js"></script>
+<script src="crm/leads.js"></script>
 <script>
 // ===== STATE =====
-let events = JSON.parse(localStorage.getItem('corretor_events') || '[]');
-let reminders = JSON.parse(localStorage.getItem('corretor_reminders') || '[]');
-let messages = JSON.parse(localStorage.getItem('corretor_messages') || '[]');
+// Com a nuvem ativa os dados chegam depois do login (aoCarregarDados); sem ela,
+// ficam só neste aparelho, como sempre.
+const lerLocal = k => { try { return JSON.parse(localStorage.getItem(k) || '[]'); } catch { return []; } };
+let events = Nuvem.ativa ? [] : lerLocal('corretor_events');
+let reminders = Nuvem.ativa ? [] : lerLocal('corretor_reminders');
+let messages = Nuvem.ativa ? [] : lerLocal('corretor_messages');
+if (!Nuvem.ativa) leads = lerLocal('corretor_leads');
 let editingEventId = null;
+let eventLeadId = null;
+let reminderLeadId = null;
 let currentCalMonth = new Date();
 let selectedCalDate = new Date();
 let mediaRecorder = null;
@@ -556,11 +814,11 @@ if ('serviceWorker' in navigator) {
 // ===== INIT =====
 document.addEventListener('DOMContentLoaded', () => {
   updateHeaderDate();
-  renderCalendar();
-  renderAgenda();
-  renderReminders();
-  renderMessages();
-  checkReminderBadge();
+  renderTudo();
+  if (Nuvem.ativa) {
+    document.getElementById('btnConta').style.display = 'inline-block';
+    Nuvem.iniciar();
+  }
   requestNotificationPermission();
   setInterval(checkDueReminders, 60000);
   checkDueReminders();
@@ -594,6 +852,10 @@ function switchTab(name) {
     fab.style.display = 'flex';
     fab.title = 'Novo lembrete';
     fab.onclick = openReminderModal;
+  } else if (name === 'leads') {
+    fab.style.display = 'flex';
+    fab.title = 'Novo lead';
+    fab.onclick = openLeadModal;
   } else {
     fab.style.display = 'none';
   }
@@ -601,9 +863,50 @@ function switchTab(name) {
 
 // ===== SAVE =====
 function saveData() {
+  if (Nuvem.ativa) {
+    Nuvem.salvar({ events, reminders, messages, leads });
+    return;
+  }
   localStorage.setItem('corretor_events', JSON.stringify(events));
   localStorage.setItem('corretor_reminders', JSON.stringify(reminders));
   localStorage.setItem('corretor_messages', JSON.stringify(messages));
+  localStorage.setItem('corretor_leads', JSON.stringify(leads));
+}
+
+function renderTudo() {
+  renderCalendar();
+  renderAgenda();
+  renderReminders();
+  renderMessages();
+  checkReminderBadge();
+  renderLeads();
+}
+
+// Chamado pela nuvem ao abrir a sessão e sempre que chegam dados novos.
+function aoCarregarDados(d) {
+  events = d.events || [];
+  reminders = d.reminders || [];
+  messages = d.messages || [];
+  leads = d.leads || [];
+  renderTudo();
+}
+
+// Dados que estavam só neste aparelho sobem para a conta (uma vez só).
+function aoImportarLegado(d) {
+  const juntar = (lista, novos) => {
+    const ids = new Set(lista.map(x => x.id));
+    return lista.concat(novos.filter(x => x.id && !ids.has(x.id)));
+  };
+  if (d.events) events = juntar(events, d.events);
+  if (d.reminders) reminders = juntar(reminders, d.reminders);
+  if (d.messages) {
+    const base = Date.now() - d.messages.length;
+    messages = juntar(messages, d.messages.map((m, i) => ({ ...m, id: m.id || genId() + i, createdAt: m.createdAt || new Date(base + i).toISOString() })));
+  }
+  if (d.leads) leads = juntar(leads, d.leads);
+  saveData();
+  renderTudo();
+  showToast('☁️', 'Dados deste aparelho enviados para a nuvem', '');
 }
 
 // ===== CALENDAR =====
@@ -712,8 +1015,8 @@ function renderAgenda() {
     html += `<div class="event-item type-${ev.type}" onclick="editEvent('${ev.id}')">
       <div class="event-info">
         <div class="event-time">${ev.time || '–'}</div>
-        <div class="event-title">${ev.title}</div>
-        ${ev.desc ? `<div class="event-desc">${ev.desc}</div>` : ''}
+        <div class="event-title">${esc(ev.title)}</div>
+        ${ev.desc ? `<div class="event-desc">${esc(ev.desc)}</div>` : ''}
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
         <span class="event-type-badge badge-${ev.type}">${typeLabel}</span>
@@ -729,23 +1032,38 @@ function renderAgenda() {
 }
 
 // ===== EVENT MODAL =====
-function openEventModal(prefillDate) {
+function openEventModal(prefillDate, prefill) {
+  // o botão + chama sem argumentos úteis (recebe o clique), por isso a checagem de tipo
+  prefillDate = typeof prefillDate === 'string' ? prefillDate : '';
+  prefill = prefill || {};
   editingEventId = null;
+  eventLeadId = prefill.leadId || null;
   document.getElementById('modalTitle').textContent = 'Novo Evento';
-  document.getElementById('evTitle').value = '';
+  document.getElementById('evTitle').value = prefill.title || '';
   document.getElementById('evDate').value = prefillDate || formatDate(new Date());
   document.getElementById('evTime').value = '';
-  document.getElementById('evType').value = 'cliente';
-  document.getElementById('evDesc').value = '';
+  document.getElementById('evType').value = prefill.type || 'cliente';
+  document.getElementById('evDesc').value = prefill.desc || '';
   document.getElementById('evReminder').value = '';
+  mostrarLeadDoEvento();
   document.getElementById('eventModal').classList.add('open');
   setTimeout(() => document.getElementById('evTitle').focus(), 100);
+}
+
+function mostrarLeadDoEvento() {
+  const el = document.getElementById('evLeadInfo');
+  const nome = nomeDoLead(eventLeadId);
+  el.style.display = nome ? 'block' : 'none';
+  el.innerHTML = nome ? '🎯 Lead: <b>' + esc(nome) + '</b> — toque para abrir' : '';
+  el.onclick = () => { const id = eventLeadId; closeEventModal(); switchTab('leads'); openLeadModal(id); };
 }
 
 function editEvent(id) {
   const ev = events.find(e => e.id === id);
   if (!ev) return;
   editingEventId = id;
+  eventLeadId = ev.leadId || null;
+  mostrarLeadDoEvento();
   document.getElementById('modalTitle').textContent = 'Editar Evento';
   document.getElementById('evTitle').value = ev.title;
   document.getElementById('evDate').value = ev.date;
@@ -773,11 +1091,13 @@ function saveEvent() {
     type: document.getElementById('evType').value,
     desc: document.getElementById('evDesc').value.trim(),
     reminderMin: document.getElementById('evReminder').value,
+    leadId: eventLeadId,
     createdAt: new Date().toISOString()
   };
 
-  if (editingEventId) {
-    const idx = events.findIndex(e => e.id === editingEventId);
+  const idx = editingEventId ? events.findIndex(e => e.id === editingEventId) : -1;
+  if (idx >= 0) {
+    ev.createdAt = events[idx].createdAt || ev.createdAt;
     events[idx] = ev;
   } else {
     events.push(ev);
@@ -800,8 +1120,9 @@ function deleteEvent(id) {
 }
 
 // ===== REMINDERS =====
-function openReminderModal(prefillTitle) {
-  document.getElementById('remTitle').value = prefillTitle || '';
+function openReminderModal(prefillTitle, leadId) {
+  reminderLeadId = typeof leadId === 'string' ? leadId : null;
+  document.getElementById('remTitle').value = typeof prefillTitle === 'string' ? prefillTitle : '';
   document.getElementById('remDate').value = formatDate(new Date());
   document.getElementById('remTime').value = '';
   document.getElementById('reminderModal').classList.add('open');
@@ -822,6 +1143,7 @@ function saveReminder() {
     date: document.getElementById('remDate').value,
     time: document.getElementById('remTime').value,
     done: false,
+    leadId: reminderLeadId,
     createdAt: new Date().toISOString()
   };
 
@@ -857,7 +1179,8 @@ function renderReminders() {
         ${r.done ? '✓' : ''}
       </div>
       <div class="reminder-info">
-        <div class="reminder-title">${r.title}</div>
+        <div class="reminder-title">${esc(r.title)}</div>
+        ${nomeDoLead(r.leadId) ? `<div class="reminder-lead" onclick="switchTab('leads');openLeadModal('${r.leadId}')">🎯 ${esc(nomeDoLead(r.leadId))}</div>` : ''}
         ${when ? `<div class="reminder-when ${isOverdue ? 'reminder-overdue' : ''}">${isOverdue ? '⚠️ Atrasado — ' : ''}${when}</div>` : ''}
       </div>
       <button class="btn-icon btn-delete" onclick="deleteReminder('${r.id}')">🗑️</button>
@@ -947,6 +1270,8 @@ function sendMessage() {
 }
 
 function addMessage(msg) {
+  msg.id = msg.id || genId();
+  msg.createdAt = msg.createdAt || new Date().toISOString();
   messages.push(msg);
   saveData();
   const container = document.getElementById('chatMessages');
@@ -1231,7 +1556,8 @@ function showToast(icon, title, body) {
 
 // ===== UTILS =====
 function genId() { return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
-function formatDate(d) { return d.toISOString().slice(0,10); }
+// data local (toISOString usaria UTC e, à noite no Brasil, já daria o dia seguinte)
+function formatDate(d) { return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
 function formatDateDisplay(dateStr) {
   const d = new Date(dateStr + 'T12:00:00');
   return d.toLocaleDateString('pt-BR', { weekday: 'short', day: 'numeric', month: 'short' });
