@@ -1,4 +1,4 @@
-const CACHE = 'agenda-corretor-v2';
+const CACHE = 'agenda-corretor-v3';
 const FILES = ['./', './index.html', './manifest.json', './crm/supabase.js', './crm/config.js', './crm/nuvem.js', './crm/leads.js'];
 
 self.addEventListener('install', e => {
