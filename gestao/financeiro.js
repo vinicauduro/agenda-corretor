@@ -309,6 +309,65 @@ function drawFluxoChart(cv, recs, custos) {
     }
   });
 }
+/* Recebido × inadimplência. Cores conferidas no validador de paleta, inclusive para quem
+   não distingue vermelho de verde: azul, vermelho e amarelo. O amarelo tem pouco contraste
+   com o fundo branco, por isso o gráfico vem com legenda, dica ao passar o mouse e a tabela. */
+const COR_RECEBIDO = '#2a78d6', COR_ATRASO = '#d03b3b', COR_A_VENCER = '#eda100';
+function drawRecebimentosChart(cv, tip, serie) {
+  if (!cv) return; const { ctx, w, h } = setupCanvas(cv);
+  const padL = 8, padB = 22, padT = 16; const cw = w - padL * 2, ch = h - padB - padT; const gw = cw / serie.length;
+  const bw = Math.min(24, gw * 0.56);   // barra fina: no máximo 24 px, o resto do espaço é respiro
+  const max = Math.max(...serie.map(x => x.devido), 1);
+  ctx.clearRect(0, 0, w, h);
+  ctx.strokeStyle = '#e2e8f0'; ctx.lineWidth = 1;
+  [0.25, 0.5, 0.75, 1].forEach(p => { const y = Math.round(padT + ch - ch * p) + 0.5; ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(w - padL, y); ctx.stroke(); });
+  const narrow = gw < 46;
+  serie.forEach((x, i) => {
+    const cx = padL + i * gw + gw / 2; let base = padT + ch;
+    /* Recebido embaixo, atraso no meio, a vencer em cima; 2 px de fundo entre os pedaços e
+       só o topo arredondado. */
+    const partes = [[x.recebido, COR_RECEBIDO], [x.atraso, COR_ATRASO], [x.aVencer, COR_A_VENCER]].filter(p => p[0] > 0.005);
+    partes.forEach(([val, cor], j) => {
+      let hh = val / max * ch; if (hh < 2) hh = 2;
+      const topo = j === partes.length - 1;
+      const y = base - hh + (j ? 2 : 0), altura = hh - (j ? 2 : 0);
+      if (altura <= 0) { base -= hh; return; }
+      ctx.fillStyle = cor; ctx.beginPath();
+      const r = topo ? Math.min(4, altura, bw / 2) : 0;
+      ctx.moveTo(cx - bw / 2, y + altura); ctx.lineTo(cx - bw / 2, y + r);
+      if (r) ctx.quadraticCurveTo(cx - bw / 2, y, cx - bw / 2 + r, y);
+      ctx.lineTo(cx + bw / 2 - r, y);
+      if (r) ctx.quadraticCurveTo(cx + bw / 2, y, cx + bw / 2, y + r);
+      ctx.lineTo(cx + bw / 2, y + altura); ctx.closePath(); ctx.fill();
+      base -= hh;
+    });
+    ctx.fillStyle = x.mes === mesAtual() ? '#0f172a' : '#64748b'; ctx.font = (x.mes === mesAtual() ? 'bold ' : '') + '10px system-ui'; ctx.textAlign = 'center';
+    if (!narrow || (serie.length - 1 - i) % 2 === 0) ctx.fillText(monthLabel(x.mes), cx, h - 6);
+  });
+  /* Só o mês com a maior inadimplência leva o número em cima; o resto fica na dica e na tabela. */
+  const pior = serie.reduce((a, x, i) => (x.pct > (serie[a] || {}).pct ? i : a), 0);
+  if (serie[pior] && serie[pior].pct >= 0.5) {
+    const x = serie[pior], cx = padL + pior * gw + gw / 2, topoY = padT + ch - x.devido / max * ch;
+    ctx.fillStyle = '#334155'; ctx.font = '10px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText(fmtNum(x.pct, 0) + '% atraso', cx, Math.max(10, topoY - 4));
+  }
+  if (!tip) return;
+  const mostrar = ev => {
+    const rect = cv.getBoundingClientRect(); const px = ev.clientX - rect.left;
+    const i = Math.floor((px - padL) / gw);
+    if (i < 0 || i >= serie.length) { tip.style.display = 'none'; return; }
+    const x = serie[i];
+    tip.innerHTML = `<b>${monthLabel(x.mes)}</b><div><span class="dot" style="background:${COR_RECEBIDO}"></span>Recebido <span>${fmtMoney(x.recebido)}</span></div>
+      <div><span class="dot" style="background:${COR_ATRASO}"></span>Em atraso <span>${fmtMoney(x.atraso)}</span></div>
+      ${x.aVencer ? `<div><span class="dot" style="background:${COR_A_VENCER}"></span>A vencer <span>${fmtMoney(x.aVencer)}</span></div>` : ''}
+      <div class="tip-total">Venceu ${fmtMoney(x.devido)} · inadimplência ${fmtNum(x.pct, 1)}%</div>`;
+    tip.style.display = 'block';
+    const cx = padL + i * gw + gw / 2; const tw = tip.offsetWidth;
+    tip.style.left = Math.max(0, Math.min(rect.width - tw, cx - tw / 2)) + 'px'; tip.style.top = '4px';
+  };
+  cv.onmousemove = mostrar; cv.onmouseleave = () => { tip.style.display = 'none'; };
+  cv.onclick = mostrar;   // no celular, tocar mostra a dica
+}
 function drawDonut(cv, legendEl, data, money) {
   if (!cv) return; const { ctx, w, h } = setupCanvas(cv);
   ctx.clearRect(0, 0, w, h);

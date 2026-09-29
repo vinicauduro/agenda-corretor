@@ -415,12 +415,12 @@ canvas.chart { width: 100%; display: block; }
 .auth-card .item { cursor: pointer; }
 
 /* Bloco recolhível da qualificação: o essencial fica à vista e o resto abre quando precisa */
-details.qualif { border: 1px dashed var(--border); border-radius: 8px; padding: 8px 10px; margin: 4px 0 10px; background: #fff; }
-details.qualif > summary { cursor: pointer; font-size: 0.82rem; font-weight: 700; color: var(--primary); list-style: none; }
-details.qualif > summary::-webkit-details-marker { display: none; }
-details.qualif > summary::before { content: '▸ '; }
-details.qualif[open] > summary::before { content: '▾ '; }
-details.qualif[open] > summary { margin-bottom: 10px; }
+details.qualif, details.ver-tabela { border: 1px dashed var(--border); border-radius: 8px; padding: 8px 10px; margin: 4px 0 10px; background: #fff; }
+details.qualif > summary, details.ver-tabela > summary { cursor: pointer; font-size: 0.82rem; font-weight: 700; color: var(--primary); list-style: none; }
+details.qualif > summary::-webkit-details-marker, details.ver-tabela > summary::-webkit-details-marker { display: none; }
+details.qualif > summary::before, details.ver-tabela > summary::before { content: '▸ '; }
+details.qualif[open] > summary::before, details.ver-tabela[open] > summary::before { content: '▾ '; }
+details.qualif[open] > summary, details.ver-tabela[open] > summary { margin-bottom: 10px; }
 .tiny.ok { color: #15803d; }
 
 /* Cada pessoa a mais na venda ganha o seu bloco, separado do anterior */
@@ -468,3 +468,8 @@ details.qualif[open] > summary { margin-bottom: 10px; }
 }
 @media (prefers-reduced-motion: reduce) { #screen-admin .aside { transition: none; } }
 .sync-pendentes:not(:empty) { padding: 12px 16px 0; max-width: 1200px; }
+.chart-tip { display: none; position: absolute; top: 4px; left: 0; z-index: 5; pointer-events: none; background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; box-shadow: 0 6px 18px rgba(15,23,42,.12); padding: 8px 10px; font-size: 0.76rem; color: #0f172a; min-width: 190px; }
+.chart-tip b { display: block; margin-bottom: 4px; }
+.chart-tip div { display: flex; align-items: center; gap: 6px; }
+.chart-tip div span:last-child { margin-left: auto; font-variant-numeric: tabular-nums; }
+.chart-tip .tip-total { margin-top: 4px; padding-top: 4px; border-top: 1px solid #e2e8f0; color: #52514e; }
