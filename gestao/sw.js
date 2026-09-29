@@ -1,26 +1,13 @@
-const CACHE = 'gestao-loteamento-v40';
-const FILES = ['./', './index.html', './style.css', './config.js', './vendor/supabase.js', './core.js', './permissoes.js', './planta.js', './planta-pdf.js', './planta-dxf.js', './admin-pdf.js', './corretor.js', './admin.js', './indices.js', './antecipacao.js', './cobranca.js', './financeiro.js', './banco.js', './cnab.js', './relatorios.js', './docs.js', './clientes.js', './auth.js', './manifest.json'];
-
-self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)));
-  self.skipWaiting();
-});
-
+/* O sistema de gestão mudou para https://vinicauduro.github.io/lotifly/. Esta versão do
+   service worker só existe para desligar a antiga: apaga a memória offline dela, sai de cena
+   e recarrega as abas abertas, que então caem na página de redirecionamento. */
+self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', e => {
-  e.waitUntil(caches.keys().then(keys =>
-    Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
-  ));
-  self.clients.claim();
-});
-
-self.addEventListener('fetch', e => {
-  if (e.request.method !== 'GET') return;
-  // Rede primeiro (para pegar atualizações), cache como reserva offline.
-  e.respondWith(
-    fetch(e.request).then(res => {
-      const copy = res.clone();
-      caches.open(CACHE).then(c => c.put(e.request, copy)).catch(() => {});
-      return res;
-    }).catch(() => caches.match(e.request))
-  );
+  e.waitUntil((async () => {
+    const keys = await caches.keys();
+    await Promise.all(keys.filter(k => k.startsWith('gestao-loteamento-')).map(k => caches.delete(k)));
+    await self.registration.unregister();
+    const abas = await self.clients.matchAll({ type: 'window' });
+    abas.forEach(c => c.navigate(c.url));
+  })());
 });
