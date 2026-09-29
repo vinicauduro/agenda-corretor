@@ -110,74 +110,86 @@ function listaEmpreendimentosHtml() {
 function fabShow(action) { const f = $('#fab'); f.classList.add('show'); f.setAttribute('onclick', action); }
 
 // ================================================================ PAINEL
+/* O Início é da empresa inteira: o que precisa de alguém hoje, quanto entrou de venda no
+   mês, quanto tem para receber e para pagar, e como o dinheiro vai andar. Quantidade de
+   lotes, VGV e situação dos lotes ficam dentro de cada empreendimento, em Imóveis. */
+function inicioMes() {
+  const m = mesAtual(), hoje = todayStr();
+  const vendasMes = db.vendas.filter(x => x.status !== 'distrato' && monthKey(x.dataVenda) === m);
+  const recsMes = db.recebiveis.filter(r => monthKey(r.vencimento) === m);
+  const custosMes = db.custos.filter(c => c.status !== 'pago' && monthKey(c.vencimento || c.dataCompetencia) === m);
+  const atrasados = db.recebiveis.filter(r => recStatus(r) === 'atrasado');
+  return {
+    vendas: vendasMes.length, vendido: vendasMes.reduce((s, x) => s + num(x.valorTotal), 0),
+    previsto: recsMes.reduce((s, r) => s + recValor(r), 0),
+    recebidoMes: recsMes.reduce((s, r) => s + Math.min(num(r.valorPago), recValor(r)), 0),
+    aReceber: recsMes.reduce((s, r) => s + recRestante(r), 0),
+    aPagar: custosMes.reduce((s, c) => s + num(c.valor), 0), nPagar: custosMes.length,
+    pagarVencido: custosMes.filter(c => c.vencimento && c.vencimento < hoje).length,
+    atrasado: atrasados.reduce((s, r) => s + recRestante(r), 0), nAtrasados: atrasados.length,
+    clientesAtraso: new Set(atrasados.map(r => r.vendaId)).size
+  };
+}
+/* Mês a mês, das parcelas que venceram naquele mês: quanto entrou, quanto ficou em atraso
+   e, no mês corrente, quanto ainda vai vencer. */
+function recebimentosPorMes(n) {
+  const hoje = todayStr(); const out = [];
+  let m = mesAtual(); const meses = [m];
+  for (let i = 1; i < n; i++) { m = mesAnterior(m); meses.unshift(m); }
+  meses.forEach(mes => {
+    const rs = db.recebiveis.filter(r => monthKey(r.vencimento) === mes);
+    let recebido = 0, atraso = 0, aVencer = 0;
+    rs.forEach(r => {
+      recebido += Math.min(num(r.valorPago), recValor(r));
+      const rest = recRestante(r);
+      if (rest > 0.005) { if (r.vencimento < hoje) atraso += rest; else aVencer += rest; }
+    });
+    /* Inadimplência é o atraso sobre o que já venceu. A parcela que vence amanhã não entra na
+       conta: ainda não teve chance de ser paga. */
+    const devido = recebido + atraso + aVencer, vencido = recebido + atraso;
+    out.push({ mes, recebido, atraso, aVencer, devido, vencido, pct: vencido ? atraso / vencido * 100 : 0 });
+  });
+  return out;
+}
 function renderPainel() {
-  const esc0 = escopoAtual(); const v = $('#av-painel');
-  /* O painel é da empresa inteira; o filtro em cima restringe a um empreendimento. */
-  const emps = esc0 ? db.loteamentos.filter(l => l.id === esc0) : db.loteamentos;
-  const lot = esc0 ? getLoteamento(esc0) : (db.loteamentos.length === 1 ? db.loteamentos[0] : null);
-  const ls = db.lotes.filter(l => noEscopo(l, esc0));
-  const cnt = s => ls.filter(l => l.status === s).length;
-  const vgv = ls.reduce((s, l) => s + num(l.preco), 0);
-  const vendas = vendasDo(esc0).filter(x => x.status !== 'distrato');
-  const vendido = vendas.reduce((s, x) => s + num(x.valorTotal), 0);
-  const recs = recebiveisDo(esc0);
-  const recebido = recs.reduce((s, r) => s + num(r.valorPago), 0);
-  const aReceber = recs.reduce((s, r) => s + recRestante(r), 0);
-  const atrasados = recs.filter(r => recStatus(r) === 'atrasado');
-  const atrasado = atrasados.reduce((s, r) => s + recRestante(r), 0);
-  const cs = custosDo(esc0);
-  const custoTotal = cs.reduce((s, c) => s + num(c.valor), 0);
-  const custoPago = cs.filter(c => c.status === 'pago').reduce((s, c) => s + num(c.valor), 0);
-  const custosAtr = cs.filter(c => custoStatus(c) === 'atrasado');
-  const comissoesPend = vendas.filter(x => !x.comissaoPaga).reduce((s, x) => s + num(x.comissaoValor), 0);
-  const orcTotal = emps.reduce((s, e) => s + Object.values(e.orcamento || {}).reduce((a, x) => a + num(x), 0), 0);
-  const resPend = db.reservas.filter(r => noEscopo(r, esc0) && r.status === 'pendente');
-  const resExp = db.reservas.filter(r => noEscopo(r, esc0) && reservaStatus(r) === 'expirada');
-  const resVencendo = db.reservas.filter(r => noEscopo(r, esc0) && reservaStatus(r) === 'aprovada' && daysBetween(todayStr(), r.validade) <= 2);
-  const mesKey = todayStr().slice(0, 7);
-  const prevMes = recs.filter(r => monthKey(r.vencimento) === mesKey).reduce((s, r) => s + recRestante(r), 0);
-  const custosMes = cs.filter(c => c.status !== 'pago' && monthKey(c.vencimento || c.dataCompetencia) === mesKey).reduce((s, c) => s + num(c.valor), 0);
-  const pctVend = ls.length ? Math.round(cnt('vendido') / ls.length * 100) : 0;
+  const v = $('#av-painel'); const k = inicioMes();
+  const resPend = db.reservas.filter(r => r.status === 'pendente');
+  const resExp = db.reservas.filter(r => reservaStatus(r) === 'expirada');
+  const resVencendo = db.reservas.filter(r => reservaStatus(r) === 'aprovada' && daysBetween(todayStr(), r.validade) <= 2);
+  const custosAtr = db.custos.filter(c => custoStatus(c) === 'atrasado');
 
   let alerts = '';
   if (resPend.length) alerts += `<div class="alert warn" onclick="switchTab('reservas')"><span><b>${resPend.length} reserva(s) aguardando aprovação</b></span><span>›</span></div>`;
   if (resExp.length) alerts += `<div class="alert" onclick="aSetFiltroRes('expirada')"><span><b>${resExp.length} reserva(s) vencida(s)</b> — libere o lote ou renove</span><span>›</span></div>`;
   if (resVencendo.length) alerts += `<div class="alert info" onclick="switchTab('reservas')"><span><b>${resVencendo.length} reserva(s) vencem em até 2 dias</b></span><span>›</span></div>`;
-  if (atrasados.length) alerts += `<div class="alert" onclick="abrirPainelCobranca()"><span><b>${atrasados.length} parcela(s) em atraso</b> — ${fmtMoney(atrasado)} · cobrar</span><span>›</span></div>`;
+  if (k.nAtrasados) alerts += `<div class="alert" onclick="abrirPainelCobranca()"><span><b>${k.nAtrasados} parcela(s) em atraso</b> — ${fmtMoney(k.atrasado)} · cobrar</span><span>›</span></div>`;
   if (custosAtr.length) alerts += `<div class="alert" onclick="aSetFiltroCusto('atrasado')"><span><b>${custosAtr.length} conta(s) a pagar vencida(s)</b> — ${fmtMoney(custosAtr.reduce((s, c) => s + num(c.valor), 0))}</span><span>›</span></div>`;
-  const semPreco = ls.filter(l => !num(l.preco)).length;
-  if (semPreco) alerts += `<div class="alert info" onclick="abrirEmpreendimento('${(ls.find(l => !num(l.preco)) || {}).loteamentoId}','lotes')"><span><b>${semPreco} lote(s) sem preço</b></span><span>›</span></div>`;
   if (!alerts) alerts = `<div class="alert ok"><span>Tudo em dia. 👍</span></div>`;
 
+  const serie = recebimentosPorMes(12);
+  const tot = serie.reduce((a, x) => ({ vencido: a.vencido + x.vencido, atraso: a.atraso + x.atraso }), { vencido: 0, atraso: 0 });
   v.innerHTML = `
-    ${db.loteamentos.length > 1 ? `<div class="filters">${escopoSelectHtml('renderPainel()')}</div>` : ''}
     ${alerts}
-    <div class="status-strip">
-      <div class="pill"><span class="dot disponivel"></span><div><b>${cnt('disponivel')}</b><br>disponíveis</div></div>
-      <div class="pill"><span class="dot reservado"></span><div><b>${cnt('reservado')}</b><br>reservados</div></div>
-      <div class="pill"><span class="dot vendido"></span><div><b>${cnt('vendido')}</b><br>vendidos</div></div>
-      <div class="pill"><span class="dot bloqueado"></span><div><b>${cnt('bloqueado')}</b><br>indispon.</div></div>
-    </div>
     <div class="kpi-grid">
-      <div class="kpi c-primary"><div class="lbl">VGV (tabela)</div><div class="val">${fmtMoneyShort(vgv)}</div><div class="sub">${ls.length} lotes · ${pctVend}% vendido</div></div>
-      <div class="kpi c-blue"><div class="lbl">Vendido</div><div class="val">${fmtMoneyShort(vendido)}</div><div class="sub">${vendas.length} venda(s)</div></div>
-      <div class="kpi c-green"><div class="lbl">Recebido</div><div class="val">${fmtMoneyShort(recebido)}</div><div class="sub">${vendido ? Math.round(recebido / vendido * 100) : 0}% do vendido</div></div>
-      <div class="kpi c-amber"><div class="lbl">A receber</div><div class="val">${fmtMoneyShort(aReceber)}</div><div class="sub">${fmtMoneyShort(prevMes)} previsto no mês</div></div>
-      <div class="kpi c-red" onclick="abrirPainelCobranca()" style="cursor:pointer"><div class="lbl">Em atraso</div><div class="val">${fmtMoneyShort(atrasado)}</div><div class="sub">${atrasados.length} parcela(s) · cobrar ›</div></div>
-      <div class="kpi c-red"><div class="lbl">Custos</div><div class="val">${fmtMoneyShort(custoTotal)}</div><div class="sub">${fmtMoneyShort(custoPago)} pagos · ${fmtMoneyShort(custosMes)} a pagar no mês</div></div>
-      <div class="kpi ${recebido - custoPago >= 0 ? 'c-green' : 'c-red'}"><div class="lbl">Caixa (receb. − pagos)</div><div class="val">${fmtMoneyShort(recebido - custoPago)}</div><div class="sub">Comissões a pagar ${fmtMoneyShort(comissoesPend)}</div></div>
-      <div class="kpi ${vgv - (orcTotal || custoTotal) >= 0 ? 'c-green' : 'c-red'}"><div class="lbl">Resultado projetado</div><div class="val">${fmtMoneyShort(vgv - Math.max(orcTotal, custoTotal))}</div><div class="sub">VGV − ${orcTotal ? 'orçamento' : 'custos'} (${fmtMoneyShort(Math.max(orcTotal, custoTotal))})</div></div>
+      <div class="kpi c-blue" onclick="switchTab('vendas')" style="cursor:pointer"><div class="lbl">Vendas de ${monthLabel(mesAtual())}</div><div class="val">${fmtMoneyShort(k.vendido)}</div><div class="sub">${k.vendas} contrato(s) ›</div></div>
+      <div class="kpi c-amber" onclick="mostrarRecebiveis('aberto')" style="cursor:pointer"><div class="lbl">A receber no mês</div><div class="val">${fmtMoneyShort(k.aReceber)}</div><div class="sub">${fmtMoneyShort(k.recebidoMes)} já recebido de ${fmtMoneyShort(k.previsto)} ›</div></div>
+      <div class="kpi c-red" onclick="abrirPainelCobranca()" style="cursor:pointer"><div class="lbl">Em atraso</div><div class="val">${fmtMoneyShort(k.atrasado)}</div><div class="sub">${k.nAtrasados} parcela(s) · ${k.clientesAtraso} contrato(s) ›</div></div>
+      <div class="kpi c-primary" onclick="switchTab('custos')" style="cursor:pointer"><div class="lbl">A pagar no mês</div><div class="val">${fmtMoneyShort(k.aPagar)}</div><div class="sub">${k.nPagar} conta(s)${k.pagarVencido ? ` · ${k.pagarVencido} vencida(s)` : ''} ›</div></div>
     </div>
     <div class="grid2">
-      <div class="card"><h3>📈 Fluxo previsto (12 meses)</h3><canvas class="chart" id="chartFluxo" height="200"></canvas><div class="legend-list" style="flex-direction:row;gap:14px"><div><span class="dot" style="background:#2563eb"></span>Recebimentos previstos</div><div><span class="dot" style="background:#f97316"></span>Custos previstos</div></div></div>
-      <div class="card"><h3>🥧 Situação dos lotes</h3><canvas class="chart" id="chartLotes" height="200"></canvas><div class="legend-list" id="chartLotesLegend"></div></div>
+      <div class="card"><h3>📈 Fluxo previsto (12 meses)</h3><canvas class="chart" id="chartFluxo" height="220"></canvas>
+        <div class="legend-list" style="flex-direction:row;gap:14px"><div><span class="dot" style="background:#2563eb"></span>Recebimentos previstos</div><div><span class="dot" style="background:#f97316"></span>Despesas previstas</div></div></div>
+      <div class="card"><h3>💵 Recebido × inadimplência (12 meses)</h3>
+        <p class="help" style="margin-top:-4px">Parcelas que venceram em cada mês. Inadimplência nos 12 meses: <b>${tot.vencido ? fmtNum(tot.atraso / tot.vencido * 100, 1) : '0,0'}%</b> (${fmtMoneyShort(tot.atraso)} em atraso).</p>
+        <div style="position:relative"><canvas class="chart" id="chartReceb" height="220"></canvas><div class="chart-tip" id="chartRecebTip"></div></div>
+        <div class="legend-list" style="flex-direction:row;gap:14px;flex-wrap:wrap"><div><span class="dot" style="background:${COR_RECEBIDO}"></span>Recebido</div><div><span class="dot" style="background:${COR_ATRASO}"></span>Em atraso</div><div><span class="dot" style="background:${COR_A_VENCER}"></span>A vencer</div></div>
+        <details class="ver-tabela"><summary>Ver em tabela</summary><div class="table-wrap"><table class="tbl"><thead><tr><th>Mês</th><th class="num">Venceu</th><th class="num">Recebido</th><th class="num">Em atraso</th><th class="num">A vencer</th><th class="num">Inadimpl.</th></tr></thead><tbody>
+          ${serie.slice().reverse().map(x => `<tr><td>${monthLabel(x.mes)}</td><td class="num">${fmtMoney(x.devido)}</td><td class="num">${fmtMoney(x.recebido)}</td><td class="num">${fmtMoney(x.atraso)}</td><td class="num">${x.aVencer ? fmtMoney(x.aVencer) : '—'}</td><td class="num">${fmtNum(x.pct, 1)}%</td></tr>`).join('')}
+        </tbody></table></div></details></div>
     </div>
 `;
-  drawFluxoChart($('#chartFluxo'), recs, cs);
-  drawDonut($('#chartLotes'), $('#chartLotesLegend'), [
-    { label: 'Disponíveis', value: cnt('disponivel'), color: '#22c55e' }, { label: 'Reservados', value: cnt('reservado'), color: '#f59e0b' },
-    { label: 'Vendidos', value: cnt('vendido'), color: '#ef4444' }, { label: 'Indisponíveis', value: cnt('bloqueado'), color: '#94a3b8' }
-  ]);
+  drawFluxoChart($('#chartFluxo'), db.recebiveis, db.custos);
+  drawRecebimentosChart($('#chartReceb'), $('#chartRecebTip'), serie);
 }
 
 // ================================================================ PLANTA (editor)

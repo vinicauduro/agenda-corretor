@@ -633,6 +633,41 @@ gaveta no celular sem rolagem lateral. As outras 17 suítes e os testes do banco
 
 ---
 
+## 7s. Início da empresa (29/09)
+
+Pedido seu: o Início é da empresa, não do empreendimento. Saíram o filtro de empreendimento,
+a contagem de lotes, o VGV, a pizza da situação dos lotes, o "resultado projetado" e o aviso
+de lotes sem preço. Isso tudo continua dentro de cada empreendimento, em Imóveis.
+
+Agora o Início tem:
+
+- **No topo, o que precisa de alguém**: reservas esperando, parcelas em atraso e contas
+  vencidas.
+- **Quatro números do mês**, todos clicáveis:
+  - **Vendas do mês**, em valor e contratos (leva a Todos os contratos);
+  - **A receber no mês**, com quanto já entrou do previsto (leva a A receber);
+  - **Em atraso**, em valor, parcelas e contratos (leva a Cobrança);
+  - **A pagar no mês**, com as contas vencidas (leva a A pagar).
+- **Fluxo previsto (12 meses)**, como estava.
+- **Recebido × inadimplência (12 meses)**: uma barra por mês com o que venceu naquele mês,
+  dividida em recebido (azul), em atraso (vermelho) e, no mês corrente, a vencer (amarelo).
+  O mês com a pior inadimplência leva o percentual em cima. Passando o mouse, aparecem os
+  valores; em **Ver em tabela**, os 12 meses em números.
+
+Uma decisão de conta: **inadimplência é o atraso dividido pelo que já venceu.** A parcela
+que vence daqui a dez dias não entra, porque ainda não teve chance de ser paga.
+
+As cores do gráfico foram conferidas para quem não distingue vermelho de verde; por isso é
+azul, vermelho e amarelo, e não verde e vermelho.
+
+- [ ] Abrir o Início e conferir os quatro números com o que você sabe do mês.
+- [ ] Passar o mouse no gráfico de inadimplência e abrir a tabela.
+
+`test34` monta um cenário conhecido e confere cada número, o gráfico, a dica, a tabela, os
+atalhos e a tela no celular.
+
+---
+
 ## 7r. Tipos de imóvel (25/09)
 
 Pedido seu: em vez de "Loteamento" e "Imóvel de terceiro", o tipo diz o que o imóvel é.
