@@ -73,3 +73,34 @@ como antes.
   filtre por esse corretor na aba Leads e passe cada lead para outra pessoa.
 - A equipe sempre precisa ter pelo menos um administrador ativo.
 - O lead que o administrador passa para um corretor aparece na tela dele em tempo real.
+
+## Avisos no celular (mesmo com o app fechado)
+
+Lembretes e compromissos com "Lembrar antes" chegam como notificação no celular, mesmo com o
+app fechado. Um lembrete sem hora avisa às 9h do dia marcado. Quem manda o aviso é uma função
+do Supabase que roda a cada minuto.
+
+### Ligar no Supabase (uma vez só)
+
+1. **Banco.** Rode de novo o `crm/schema.sql` inteiro no **SQL Editor**. Ele cria as tabelas dos
+   avisos e não apaga nada.
+2. **Função.** Em **Edge Functions › Deploy a new function › Via Editor**:
+   - Nome da função: `avisos` (exatamente assim).
+   - Apague o código de exemplo, cole o conteúdo de `crm/funcoes/avisos/index.ts` e clique em
+     **Deploy function**.
+   - Na página da função, em **Details** (ou **Settings**), **desligue** *Verify JWT* / *Enforce JWT
+     verification* e salve. Quem protege a função é um segredo que só o agendador conhece.
+3. **Agendador.** Rode o `crm/avisos.sql` no **SQL Editor**. Ele liga as extensões `pg_cron` e
+   `pg_net` e chama a função a cada minuto. Na primeira chamada, a função cria as chaves do push.
+
+Para conferir, abra **Edge Functions › avisos › Logs** (ou *Invocations*): a cada minuto deve
+aparecer uma chamada com status 200.
+
+### Ativar em cada celular
+
+- **iPhone** (iOS 16.4 ou mais novo): abra o app no Safari, toque em **Compartilhar › Adicionar à
+  Tela de Início** e abra pelo ícone novo. Depois, na aba **🔔 Lembretes** (ou em **👤 › Avisos no
+  celular**), toque em **Ativar** e permita as notificações.
+- **Android e computador:** no Chrome, basta tocar em **Ativar** e permitir.
+
+Cada pessoa ativa no próprio aparelho, e cada um recebe só os próprios lembretes e compromissos.

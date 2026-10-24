@@ -305,6 +305,7 @@ const Nuvem = (() => {
     if (dados) { aplicar(dados); migrarLegado(); }
     assinarTempoReal();
     enviar();
+    sincronizarPush();
   }
 
   // ===== tela de login =====
@@ -381,6 +382,7 @@ const Nuvem = (() => {
   async function sair() {
     if (st.fila.length && !confirm('Há ' + st.fila.length + ' alteração(ões) que ainda não foram enviadas e serão perdidas. Sair mesmo assim?')) return;
     for (const n of ['fila', 'dados', 'equipe']) localStorage.removeItem(chave(n));
+    await desativarPush().catch(() => {});
     await sb.auth.signOut().catch(() => {});
     location.reload();
   }
@@ -424,6 +426,69 @@ const Nuvem = (() => {
     if (st.membro) await atualizarMembro(st.membro.id, { nome, telefone });
   }
 
+  // ===== avisos no celular (push) =====
+  // O aparelho se inscreve e a função "avisos" do Supabase manda o lembrete na
+  // hora, mesmo com o app fechado. No iPhone só funciona com o app na Tela de Início.
+  const PUSH = 'crm_push_endpoint';
+  const iphoneNoSafari = () => /iphone|ipad|ipod/i.test(navigator.userAgent) && !navigator.standalone;
+  const pushSuportado = () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+  function chaveBytes(b64) {
+    const s = atob((b64 + '='.repeat((4 - b64.length % 4) % 4)).replace(/-/g, '+').replace(/_/g, '/'));
+    return Uint8Array.from(s, c => c.charCodeAt(0));
+  }
+  async function inscricaoAtual() {
+    const reg = await navigator.serviceWorker.ready;
+    return reg.pushManager.getSubscription();
+  }
+
+  async function estadoPush() {
+    if (!ativa || !st.usuario) return 'indisponivel';
+    if (iphoneNoSafari()) return 'instalar';
+    if (!pushSuportado()) return 'sem-suporte';
+    if (Notification.permission === 'denied') return 'bloqueado';
+    const sub = await inscricaoAtual().catch(() => null);
+    return sub && Notification.permission === 'granted' && localStorage.getItem(PUSH) ? 'ativo' : 'inativo';
+  }
+
+  async function registrarInscricao(sub) {
+    const j = sub.toJSON();
+    let fuso = 'America/Sao_Paulo';
+    try { fuso = Intl.DateTimeFormat().resolvedOptions().timeZone || fuso; } catch {}
+    await rpc('crm_salvar_inscricao', { p_endpoint: j.endpoint, p_p256dh: j.keys.p256dh, p_auth: j.keys.auth, p_fuso: fuso });
+    localStorage.setItem(PUSH, j.endpoint);
+  }
+
+  // Precisa ser chamado direto do toque no botão (o iPhone exige para mostrar a pergunta).
+  async function ativarPush() {
+    const perm = await Notification.requestPermission();
+    if (perm !== 'granted') throw new Error('Sem permissão. Libere em Ajustes › Notificações › Agenda e tente de novo.');
+    const chavePublica = await rpc('crm_vapid_publica', {});
+    if (!chavePublica) throw new Error('Os avisos ainda não foram ligados no servidor. Tente de novo em alguns minutos.');
+    let sub = await inscricaoAtual();
+    if (!sub) {
+      try {
+        sub = await (await navigator.serviceWorker.ready).pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: chaveBytes(chavePublica) });
+      } catch (e) {
+        throw new Error('Não foi possível ativar os avisos neste aparelho. Verifique a internet e tente de novo. (' + (e && e.message || e) + ')');
+      }
+    }
+    await registrarInscricao(sub);
+  }
+
+  async function desativarPush() {
+    const endpoint = localStorage.getItem(PUSH);
+    localStorage.removeItem(PUSH);
+    if (endpoint && st.usuario) await sb.rpc('crm_remover_inscricao', { p_endpoint: endpoint }).then(x => x, () => {});
+    if (pushSuportado()) { const sub = await inscricaoAtual().catch(() => null); if (sub) await sub.unsubscribe().catch(() => {}); }
+  }
+
+  // A cada entrada, confirma a inscrição no servidor (o aparelho pode trocar o endereço dela).
+  async function sincronizarPush() {
+    if (!localStorage.getItem(PUSH) || !pushSuportado() || Notification.permission !== 'granted') return;
+    const sub = await inscricaoAtual().catch(() => null);
+    if (sub) await registrarInscricao(sub).catch(() => {});
+  }
+
   function traduzir(msg) {
     const m = String(msg || '');
     const mapa = [
@@ -462,6 +527,10 @@ const Nuvem = (() => {
     atualizarMembro,
     salvarPerfil,
     recarregar,
+    estadoPush,
+    ativarPush,
+    desativarPush,
+    get pushAtivo() { return !!localStorage.getItem(PUSH); },
     get usuario() { return st.usuario; },
     get membro() { return st.membro; },
     get equipe() { return st.equipe; },

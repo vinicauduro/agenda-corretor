@@ -468,6 +468,10 @@
   .lead-vinculo { font-size: 0.82rem; color: var(--primary); background: #eff6ff; padding: 7px 10px; border-radius: 8px; margin-bottom: 14px; cursor: pointer; }
   .reminder-lead { font-size: 0.74rem; color: var(--primary); margin-top: 2px; }
   .btn-excluir { flex: 0 0 auto; background: #fff5f5; color: var(--danger); }
+  .push-card { display: flex; align-items: center; gap: 12px; background: #eff6ff; border-color: #bfdbfe; }
+  .push-card > div { flex: 1; font-size: 0.88rem; }
+  .push-card p { font-size: 0.8rem; color: var(--muted); margin-top: 3px; line-height: 1.4; }
+  .push-card .btn { flex: 0 0 auto; }
 
   /* Minha conta */
   .conta-secao { font-size: 0.95rem; margin: 22px 0 8px; }
@@ -562,6 +566,7 @@
 
 <!-- LEMBRETES VIEW -->
 <div class="view" id="view-lembretes">
+  <div id="pushAviso"></div>
   <div id="reminderList"></div>
 </div>
 
@@ -841,6 +846,7 @@ function switchTab(name) {
     fab.title = 'Novo evento';
     fab.onclick = openEventModal;
   } else if (name === 'lembretes') {
+    renderPushAviso();
     fab.style.display = 'flex';
     fab.title = 'Novo lembrete';
     fab.onclick = openReminderModal;
@@ -1209,8 +1215,9 @@ function checkDueReminders() {
     if (diff >= 0 && diff <= 60000) {
       r.notified = true;
       saveData();
-      showToast('🔔', 'Lembrete!', r.title);
-      if (Notification.permission === 'granted') {
+      showToast('🔔', 'Lembrete!', esc(r.title));
+      // com os avisos da nuvem ligados, o aviso do sistema já vem por eles
+      if (!Nuvem.pushAtivo && 'Notification' in window && Notification.permission === 'granted') {
         new Notification('🔔 Lembrete', { body: r.title });
       }
     }
