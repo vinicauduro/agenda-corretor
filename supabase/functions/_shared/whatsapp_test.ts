@@ -23,7 +23,11 @@ const aviso = {
       { field: "messages", value: { statuses: [{ id: "wamid.Z", status: "read" }] } },
       {
         field: "smb_message_echoes",
-        value: { message_echoes: [{ from: "554834476251", to: "5548999998888", id: "wamid.E", type: "text", text: { body: "Oi Maria, aqui é o Vini" } }] },
+        value: { message_echoes: [
+          { from: "554834476251", to: "5548999998888", id: "wamid.E", type: "text", text: { body: "Oi Maria, aqui é o Vini" } },
+          { from: "554834476251", to: "5548999998888", id: "wamid.F", type: "reaction", reaction: { emoji: "👍" } },
+          { from: "554834476251", to: "5548999998888", id: "wamid.G", type: "unsupported" },
+        ] },
       },
     ],
   }],

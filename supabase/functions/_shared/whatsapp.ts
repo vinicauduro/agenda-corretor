@@ -28,6 +28,8 @@ export function textoDaMensagem(m: Msg): string {
   }
 }
 
+const TIPOS_ECO_DA_EQUIPE = new Set(["text", "image", "video", "audio", "document", "location", "contacts", "sticker", "interactive", "button", "template"]);
+
 // Extrai do aviso da Meta as mensagens de clientes e as enviadas pela equipe
 // no app WhatsApp Business (coexistência: campo smb_message_echoes).
 export function lerWebhook(corpo: Msg): Evento[] {
@@ -45,9 +47,14 @@ export function lerWebhook(corpo: Msg): Evento[] {
         }
       } else if (change.field === "smb_message_echoes") {
         for (const m of v.message_echoes ?? []) {
+          // Só conta como corretor assumindo uma mensagem de verdade (não reação, edição, apagada, aviso do sistema).
+          if (!TIPOS_ECO_DA_EQUIPE.has(m.type)) continue;
           eventos.push({ tipo: "equipe", telefone: m.to, waId: m.id, texto: textoDaMensagem(m) || "[mensagem]" });
         }
       }
+      // Registro para diagnóstico: só o tipo do aviso, sem o conteúdo das mensagens.
+      const tipos = [...(v.messages ?? []), ...(v.message_echoes ?? [])].map((m: Msg) => m.type);
+      console.log("webhook", change.field, tipos.join(",") || (v.statuses ? "status" : "-"));
     }
   }
   return eventos;
