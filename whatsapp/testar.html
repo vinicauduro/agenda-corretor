@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Testar assistente</title>
+<style>
+  :root { --fundo: #efeae2; --topo: #075e54; --cliente: #d9fdd3; --agente: #ffffff; --texto: #111b21; --suave: #667781; --borda: #d1d7db; --campo: #ffffff; }
+  @media (prefers-color-scheme: dark) {
+    :root { --fundo: #0b141a; --topo: #202c33; --cliente: #005c4b; --agente: #202c33; --texto: #e9edef; --suave: #8696a0; --borda: #2a3942; --campo: #2a3942; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 15px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: var(--fundo); color: var(--texto); }
+  header { background: var(--topo); color: #fff; padding: 12px 16px; }
+  header h1 { margin: 0; font-size: 17px; }
+  header p { margin: 2px 0 0; font-size: 13px; opacity: .85; }
+  details { background: var(--campo); border-bottom: 1px solid var(--borda); padding: 10px 16px; }
+  summary { cursor: pointer; font-weight: 600; }
+  label { display: block; margin-top: 10px; font-size: 13px; color: var(--suave); }
+  input[type=text], input[type=password], input[type=url] { width: 100%; padding: 8px; border: 1px solid var(--borda); border-radius: 6px; background: var(--campo); color: var(--texto); font: inherit; }
+  .linha { display: flex; gap: 8px; align-items: center; margin-top: 10px; flex-wrap: wrap; }
+  main { max-width: 760px; margin: 0 auto; padding: 12px 16px 96px; }
+  .msg { max-width: 85%; margin: 6px 0; padding: 8px 10px; border-radius: 8px; white-space: pre-wrap; overflow-wrap: anywhere; box-shadow: 0 1px 1px rgba(0,0,0,.1); }
+  .msg.cliente { background: var(--cliente); margin-left: auto; }
+  .msg.agente { background: var(--agente); }
+  .msg img { display: block; max-width: 100%; border-radius: 6px; margin-bottom: 6px; }
+  .aviso { text-align: center; color: var(--suave); font-size: 13px; margin: 10px 0; }
+  form.envio { position: fixed; left: 0; right: 0; bottom: 0; display: flex; gap: 8px; padding: 10px 16px; background: var(--fundo); border-top: 1px solid var(--borda); }
+  form.envio input { flex: 1; padding: 10px 12px; border-radius: 20px; border: 1px solid var(--borda); background: var(--campo); color: var(--texto); font: inherit; }
+  button { padding: 8px 14px; border: 0; border-radius: 20px; background: #00a884; color: #fff; font: inherit; cursor: pointer; }
+  button.secundario { background: transparent; color: var(--texto); border: 1px solid var(--borda); }
+  button:disabled { opacity: .5; }
+  a { color: #027eb5; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Assistente Cocal — teste</h1>
+  <p>Converse com o agente como se fosse um cliente. Nada é enviado pelo WhatsApp.</p>
+</header>
+<details id="config">
+  <summary>Configuração</summary>
+  <label for="endereco">Endereço da função</label>
+  <input id="endereco" type="url" value="https://ahklfealqulmbahzvlpt.supabase.co/functions/v1/whatsapp-webhook">
+  <label for="chave">Chave (o mesmo valor do segredo WA_WEBHOOK_SEGREDO)</label>
+  <input id="chave" type="password" autocomplete="off">
+  <label for="telefone">Telefone de teste (cada um é uma conversa separada)</label>
+  <input id="telefone" type="text" value="teste1">
+  <label for="nome">Nome do cliente no WhatsApp (opcional)</label>
+  <input id="nome" type="text" placeholder="Ex.: Maria">
+  <div class="linha">
+    <label style="margin:0"><input id="lembrar" type="checkbox"> lembrar a chave neste aparelho</label>
+    <button type="button" class="secundario" id="reiniciar">Recomeçar conversa</button>
+  </div>
+</details>
+<main id="conversa"><p class="aviso" id="inicio">Escreva uma mensagem abaixo para começar.</p></main>
+<form class="envio" id="envio">
+  <input id="texto" autocomplete="off" placeholder="Mensagem do cliente">
+  <button id="botao">Enviar</button>
+</form>
+<script>
+const $ = (id) => document.getElementById(id);
+const guardado = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
+const guardar = (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch {} };
+
+if (guardado('wa_teste_chave')) { $('chave').value = guardado('wa_teste_chave'); $('lembrar').checked = true; }
+else $('config').open = true;
+$('lembrar').onchange = () => guardar('wa_teste_chave', $('lembrar').checked ? $('chave').value : null);
+$('chave').oninput = () => { if ($('lembrar').checked) guardar('wa_teste_chave', $('chave').value); };
+
+// Formatação do WhatsApp: *negrito*, _itálico_, links clicáveis.
+function formatar(texto) {
+  const esc = texto.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  return esc
+    .replace(/\[foto: (https?:\/\/[^\]\s]+)\]\n?/g, '<img src="$1" alt="foto do imóvel">')
+    .replace(/(^|[^"=])(https?:\/\/[^\s<]+)/g, '$1<a href="$2" target="_blank" rel="noopener">$2</a>')
+    .replace(/\*([^*\n]+)\*/g, '<b>$1</b>')
+    .replace(/(^|\s)_([^_\n]+)_/g, '$1<i>$2</i>');
+}
+
+function mostrar(autor, texto) {
+  const div = document.createElement('div');
+  div.className = autor === 'aviso' ? 'aviso' : 'msg ' + autor;
+  div.innerHTML = autor === 'aviso' ? '' : formatar(texto);
+  if (autor === 'aviso') div.textContent = texto;
+  $('conversa').append(div);
+  div.scrollIntoView({ behavior: 'smooth', block: 'end' });
+}
+
+async function chamar(simular) {
+  const url = $('endereco').value.trim() + '?chave=' + encodeURIComponent($('chave').value);
+  const resp = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ simular }) });
+  if (resp.status === 401) throw new Error('Chave incorreta. Confira em Configuração.');
+  const dados = await resp.json().catch(() => ({}));
+  if (!resp.ok) throw new Error(dados.erro || 'A função respondeu ' + resp.status);
+  return dados;
+}
+
+$('envio').onsubmit = async (ev) => {
+  ev.preventDefault();
+  const texto = $('texto').value.trim();
+  if (!texto) return;
+  if (!$('chave').value) { $('config').open = true; $('chave').focus(); return; }
+  $('texto').value = '';
+  $('inicio')?.remove();
+  mostrar('cliente', texto);
+  $('botao').disabled = true;
+  const pensando = document.createElement('p');
+  pensando.className = 'aviso';
+  pensando.textContent = 'digitando…';
+  $('conversa').append(pensando);
+  try {
+    const r = await chamar({ telefone: $('telefone').value, nome: $('nome').value, texto });
+    pensando.remove();
+    if (r.aviso) mostrar('aviso', r.aviso);
+    for (const m of r.respostas || []) mostrar('agente', m);
+  } catch (e) {
+    pensando.remove();
+    mostrar('aviso', '⚠️ ' + e.message);
+  } finally {
+    $('botao').disabled = false;
+    $('texto').focus();
+  }
+};
+
+$('reiniciar').onclick = async () => {
+  if (!$('chave').value) return;
+  try {
+    await chamar({ telefone: $('telefone').value, reiniciar: true });
+    $('conversa').innerHTML = '';
+    mostrar('aviso', 'Conversa apagada. O lead criado no CRM continua lá; apague por lá se quiser.');
+  } catch (e) { mostrar('aviso', '⚠️ ' + e.message); }
+};
+</script>
+</body>
+</html>
