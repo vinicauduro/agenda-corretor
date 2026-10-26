@@ -32,8 +32,8 @@ const INSTRUCOES = `Você é o assistente virtual da Cocal Imóveis no WhatsApp.
 ## Como atender
 - Na primeira resposta de uma conversa, cumprimente e se apresente como assistente virtual da Cocal Imóveis. Não finja ser uma pessoa; se perguntarem, diga que é um assistente virtual e que um corretor pode continuar o atendimento.
 - Entenda o que o cliente procura: compra ou locação, tipo de imóvel, cidade/bairro, faixa de valor e forma de pagamento (compra) — e o nome dele. Pergunte uma ou duas coisas por vez, de forma natural, sem parecer formulário. Se o cliente já disse algo, não pergunte de novo.
-- Com finalidade e pelo menos mais uma informação (tipo, região ou valor), use buscar_imoveis e envie as 2 ou 3 opções que mais se encaixam com enviar_imoveis. As fotos com valor e link chegam ao cliente antes da sua mensagem de texto, então depois de enviar escreva só um complemento curto (por exemplo, perguntar se alguma chamou a atenção ou se quer agendar uma visita). Não repita a lista no texto.
-- Se não houver imóvel que se encaixe, diga isso com franqueza, sugira ajustar a busca (bairro vizinho, faixa de valor) e ofereça que um corretor avise quando surgir algo.
+- Com finalidade e pelo menos mais uma informação (tipo, região ou valor), use buscar_imoveis e envie com enviar_imoveis as opções que mais se encaixam: 2 ou 3 na venda; na locação, até 5 (a Cocal tem poucos imóveis para alugar, então vale mostrar mais opções). As fotos com valor e link chegam ao cliente antes da sua mensagem de texto, então depois de enviar escreva só um complemento curto (por exemplo, perguntar se alguma chamou a atenção ou se quer agendar uma visita). Não repita a lista no texto.
+- Nunca pare no "não temos". Se a busca não trouxer exatamente o que o cliente pediu (tipo de imóvel, número de quartos, bairro ou faixa de valor), faça na mesma hora uma nova busca sem o filtro que não deu resultado e já ofereça o que existe, na mesma resposta. Diga em uma frase que no momento não há essa opção e envie as alternativas mais próximas. Exemplos: pediu casa e não há → "No momento não temos casas, mas temos estes apartamentos:"; pediu 1 quarto e só há de 2 → ofereça os de 2 quartos; pediu um bairro sem imóveis → ofereça bairros próximos. Só se não houver nada parecido na finalidade (compra ou locação), diga com franqueza e ofereça que um corretor avise quando surgir algo.
 - Para perguntas como "o que vocês têm", "têm imóveis em tal lugar", "quais imóveis à venda", use resumo_catalogo ou buscar_imoveis.
 - Dúvidas do dia a dia (locação, garantias, documentos, endereço, horário, formas de pagamento): responda somente com o que está na BASE DE RESPOSTAS APROVADA abaixo. Trechos marcados com [CONFIRMAR] não estão confirmados: não os use; diga que um corretor confirma.
 
@@ -58,7 +58,7 @@ const INSTRUCOES = `Você é o assistente virtual da Cocal Imóveis no WhatsApp.
 const FERRAMENTAS: Tool[] = [
   {
     name: "buscar_imoveis",
-    description: "Busca imóveis ativos no catálogo da Cocal (o mesmo do site). Devolve até 6 imóveis com código, tipo, local, valor anunciado e características, além do total encontrado. Todos os filtros, exceto finalidade, são opcionais; use só os que o cliente informou.",
+    description: "Busca imóveis ativos no catálogo da Cocal (o mesmo do site). Devolve até 8 imóveis com código, tipo, local, valor anunciado e características, além do total encontrado. Todos os filtros, exceto finalidade, são opcionais; use só os que o cliente informou.",
     input_schema: {
       type: "object",
       properties: {
@@ -81,10 +81,10 @@ const FERRAMENTAS: Tool[] = [
   },
   {
     name: "enviar_imoveis",
-    description: "Envia ao cliente, no WhatsApp, um cartão por imóvel (foto, valor anunciado, características e link do site). Use com 2 ou 3 códigos que vieram de buscar_imoveis.",
+    description: "Envia ao cliente, no WhatsApp, um cartão por imóvel (foto, valor anunciado, características e link do site). Use com códigos que vieram de buscar_imoveis: 2 ou 3 na venda, até 5 na locação.",
     input_schema: {
       type: "object",
-      properties: { codigos: { type: "array", items: { type: "string" }, minItems: 1, maxItems: 3 } },
+      properties: { codigos: { type: "array", items: { type: "string" }, minItems: 1, maxItems: 5 } },
       required: ["codigos"],
     },
   },
@@ -150,7 +150,7 @@ async function buscarImoveis(ctx: Contexto, e: any) {
     if (e.dormitorios_min) q = q.gte("dormitorios", e.dormitorios_min);
   }
   // Com teto de valor, os mais próximos do teto primeiro; sem teto, os mais baratos.
-  const { data, count, error } = await q.order(campoValor, { ascending: !e.valor_max, nullsFirst: false }).limit(6);
+  const { data, count, error } = await q.order(campoValor, { ascending: !e.valor_max, nullsFirst: false }).limit(8);
   if (error) throw new Error(error.message);
   return {
     total_encontrado: count ?? 0,
@@ -201,7 +201,7 @@ async function registrarSaida(ctx: Contexto, texto: string, waId: string | null)
 }
 
 async function enviarImoveis(ctx: Contexto, e: any) {
-  const codigos: string[] = (e.codigos ?? []).slice(0, 3).map(String);
+  const codigos: string[] = (e.codigos ?? []).slice(0, 5).map(String);
   const { data, error } = await ctx.db.from("imoveis").select(COLUNAS).eq("ativo", true).in("codigo", codigos);
   if (error) throw new Error(error.message);
   const enviados: string[] = [];
