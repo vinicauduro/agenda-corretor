@@ -1,0 +1,46 @@
+# Testa as funções do assistente do WhatsApp e, na branch main, publica no
+# Supabase do CRM. Para publicar, cadastre o segredo SUPABASE_ACCESS_TOKEN em
+# Settings › Secrets and variables › Actions (passo a passo em whatsapp/README.md).
+name: Assistente WhatsApp
+
+on:
+  push:
+    branches: [main]
+    paths: ["supabase/functions/**", ".github/workflows/assistente-whatsapp.yml"]
+  pull_request:
+    paths: ["supabase/functions/**", ".github/workflows/assistente-whatsapp.yml"]
+  workflow_dispatch:
+
+env:
+  PROJETO_SUPABASE: ahklfealqulmbahzvlpt
+
+jobs:
+  testar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.1.4
+      - run: deno test --allow-env supabase/functions/_shared/
+      - run: deno check supabase/functions/whatsapp-webhook/index.ts supabase/functions/importar-imoveis/index.ts
+
+  publicar:
+    needs: testar
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - if: env.SUPABASE_ACCESS_TOKEN == ''
+        run: echo "::warning::Segredo SUPABASE_ACCESS_TOKEN não cadastrado; as funções não foram publicadas."
+      - if: env.SUPABASE_ACCESS_TOKEN != ''
+        uses: supabase/setup-cli@v1
+        with:
+          version: 2.120.0
+      - if: env.SUPABASE_ACCESS_TOKEN != ''
+        run: |
+          # O WhatsApp não manda login do Supabase: a função confere a chave/assinatura dela.
+          supabase functions deploy whatsapp-webhook --project-ref "$PROJETO_SUPABASE" --no-verify-jwt
+          supabase functions deploy importar-imoveis --project-ref "$PROJETO_SUPABASE"
