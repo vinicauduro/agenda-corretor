@@ -109,6 +109,35 @@ function fotos(no: No): string[] {
   return [...new Set(urls)];
 }
 
+// Tipos do formato VRSync (ZAP/VivaReal) vêm em inglês: traduz para o cliente
+// buscar "casa", "apartamento", "terreno"...
+const TIPOS_VRSYNC: Record<string, string> = {
+  "residential / apartment": "Apartamento",
+  "residential / home": "Casa",
+  "residential / condo": "Casa em condomínio",
+  "residential / village house": "Casa de vila",
+  "residential / sobrado": "Sobrado",
+  "residential / penthouse": "Cobertura",
+  "residential / flat": "Flat",
+  "residential / kitnet": "Kitnet",
+  "residential / land lot": "Terreno",
+  "residential / farm ranch": "Chácara / Sítio",
+  "residential / agricultural": "Área rural",
+  "commercial / office": "Sala comercial",
+  "commercial / business": "Ponto comercial",
+  "commercial / building": "Prédio comercial",
+  "commercial / edificio residencial": "Prédio residencial",
+  "commercial / land lot": "Terreno comercial",
+  "commercial / industrial": "Galpão",
+  "commercial / agricultural": "Área rural",
+  "commercial / consultorio": "Consultório",
+  "commercial / hotel": "Hotel / Pousada",
+};
+
+function traduzirTipo(tipo: string): string {
+  return TIPOS_VRSYNC[normalizar(tipo).replace(/\s*\/\s*/g, " / ")] ?? tipo;
+}
+
 function finalidadeDe(campos: Map<string, unknown>, venda: number | null, locacao: number | null): Imovel["finalidade"] {
   const t = normalizar(texto(pegar(campos, "transacao", "finalidade", "transactiontype", "negocio", "tiponegocio", "operacao")));
   const temVenda = /venda|sale|vend/.test(t);
@@ -134,7 +163,7 @@ function converter(no: No): Imovel | null {
     else venda = valorGenerico;
   }
 
-  const tipo = texto(pegar(c, "tipoimovel", "tipo", "propertytype", "detailspropertytype", "subtipoimovel"));
+  const tipo = traduzirTipo(texto(pegar(c, "tipoimovel", "tipo", "propertytype", "detailspropertytype", "subtipoimovel")));
   const cidade = texto(pegar(c, "cidade", "city", "locationcity", "municipio"));
   const bairro = texto(pegar(c, "bairro", "neighborhood", "locationneighborhood"));
   return {

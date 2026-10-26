@@ -58,6 +58,8 @@ Deno.test("formato VRSync (ZAP/VivaReal)", () => {
   </Listing></Listings></ListingDataFeed>`;
   const [ap] = lerXmlImoveis(xml);
   assertEquals(ap.codigo, "2915064");
+  assertEquals(ap.tipo, "Apartamento");
+  assertEquals(ap.tipo_busca, "apartamento");
   assertEquals(ap.finalidade, "venda");
   assertEquals(ap.valor_venda, 1100000);
   assertEquals(ap.cidade, "Urussanga");
@@ -66,4 +68,17 @@ Deno.test("formato VRSync (ZAP/VivaReal)", () => {
   assertEquals(ap.area_util, 140);
   assertEquals(ap.fotos, ["https://img.exemplo.com/c.jpg"]);
   assertEquals(ap.url, "https://www.cocalimoveis.com.br/imovel/2915064/x");
+});
+
+Deno.test("VRSync: venda e locação no mesmo imóvel, casa traduzida", () => {
+  const xml = `<ListingDataFeed><Listings>
+    <Listing><ListingID>10</ListingID><TransactionType>Sale/Rent</TransactionType>
+      <Details><PropertyType>Residential / Home</PropertyType><ListPrice>300000</ListPrice><RentalPrice>1800</RentalPrice></Details>
+      <Location><City>Cocal do Sul</City></Location></Listing>
+    <Listing><ListingID>11</ListingID><TransactionType>For Rent</TransactionType>
+      <Details><PropertyType>Commercial / Office</PropertyType><RentalPrice>1300</RentalPrice></Details></Listing>
+  </Listings></ListingDataFeed>`;
+  const [casa, sala] = lerXmlImoveis(xml);
+  assertEquals([casa.tipo, casa.finalidade, casa.valor_venda, casa.valor_locacao], ["Casa", "ambos", 300000, 1800]);
+  assertEquals([sala.tipo, sala.finalidade, sala.valor_locacao], ["Sala comercial", "locacao", 1300]);
 });
