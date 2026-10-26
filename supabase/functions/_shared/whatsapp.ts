@@ -82,11 +82,20 @@ function telefoneCanonico(t: string): string {
   return d;
 }
 
-// Modo piloto: com WA_SOMENTE_TELEFONES preenchido (números separados por vírgula),
-// o agente só responde a esses números; os demais ficam para a equipe, como antes.
-export function agenteLiberado(telefone: string, lista = Deno.env.get("WA_SOMENTE_TELEFONES") ?? ""): boolean {
-  const liberados = lista.split(",").map((t) => t.trim()).filter(Boolean).map(telefoneCanonico);
-  return liberados.length === 0 || liberados.includes(telefoneCanonico(telefone));
+const listaTelefones = (lista: string) => lista.split(",").map((t) => t.trim()).filter(Boolean).map(telefoneCanonico);
+
+// Números separados por vírgula. WA_NUNCA_RESPONDER: telefones da equipe, que o
+// agente nunca atende. WA_SOMENTE_TELEFONES (modo piloto): se preenchido, o agente
+// só responde a esses números; os demais ficam para a equipe, como antes.
+export function agenteLiberado(
+  telefone: string,
+  somente = Deno.env.get("WA_SOMENTE_TELEFONES") ?? "",
+  nunca = Deno.env.get("WA_NUNCA_RESPONDER") ?? "",
+): boolean {
+  const t = telefoneCanonico(telefone);
+  if (listaTelefones(nunca).includes(t)) return false;
+  const liberados = listaTelefones(somente);
+  return liberados.length === 0 || liberados.includes(t);
 }
 
 // "5548999998888" → "(48) 99999-8888", como o CRM mostra os telefones.

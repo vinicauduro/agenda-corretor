@@ -130,6 +130,7 @@ hora, sem publicar nada.
 | `WA_ESPERA_MS` | `4000` | Espera antes de responder, para juntar mensagens seguidas do cliente. |
 | `CRM_EQUIPE_ID` | a única equipe | ID da equipe no CRM, se houver mais de uma. |
 | `WA_SOMENTE_TELEFONES` | — (todos) | Modo piloto: o assistente só responde a estes números. |
+| `WA_NUNCA_RESPONDER` | — | Telefones da equipe (separados por vírgula): o assistente nunca responde a eles. |
 | `WA_APP_SECRET` | — | Segredo do app da Meta, para conferir a assinatura (só se usar app próprio na Meta). |
 
 ## Onde ver o que aconteceu
