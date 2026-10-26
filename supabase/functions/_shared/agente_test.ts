@@ -188,3 +188,25 @@ Deno.test("eco da própria resposta do agente não conta como corretor", async (
   assertEquals(await ecoDoAgente(db, "5548", "wamid.Z", "Mensagem antiga"), false); // fora da janela
   assertEquals(await ecoDoAgente(db, "5548", "wamid.W", "Oi, aqui é a Nani"), false); // corretor de verdade
 });
+
+Deno.test("CRM com problema: transfere mesmo assim e não conta ao cliente", async () => {
+  Deno.env.set("ANTHROPIC_API_KEY", "teste");
+  const tabelas: Record<string, Linha[]> = {
+    wa_conversas: [{ telefone: "5548922223333", nome: "Ana", lead_id: null, modo: "agente" }],
+    wa_mensagens: [{ id: 1, telefone: "5548922223333", autor: "cliente", texto: "Quero falar com alguém" }],
+  };
+  const base = bancoFalso(tabelas);
+  const db = { from: (t: string) => { if (t === "leads") throw new Error("CRM fora do ar"); return base.from(t); } } as any;
+  const claude = claudeFalso([
+    { stop_reason: "tool_use", content: [usar("t1", "transferir_para_humano", { motivo: "pedido_do_cliente", detalhe: "Quer falar com alguém" })] },
+    { stop_reason: "end_turn", content: [{ type: "text", text: "Em instantes alguém da equipe continua por aqui!" }] },
+  ]);
+  try {
+    const saidas = await responder({ db, telefone: "5548922223333", nome: "Ana", simular: true, saidas: [] });
+    assertEquals(tabelas.wa_conversas[0].modo, "humano");
+    assertEquals(JSON.parse(claude.pedidos[1].corpo.messages.at(-1).content[0].content).ok, true);
+    assertEquals(saidas, ["Em instantes alguém da equipe continua por aqui!"]);
+  } finally {
+    claude.restaurar();
+  }
+});
