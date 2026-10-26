@@ -2,7 +2,7 @@
 
 O assistente faz o primeiro atendimento no WhatsApp da Cocal, 24 horas por dia: entende o que
 o cliente procura, envia 2 ou 3 imóveis do catálogo (foto, valor e link), responde dúvidas com
-a base de respostas aprovada, grava o lead no CRM e passa para um corretor quando preciso.
+a base de respostas aprovada, grava o lead no CRM e passa para a equipe (Nani ou um corretor) quando preciso.
 
 ## Como funciona
 
@@ -102,9 +102,11 @@ Depois que a Meta verificar a empresa e o número estiver conectado na Dualhook:
 3. Mande uma mensagem de outro celular para o número da Cocal e veja o assistente responder.
 
 ### 8. Base de respostas
-O rascunho está em `whatsapp/base-de-respostas.md`. O assistente só usa os temas **aprovados**:
-Supabase › **Table Editor › base_respostas**: corrija `conteudo`, apague as marcas
-`[CONFIRMAR]` e marque `aprovado`. As mudanças valem na hora, sem publicar nada.
+O texto aprovado pela Cocal está em `whatsapp/base-de-respostas.sql`. Para carregar (ou
+recarregar depois de mudanças), cole o arquivo inteiro no **SQL Editor** e clique em **Run**:
+ele substitui a base toda. Ajustes pequenos: Supabase › **Table Editor › base_respostas**,
+corrija `conteudo` (o assistente só usa as linhas com `aprovado` marcado). As mudanças valem na
+hora, sem publicar nada.
 
 ---
 
@@ -128,7 +130,8 @@ Supabase › **Table Editor › base_respostas**: corrija `conteudo`, apague as 
 ## Arquivos
 | Arquivo | Conteúdo |
 |---|---|
-| `crm/whatsapp.sql` | Tabelas do assistente e rascunho da base de respostas |
+| `crm/whatsapp.sql` | Tabelas do assistente |
+| `whatsapp/base-de-respostas.sql` | Base de respostas aprovada |
 | `supabase/functions/whatsapp-webhook/` | Recebe as mensagens e responde |
 | `supabase/functions/importar-imoveis/` | Copia o XML do site para o catálogo |
 | `supabase/functions/_shared/agente.ts` | Instruções do assistente e as ferramentas |

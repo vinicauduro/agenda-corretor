@@ -81,28 +81,7 @@ create table if not exists public.base_respostas (
   atualizado_em  timestamptz not null default now()
 );
 
--- Rascunho inicial (só entra se o tema ainda não existir; não sobrescreve
--- o que já foi revisado). Texto completo para revisão em whatsapp/base-de-respostas.md.
-insert into public.base_respostas (tema, ordem, conteudo) values
-('Sobre a Cocal', 1,
-'A Cocal Imóveis LTDA atua desde 1994 [CONFIRMAR] em Cocal do Sul e região (Sul de Santa Catarina), com compra, venda, locação e troca de imóveis. Também temos incorporadora, com empreendimentos próprios. CRECI 1629.'),
-('Endereço e contato', 2,
-'Matriz: Av. Polidoro Santiago, 419, Centro, Cocal do Sul/SC. Filial: Jaguaruna/SC [CONFIRMAR endereço]. Telefone: (48) 3447-6251. E-mail: atendimento@cocalimoveis.com.br. Site com todos os imóveis: www.cocalimoveis.com.br'),
-('Horário de atendimento', 3,
-'Segunda a sexta, das 8h às 12h e das 13h30 às 18h; sábado, das 8h às 12h [CONFIRMAR]. Fora desse horário o assistente virtual registra o pedido e um corretor retorna no próximo horário de atendimento.'),
-('Como funciona a locação', 4,
-'1) O cliente escolhe o imóvel e agenda a visita com um corretor. 2) Preenche a ficha cadastral e envia os documentos. 3) A Cocal faz a análise cadastral, que leva em média [CONFIRMAR] dias úteis. 4) Aprovado o cadastro, é escolhida a garantia e o contrato é assinado. 5) Entrega das chaves após a vistoria de entrada. O contrato residencial costuma ser de 30 meses [CONFIRMAR]. O aluguel é reajustado uma vez por ano pelo índice previsto no contrato.'),
-('Garantias aceitas na locação', 5,
-'Aceitamos [CONFIRMAR quais]: fiador com imóvel quitado na região; seguro-fiança; título de capitalização; caução (depósito de até 3 aluguéis, conforme a lei). A garantia é definida na análise cadastral.'),
-('Documentos para alugar', 6,
-'Inquilino (pessoa física): RG e CPF (ou CNH), comprovante de estado civil, comprovante de residência atual e comprovantes de renda dos últimos 3 meses (contracheque, extrato ou declaração de imposto de renda). A renda costuma precisar ser de cerca de 3 vezes o valor do aluguel [CONFIRMAR]. Pessoa jurídica: contrato social e alterações, cartão CNPJ e documentos dos sócios. Fiador: os mesmos documentos do inquilino, mais a matrícula atualizada do imóvel quitado [CONFIRMAR].'),
-('Documentos para comprar', 7,
-'Para dar início à compra: RG e CPF (ou CNH), comprovante de estado civil (certidão de casamento, se for o caso) e comprovante de residência. Em financiamento, o banco pede também comprovantes de renda e extrato do FGTS, se for usar. O corretor orienta cada caso.'),
-('Formas de pagamento na compra', 8,
-'Trabalhamos com pagamento à vista, financiamento bancário, uso do FGTS, consórcio e, em alguns imóveis, parcelamento direto ou permuta. As condições de cada imóvel são confirmadas pelo corretor.'),
-('Quero vender ou alugar meu imóvel', 9,
-'Para anunciar um imóvel com a Cocal, um corretor faz a avaliação e explica as condições de intermediação ou administração. O assistente registra os dados (tipo, endereço/bairro e se é venda ou locação) e passa para um corretor.')
-on conflict (tema) do nothing;
+-- O conteúdo (aprovado pela Cocal) está em whatsapp/base-de-respostas.sql.
 
 -- ---------------------------------------------------------------------
 -- 4. Segurança: nada disso é visível para o app ou para visitantes.
