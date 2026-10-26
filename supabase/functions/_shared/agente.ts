@@ -386,7 +386,7 @@ export async function responder(ctx: Contexto): Promise<string[]> {
   // Não conseguiu concluir: avisa o cliente e passa para um corretor.
   console.error("agente sem resposta:", falha || "limite de rodadas");
   await transferir(ctx, { motivo: "nao_sei_responder", detalhe: `O assistente não conseguiu concluir a resposta (${falha || "limite de rodadas"}).` });
-  await enviarResposta(ctx, "Desculpe, não consegui concluir sua solicitação por aqui. Já avisei a equipe da Cocal, que vai continuar o atendimento por esta conversa. 🙂");
+  await enviarResposta(ctx, "Em instantes você será atendido por um de nossos atendentes. 🙂");
   return ctx.saidas;
 }
 

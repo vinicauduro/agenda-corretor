@@ -62,7 +62,7 @@ async function atender(telefone: string, msgId: number) {
   } catch (err) {
     console.error("erro ao responder", telefone, err);
     await pausarAgente(telefone);
-    await enviarResposta(ctx, "Desculpe, tive um problema técnico agora. A equipe da Cocal vai continuar o seu atendimento por aqui. 🙂")
+    await enviarResposta(ctx, "Em instantes você será atendido por um de nossos atendentes. 🙂")
       .catch((e) => console.error("erro ao avisar o cliente", e));
   }
 }
