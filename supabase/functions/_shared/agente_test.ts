@@ -1,7 +1,7 @@
 // Teste do ciclo completo do agente com um banco em memória e respostas do
 // Claude roteirizadas (nada sai para a internet).
 import { assert, assertEquals, assertMatch } from "jsr:@std/assert@1.0.13";
-import { type Contexto, responder } from "./agente.ts";
+import { type Contexto, ecoDoAgente, responder } from "./agente.ts";
 
 type Linha = Record<string, any>;
 
@@ -170,4 +170,21 @@ Deno.test("se o Claude recusar, avisa o cliente e passa para um corretor", async
   } finally {
     claude.restaurar();
   }
+});
+
+Deno.test("eco da própria resposta do agente não conta como corretor", async () => {
+  const agora = new Date().toISOString();
+  const antigo = new Date(Date.now() - 3600_000).toISOString();
+  const db = bancoFalso({
+    wa_mensagens: [
+      { id: 1, telefone: "5548", autor: "agente", texto: "Olá! Como posso te ajudar?", wa_id: "wamid.1", criado_em: agora },
+      { id: 2, telefone: "5548", autor: "agente", texto: "[Cartão do imóvel 7 enviado]\n*Casa*\nCentro", wa_id: null, criado_em: agora },
+      { id: 3, telefone: "5548", autor: "agente", texto: "Mensagem antiga", wa_id: null, criado_em: antigo },
+    ],
+  });
+  assertEquals(await ecoDoAgente(db, "5548", "wamid.1", "qualquer"), true); // mesmo id
+  assertEquals(await ecoDoAgente(db, "5548", "wamid.X", "Olá! Como posso te ajudar?"), true); // mesmo texto
+  assertEquals(await ecoDoAgente(db, "5548", "wamid.Y", "[O cliente enviou uma foto com a legenda: *Casa*\nCentro]"), true);
+  assertEquals(await ecoDoAgente(db, "5548", "wamid.Z", "Mensagem antiga"), false); // fora da janela
+  assertEquals(await ecoDoAgente(db, "5548", "wamid.W", "Oi, aqui é a Nani"), false); // corretor de verdade
 });

@@ -204,7 +204,25 @@ function cartao(i: any): string {
 }
 
 async function registrarSaida(ctx: Contexto, texto: string, waId: string | null) {
-  await ctx.db.from("wa_mensagens").insert({ telefone: ctx.telefone, autor: "agente", texto, wa_id: waId });
+  const { error } = await ctx.db.from("wa_mensagens").insert({ telefone: ctx.telefone, autor: "agente", texto, wa_id: waId });
+  if (error) console.error("erro ao gravar mensagem do agente", error.message);
+}
+
+// A Meta pode devolver como "eco" (mensagem enviada pelo app) a própria resposta
+// do agente. Não é um corretor assumindo: reconhece pelo id da mensagem ou pelo
+// mesmo texto enviado pelo agente nos últimos minutos.
+export async function ecoDoAgente(db: SupabaseClient, telefone: string, waId: string, texto: string): Promise<boolean> {
+  const porId = await db.from("wa_mensagens").select("id").eq("wa_id", waId).limit(1);
+  if (porId.data?.length) return true;
+  const desde = new Date(Date.now() - 5 * 60_000).toISOString();
+  const recentes = await db.from("wa_mensagens").select("texto").eq("telefone", telefone).eq("autor", "agente")
+    .gte("criado_em", desde).limit(20);
+  const alvo = texto.trim();
+  return (recentes.data ?? []).some((m: { texto: string }) => {
+    // cartões são gravados com um título antes do texto; o eco de uma foto traz a legenda dentro de outro texto
+    const t = m.texto.replace(/^\[Cartão do imóvel [^\]]*\]\n/, "").trim();
+    return t !== "" && (alvo === t || alvo.includes(t));
+  });
 }
 
 async function enviarImoveis(ctx: Contexto, e: any) {
