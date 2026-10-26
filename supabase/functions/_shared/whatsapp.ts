@@ -66,6 +66,22 @@ export async function assinaturaValida(corpoBruto: string, assinatura: string | 
   return dif === 0;
 }
 
+// Forma única de um telefone brasileiro para comparar: com 55, sem o 9 extra
+// do celular (o WhatsApp às vezes manda "554899998888" para "(48) 99999-8888").
+function telefoneCanonico(t: string): string {
+  let d = t.replace(/\D/g, "");
+  if (d.length === 10 || d.length === 11) d = "55" + d;
+  if (/^55\d{2}9\d{8}$/.test(d)) d = d.slice(0, 4) + d.slice(5);
+  return d;
+}
+
+// Modo piloto: com WA_SOMENTE_TELEFONES preenchido (números separados por vírgula),
+// o agente só responde a esses números; os demais ficam para a equipe, como antes.
+export function agenteLiberado(telefone: string, lista = Deno.env.get("WA_SOMENTE_TELEFONES") ?? ""): boolean {
+  const liberados = lista.split(",").map((t) => t.trim()).filter(Boolean).map(telefoneCanonico);
+  return liberados.length === 0 || liberados.includes(telefoneCanonico(telefone));
+}
+
 // "5548999998888" → "(48) 99999-8888", como o CRM mostra os telefones.
 export function telefoneLegivel(waId: string): string {
   const tudo = waId.replace(/\D/g, "");

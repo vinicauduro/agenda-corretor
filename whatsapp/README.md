@@ -84,22 +84,32 @@ passo 3 em *Configuração* e converse como se fosse um cliente. Cada "telefone 
 conversa nova. Os leads de teste aparecem no CRM (apague depois).
 
 ### 7. Ligar o WhatsApp (Dualhook, coexistência)
-Depois que a Meta verificar a empresa e o número estiver conectado na Dualhook:
-1. Na Dualhook, configure o **webhook** (endereço que recebe as mensagens):
-   `https://ahklfealqulmbahzvlpt.supabase.co/functions/v1/whatsapp-webhook?chave=SUA_CHAVE_DO_PASSO_3`
-   (substitua no final pela chave; digite direto na Dualhook) e ative os avisos de mensagens
-   **e** de mensagens enviadas pelo app (*message echoes* / *smb_message_echoes*).
-2. Salve no Supabase os dados de envio que a Dualhook fornecer:
+1. **Antes de conectar, ligue o modo piloto:** salve no Supabase o segredo
+   **`WA_SOMENTE_TELEFONES`** com os números que podem conversar com o assistente, separados por
+   vírgula (ex.: `(48) 99999-8888, (48) 98888-7777`). Os demais clientes continuam sendo atendidos
+   só pela equipe, como hoje. Para liberar para todos, apague esse segredo.
+2. Crie a conta em https://dualhook.com (plano Developer, 1 número; tem teste grátis) e inicie a
+   conexão de um número **existente do WhatsApp Business app (Coexistence)**.
+3. Antes de abrir a janela da Meta, a Dualhook pede:
+   - **Webhook URL:**
+     `https://ahklfealqulmbahzvlpt.supabase.co/functions/v1/whatsapp-webhook?chave=SUA_CHAVE_DO_PASSO_3`
+     (troque o final pela chave do passo 3; digite direto na Dualhook)
+   - **Verify token:** a mesma chave do passo 3.
+4. Na janela da Meta, entre com o Facebook, escolha a empresa e o número do escritório, e confirme
+   no celular (app WhatsApp Business › aparece um pedido de conexão).
+5. No painel da Dualhook, copie o **Phone Number ID** e a chave **`dh_live_...`** e salve no
+   Supabase:
 
-   | Segredo | O que é |
+   | Segredo | Valor |
    |---|---|
-   | `WA_TOKEN` | Chave/token de envio de mensagens |
-   | `WA_API_URL` | Endereço de envio de mensagens do parceiro. Sem ele, usa o da Meta com `WA_PHONE_NUMBER_ID` |
-   | `WA_PHONE_NUMBER_ID` | ID do número (só se usar o endereço da Meta) |
-   | `WA_AUTH_HEADER` | Só se o parceiro pedir outro nome de cabeçalho (ex.: `D360-API-KEY`) |
+   | `WA_API_URL` | `https://api.dualhook.com/v25.0/PHONE_NUMBER_ID/messages` (troque PHONE_NUMBER_ID pelo número do painel) |
+   | `WA_TOKEN` | a chave `dh_live_...` |
 
-   Eu confiro esses detalhes com a documentação da Dualhook quando chegarmos nesta etapa.
-3. Mande uma mensagem de outro celular para o número da Cocal e veja o assistente responder.
+6. Do seu celular (liberado no passo 1), mande uma mensagem para o WhatsApp da Cocal e veja o
+   assistente responder.
+
+**Mantenha o app aberto:** a Meta desliga a coexistência se o app WhatsApp Business do celular
+principal ficar uns 14 dias sem ser aberto.
 
 ### 8. Base de respostas
 O texto aprovado pela Cocal está em `whatsapp/base-de-respostas.sql`. Para carregar (ou
@@ -119,6 +129,7 @@ hora, sem publicar nada.
 | `WA_PAUSA_HORAS` | `12` | Quantas horas o assistente fica calado depois que um corretor assume. |
 | `WA_ESPERA_MS` | `4000` | Espera antes de responder, para juntar mensagens seguidas do cliente. |
 | `CRM_EQUIPE_ID` | a única equipe | ID da equipe no CRM, se houver mais de uma. |
+| `WA_SOMENTE_TELEFONES` | — (todos) | Modo piloto: o assistente só responde a estes números. |
 | `WA_APP_SECRET` | — | Segredo do app da Meta, para conferir a assinatura (só se usar app próprio na Meta). |
 
 ## Onde ver o que aconteceu

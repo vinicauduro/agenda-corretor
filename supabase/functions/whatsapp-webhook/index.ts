@@ -6,7 +6,7 @@
 //         WhatsApp: devolve as respostas em vez de enviá-las (também exige a chave).
 import { createClient } from "npm:@supabase/supabase-js@2.118.0";
 import { type Contexto, enviarResposta, PAUSA_HORAS, responder } from "../_shared/agente.ts";
-import { assinaturaValida, type Evento, lerWebhook } from "../_shared/whatsapp.ts";
+import { agenteLiberado, assinaturaValida, type Evento, lerWebhook } from "../_shared/whatsapp.ts";
 
 declare const EdgeRuntime: { waitUntil(p: Promise<unknown>): void };
 
@@ -73,7 +73,7 @@ async function processar(eventos: Evento[]) {
       const id = await gravar(ev);
       if (id === null) continue;
       if (ev.tipo === "equipe") await pausarAgente(ev.telefone);
-      else aResponder.set(ev.telefone, id);
+      else if (agenteLiberado(ev.telefone)) aResponder.set(ev.telefone, id);
     } catch (err) {
       console.error("erro ao gravar mensagem", err);
     }
