@@ -69,3 +69,13 @@ Deno.test("histórico: junta mensagens seguidas e começa pelo cliente", () => {
     { role: "user", content: "Pode" },
   ]);
 });
+
+Deno.test("modo piloto: só responde aos números liberados", async () => {
+  const { agenteLiberado } = await import("./whatsapp.ts");
+  const lista = "(48) 99999-8888, 48 98888-7777";
+  assertEquals(agenteLiberado("5548999998888", lista), true);
+  assertEquals(agenteLiberado("554899998888", lista), true); // sem o 9 extra
+  assertEquals(agenteLiberado("5548988887777", lista), true);
+  assertEquals(agenteLiberado("5548911112222", lista), false);
+  assertEquals(agenteLiberado("5548911112222", ""), true); // sem lista: responde a todos
+});
