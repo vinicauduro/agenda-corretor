@@ -30,6 +30,9 @@ export function textoDaMensagem(m: Msg): string {
 
 const TIPOS_ECO_DA_EQUIPE = new Set(["text", "image", "video", "audio", "document", "location", "contacts", "sticker", "interactive", "button", "template"]);
 
+// Grupos ficam só com a equipe: o agente ignora qualquer mensagem de grupo.
+const deGrupo = (m: Msg) => Boolean(m.group_id || m.group || m.context?.group_id);
+
 // Extrai do aviso da Meta as mensagens de clientes e as enviadas pela equipe
 // no app WhatsApp Business (coexistência: campo smb_message_echoes).
 export function lerWebhook(corpo: Msg): Evento[] {
@@ -41,6 +44,7 @@ export function lerWebhook(corpo: Msg): Evento[] {
         const nomes = new Map<string, string>();
         for (const c of v.contacts ?? []) nomes.set(c.wa_id, c.profile?.name ?? "");
         for (const m of v.messages ?? []) {
+          if (deGrupo(m)) continue;
           const texto = textoDaMensagem(m);
           if (!texto) continue;
           eventos.push({ tipo: "cliente", telefone: m.from, nome: nomes.get(m.from) ?? "", waId: m.id, texto });
@@ -48,7 +52,7 @@ export function lerWebhook(corpo: Msg): Evento[] {
       } else if (change.field === "smb_message_echoes") {
         for (const m of v.message_echoes ?? []) {
           // Só conta como corretor assumindo uma mensagem de verdade (não reação, edição, apagada, aviso do sistema).
-          if (!TIPOS_ECO_DA_EQUIPE.has(m.type)) continue;
+          if (!TIPOS_ECO_DA_EQUIPE.has(m.type) || deGrupo(m)) continue;
           eventos.push({ tipo: "equipe", telefone: m.to, waId: m.id, texto: textoDaMensagem(m) || "[mensagem]" });
         }
       }
