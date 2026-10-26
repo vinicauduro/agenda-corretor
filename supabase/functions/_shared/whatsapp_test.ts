@@ -83,3 +83,12 @@ Deno.test("modo piloto: só responde aos números liberados", async () => {
   assertEquals(agenteLiberado("5548911112222", lista), false);
   assertEquals(agenteLiberado("5548911112222", ""), true); // sem lista: responde a todos
 });
+
+Deno.test("números da equipe: o agente nunca responde", async () => {
+  const { agenteLiberado } = await import("./whatsapp.ts");
+  const equipe = "(48) 3447-6251, (48) 98888-7777";
+  assertEquals(agenteLiberado("5548988887777", "", equipe), false);
+  assertEquals(agenteLiberado("554888887777", "", equipe), false); // sem o 9 extra
+  assertEquals(agenteLiberado("5548999998888", "", equipe), true);
+  assertEquals(agenteLiberado("5548988887777", "(48) 98888-7777", equipe), false); // equipe vence o piloto
+});
