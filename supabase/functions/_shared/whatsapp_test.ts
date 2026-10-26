@@ -92,3 +92,11 @@ Deno.test("números da equipe: o agente nunca responde", async () => {
   assertEquals(agenteLiberado("5548999998888", "", equipe), true);
   assertEquals(agenteLiberado("5548988887777", "(48) 98888-7777", equipe), false); // equipe vence o piloto
 });
+
+Deno.test("mensagens de grupo são ignoradas", () => {
+  const grupo = { entry: [{ changes: [
+    { field: "messages", value: { messages: [{ from: "5548999998888", id: "wamid.G1", type: "text", group_id: "120363", text: { body: "Bom dia, grupo" } }] } },
+    { field: "smb_message_echoes", value: { message_echoes: [{ to: "5548999998888", id: "wamid.G2", type: "text", group_id: "120363", text: { body: "Oi" } }] } },
+  ] }] };
+  assertEquals(lerWebhook(grupo), []);
+});
