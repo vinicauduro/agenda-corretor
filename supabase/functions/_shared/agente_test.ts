@@ -164,7 +164,7 @@ Deno.test("se o Claude recusar, avisa o cliente e passa para um corretor", async
   try {
     const saidas = await responder({ db: bancoFalso(tabelas), telefone: "5548911112222", nome: "", simular: true, saidas: [] });
     assertEquals(saidas.length, 1);
-    assertMatch(saidas[0], /corretor/);
+    assertMatch(saidas[0], /equipe/);
     assertEquals(tabelas.wa_conversas[0].modo, "humano");
     assertEquals(tabelas.leads[0].nome, "Cliente WhatsApp");
   } finally {
