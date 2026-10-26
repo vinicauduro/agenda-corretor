@@ -5,7 +5,7 @@
 //  POST {"simular": {"telefone", "texto", "nome"?, "reiniciar"?}} — testa o agente sem
 //         WhatsApp: devolve as respostas em vez de enviá-las (também exige a chave).
 import { createClient } from "npm:@supabase/supabase-js@2.118.0";
-import { type Contexto, enviarResposta, PAUSA_HORAS, responder } from "../_shared/agente.ts";
+import { type Contexto, ecoDoAgente, enviarResposta, PAUSA_HORAS, responder } from "../_shared/agente.ts";
 import { agenteLiberado, assinaturaValida, type Evento, lerWebhook } from "../_shared/whatsapp.ts";
 
 declare const EdgeRuntime: { waitUntil(p: Promise<unknown>): void };
@@ -15,6 +15,7 @@ const SEGREDO = Deno.env.get("WA_WEBHOOK_SEGREDO") ?? "";
 const SEGREDO_APP = Deno.env.get("WA_APP_SECRET") ?? "";
 // Espera um pouco antes de responder: quem manda três mensagens seguidas recebe uma resposta só.
 const ESPERA_MS = Number(Deno.env.get("WA_ESPERA_MS") || "4000");
+const ESPERA_ECO_MS = 5000;
 
 const dormir = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -66,19 +67,31 @@ async function atender(telefone: string, msgId: number) {
   }
 }
 
+// Mensagem enviada pelo app do escritório. Espera um pouco para a resposta do
+// agente estar gravada e descarta o eco dela; se for mesmo da equipe, pausa o agente.
+async function tratarMensagemDaEquipe(ev: Evento) {
+  await dormir(ESPERA_ECO_MS);
+  if (await ecoDoAgente(db, ev.telefone, ev.waId, ev.texto)) return;
+  const id = await gravar(ev);
+  if (id !== null) await pausarAgente(ev.telefone);
+}
+
 async function processar(eventos: Evento[]) {
   const aResponder = new Map<string, number>();
+  const daEquipe: Promise<void>[] = [];
   for (const ev of eventos) {
     try {
+      if (ev.tipo === "equipe") {
+        daEquipe.push(tratarMensagemDaEquipe(ev).catch((err) => console.error("erro ao tratar mensagem da equipe", err)));
+        continue;
+      }
       const id = await gravar(ev);
-      if (id === null) continue;
-      if (ev.tipo === "equipe") await pausarAgente(ev.telefone);
-      else if (agenteLiberado(ev.telefone)) aResponder.set(ev.telefone, id);
+      if (id !== null && agenteLiberado(ev.telefone)) aResponder.set(ev.telefone, id);
     } catch (err) {
       console.error("erro ao gravar mensagem", err);
     }
   }
-  await Promise.all([...aResponder].map(([tel, id]) => atender(tel, id)));
+  await Promise.all([...daEquipe, ...[...aResponder].map(([tel, id]) => atender(tel, id))]);
 }
 
 async function simular(s: { telefone?: string; texto?: string; nome?: string; reiniciar?: boolean }) {
