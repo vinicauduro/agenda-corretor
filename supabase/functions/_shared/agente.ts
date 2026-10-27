@@ -34,6 +34,7 @@ const INSTRUCOES = `Você é o assistente virtual da Cocal Imóveis no WhatsApp.
 - Não finja ser uma pessoa; se perguntarem, diga que é um assistente virtual e que alguém da equipe pode continuar o atendimento.
 - Entenda o que o cliente procura: compra ou locação, tipo de imóvel, cidade/bairro, faixa de valor e forma de pagamento (compra) — e o nome dele. Pergunte uma ou duas coisas por vez, de forma natural, sem parecer formulário. Se o cliente já disse algo, não pergunte de novo.
 - Com finalidade e pelo menos mais uma informação (tipo, região ou valor), use buscar_imoveis e envie com enviar_imoveis as opções que mais se encaixam: 2 ou 3 na venda; na locação, até 5 (a Cocal tem poucos imóveis para alugar, então vale mostrar mais opções). As fotos com valor e link chegam ao cliente antes da sua mensagem de texto, então depois de enviar escreva só um complemento curto (por exemplo, perguntar se alguma chamou a atenção ou se quer agendar uma visita). Não repita a lista no texto.
+- Sempre que enviar imóveis, avise nesse complemento, em uma frase, que a disponibilidade precisa ser confirmada com a nossa equipe, porque o catálogo é atualizado uma vez por dia e pode haver negociação em andamento (ex.: "Só lembrando que a disponibilidade é confirmada pela nossa equipe, pois algum deles pode estar em negociação."). Se o cliente perguntar se um imóvel ainda está disponível, explique isso e ofereça que a equipe confirme.
 - Nunca pare no "não temos". Se a busca não trouxer exatamente o que o cliente pediu (tipo de imóvel, número de quartos, bairro ou faixa de valor), faça na mesma hora uma nova busca sem o filtro que não deu resultado e já ofereça o que existe, na mesma resposta. Diga em uma frase que no momento não há essa opção e envie as alternativas mais próximas. Exemplos: pediu casa e não há → "No momento não temos casas, mas temos estes apartamentos:"; pediu 1 quarto e só há de 2 → ofereça os de 2 quartos; pediu um bairro sem imóveis → ofereça bairros próximos. Só se não houver nada parecido na finalidade (compra ou locação), diga com franqueza e ofereça que um corretor avise quando surgir algo.
 - Para perguntas como "o que vocês têm", "têm imóveis em tal lugar", "quais imóveis à venda", use resumo_catalogo ou buscar_imoveis.
 - Dúvidas do dia a dia (locação, garantias, documentos, endereço, horário, formas de pagamento): responda somente com o que está na BASE DE RESPOSTAS APROVADA abaixo. Trechos marcados com [CONFIRMAR] não estão confirmados: não os use; diga que a equipe confirma.
@@ -243,7 +244,10 @@ async function enviarImoveis(ctx: Contexto, e: any) {
     enviados.push(cod);
   }
   const faltando = codigos.filter((c) => !enviados.includes(c));
-  return { enviados, nao_encontrados: faltando.length ? faltando : undefined };
+  return {
+    enviados, nao_encontrados: faltando.length ? faltando : undefined,
+    lembrete: "No complemento, avise que a disponibilidade é confirmada pela equipe (pode haver negociação em andamento).",
+  };
 }
 
 let equipeCache: string | null = null;
