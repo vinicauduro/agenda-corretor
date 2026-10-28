@@ -210,3 +210,29 @@ Deno.test("CRM com problema: transfere mesmo assim e não conta ao cliente", asy
     claude.restaurar();
   }
 });
+
+Deno.test("cartão de aluguel mostra as taxas e o total do mês", async () => {
+  Deno.env.set("ANTHROPIC_API_KEY", "teste");
+  const tabelas: Record<string, Linha[]> = {
+    imoveis: [{ codigo: "9", tipo: "Apartamento", finalidade: "locacao", cidade: "Cocal do Sul", bairro: "Vale dos Ypês",
+      valor_locacao: 1150, condominio: null, dormitorios: 2, vagas: 1, ativo: true, url: "https://site/9", fotos: [],
+      titulo: "Apartamento Vale dos Ypês",
+      descricao: "Valores:\nAluguel: R$ 1.150,00\nGarantia locatícia: R$ 143,75\nSeguro incêndio: em torno de R$ 30,00 (necessário orçamento)\nCondomínio: aproximadamente R$ 250,00" }],
+    wa_conversas: [{ telefone: "5548933334444", nome: "", lead_id: null, modo: "agente" }],
+    wa_mensagens: [{ id: 1, telefone: "5548933334444", autor: "cliente", texto: "Quero alugar apto" }],
+  };
+  const claude = claudeFalso([
+    { stop_reason: "tool_use", content: [usar("t1", "enviar_imoveis", { codigos: ["9"] })] },
+    { stop_reason: "end_turn", content: [{ type: "text", text: "Gostou?" }] },
+  ]);
+  try {
+    const [cartao] = await responder({ db: bancoFalso(tabelas), telefone: "5548933334444", nome: "", simular: true, saidas: [] });
+    assertMatch(cartao, /Aluguel: R\$\s?1\.150/);
+    assertMatch(cartao, /Garantia locatícia: R\$\s?143,75/);
+    assertMatch(cartao, /Condomínio: aprox\. R\$\s?250/);
+    assertMatch(cartao, /Seguro incêndio: aprox\. R\$\s?30 \(sujeito a orçamento\)/);
+    assertMatch(cartao, /\*Total mensal aproximado: R\$\s?1\.573,75\*/);
+  } finally {
+    claude.restaurar();
+  }
+});

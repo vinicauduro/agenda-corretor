@@ -72,6 +72,19 @@ function texto(v: unknown): string {
   return String(v).trim();
 }
 
+// Descrição em texto simples: <br> (às vezes escapado como &lt;br&gt;) vira quebra de linha.
+export function limparDescricao(d: string): string {
+  return d
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<").replace(/&gt;/gi, ">")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&quot;/gi, '"').replace(/&#39;/g, "'").replace(/&nbsp;/gi, " ")
+    .split("\n").map((l) => l.trim()).join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 // Aceita "350000", "350.000,00", "R$ 1.300,00" e "350000.00".
 export function numero(v: unknown): number | null {
   let s = texto(v).replace(/[^\d.,-]/g, "");
@@ -184,7 +197,7 @@ function converter(no: No): Imovel | null {
     vagas: inteiro(pegar(c, "vagas", "garagem", "garagens", "vagasgaragem", "garage", "detailsgarage", "qtdvagas")),
     area_util: numero(pegar(c, "areautil", "areaprivativa", "areaconstruida", "livingarea", "detailslivingarea")),
     area_total: numero(pegar(c, "areatotal", "areaterreno", "lotarea", "detailslotarea")),
-    descricao: texto(pegar(c, "descricao", "description", "detailsdescription", "observacao")).slice(0, 1500),
+    descricao: limparDescricao(texto(pegar(c, "descricao", "description", "detailsdescription", "observacao"))).slice(0, 4000),
     url: texto(pegar(c, "url", "link", "detailviewurl", "urlimovel", "linkimovel")),
     fotos: fotos(no),
     tipo_busca: normalizar(tipo),
