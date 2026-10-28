@@ -36,6 +36,7 @@ const INSTRUCOES = `Você é o assistente virtual da Cocal Imóveis no WhatsApp.
 - Entenda o que o cliente procura: compra ou locação, tipo de imóvel, cidade/bairro, faixa de valor e forma de pagamento (compra) — e o nome dele. Pergunte uma ou duas coisas por vez, de forma natural, sem parecer formulário. Se o cliente já disse algo, não pergunte de novo.
 - Com finalidade e pelo menos mais uma informação (tipo, região ou valor), use buscar_imoveis e envie com enviar_imoveis as opções que mais se encaixam: 2 ou 3 na venda; na locação, até 5 (a Cocal tem poucos imóveis para alugar, então vale mostrar mais opções). As fotos com valor e link chegam ao cliente antes da sua mensagem de texto, então depois de enviar escreva só um complemento curto (por exemplo, perguntar se alguma chamou a atenção ou se quer agendar uma visita). Não repita a lista no texto.
 - Sempre que enviar imóveis, avise nesse complemento, em uma frase, que a disponibilidade precisa ser confirmada com a nossa equipe, porque o catálogo é atualizado uma vez por dia e pode haver negociação em andamento (ex.: "Só lembrando que a disponibilidade é confirmada pela nossa equipe, pois algum deles pode estar em negociação."). Se o cliente perguntar se um imóvel ainda está disponível, explique isso e ofereça que a equipe confirme.
+- Quando o cliente disser um valor máximo, a busca já traz também imóveis até 10% acima dele (marcados como acima_do_valor_pedido). Pode oferecê-los, avisando com naturalidade que ficam um pouco acima do valor que ele comentou.
 - Nunca pare no "não temos". Se a busca não trouxer exatamente o que o cliente pediu (tipo de imóvel, número de quartos, bairro ou faixa de valor), faça na mesma hora uma nova busca sem o filtro que não deu resultado e já ofereça o que existe, na mesma resposta. Diga em uma frase que no momento não há essa opção e envie as alternativas mais próximas. Exemplos: pediu casa e não há → "No momento não temos casas, mas temos estes apartamentos:"; pediu 1 quarto e só há de 2 → ofereça os de 2 quartos; pediu um bairro sem imóveis → ofereça bairros próximos. Só se não houver nada parecido na finalidade (compra ou locação), diga com franqueza e ofereça que um corretor avise quando surgir algo.
 - Para perguntas como "o que vocês têm", "têm imóveis em tal lugar", "quais imóveis à venda", use resumo_catalogo ou buscar_imoveis.
 - Dúvidas do dia a dia (locação, garantias, documentos, endereço, horário, formas de pagamento): responda somente com o que está na BASE DE RESPOSTAS APROVADA abaixo. Trechos marcados com [CONFIRMAR] não estão confirmados: não os use; diga que a equipe confirma.
@@ -79,7 +80,7 @@ const FERRAMENTAS: Tool[] = [
         cidade: { type: "string" },
         bairro: { type: "string" },
         valor_min: { type: "number", description: "Valor mínimo em reais" },
-        valor_max: { type: "number", description: "Valor máximo em reais" },
+        valor_max: { type: "number", description: "Valor máximo em reais que o cliente informou (a busca já inclui até 10% acima)" },
         dormitorios_min: { type: "integer" },
         codigo: { type: "string", description: "Código ou referência de um imóvel específico (ex.: o número do link do site)" },
       },
@@ -150,9 +151,15 @@ function agoraBR() {
 
 const COLUNAS = "codigo, referencia, titulo, tipo, finalidade, cidade, bairro, valor_venda, valor_locacao, condominio, dormitorios, suites, banheiros, vagas, area_util, area_total, url, fotos, descricao";
 
+// Quando o cliente dá um valor máximo, também entram imóveis até 10% acima dele
+// (quem pede "até 1.500" pode gostar de um de 1.550).
+const MARGEM_ACIMA = 0.10;
+
 async function buscarImoveis(ctx: Contexto, e: any) {
-  let q = ctx.db.from("imoveis").select(COLUNAS, { count: "exact" }).eq("ativo", true);
-  const campoValor = e.finalidade === "locacao" ? "valor_locacao" : "valor_venda";
+  let q = ctx.db.from("imoveis").select(COLUNAS).eq("ativo", true);
+  const locacao = e.finalidade === "locacao";
+  const campoValor = locacao ? "valor_locacao" : "valor_venda";
+  const teto = e.valor_max && !e.codigo ? e.valor_max * (1 + MARGEM_ACIMA) : null;
   if (e.codigo) {
     const cod = String(e.codigo).replace(/[^\w-]/g, "");
     q = q.or(`codigo.eq.${cod},referencia.ilike.${cod}`);
@@ -162,15 +169,22 @@ async function buscarImoveis(ctx: Contexto, e: any) {
     if (e.cidade) q = q.ilike("cidade_busca", `%${normalizar(e.cidade).replace(/[%_]/g, "")}%`);
     if (e.bairro) q = q.ilike("bairro_busca", `%${normalizar(e.bairro).replace(/[%_]/g, "")}%`);
     if (e.valor_min) q = q.gte(campoValor, e.valor_min);
-    if (e.valor_max) q = q.lte(campoValor, e.valor_max);
+    if (teto) q = q.lte(campoValor, teto); // o total do aluguel nunca é menor que o aluguel
     if (e.dormitorios_min) q = q.gte("dormitorios", e.dormitorios_min);
   }
-  // Com teto de valor, os mais próximos do teto primeiro; sem teto, os mais baratos.
-  const { data, count, error } = await q.order(campoValor, { ascending: !e.valor_max, nullsFirst: false }).limit(8);
+  const { data, error } = await q.order(campoValor, { ascending: true, nullsFirst: false }).limit(60);
   if (error) throw new Error(error.message);
+
+  // No aluguel, o que conta para o orçamento é o total do mês (aluguel + taxas).
+  const valorDoMes = (i: any) => (locacao ? custosDe(i).total ?? i.valor_locacao : i.valor_venda) as number | null;
+  let lista = (data ?? []) as any[];
+  if (teto) {
+    lista = lista.filter((i) => valorDoMes(i) != null && valorDoMes(i)! <= teto)
+      .sort((x, y) => Math.abs(valorDoMes(x)! - e.valor_max) - Math.abs(valorDoMes(y)! - e.valor_max));
+  }
   return {
-    total_encontrado: count ?? 0,
-    imoveis: (data ?? []).map((i: any) => ({
+    total_encontrado: lista.length,
+    imoveis: lista.slice(0, 8).map((i: any) => ({
       codigo: i.codigo, referencia: i.referencia || undefined, titulo: i.titulo || undefined, tipo: i.tipo,
       local: [i.bairro, i.cidade].filter(Boolean).join(", "),
       valor_venda: i.valor_venda ?? undefined, valor_locacao: i.valor_locacao ?? undefined,
@@ -178,6 +192,7 @@ async function buscarImoveis(ctx: Contexto, e: any) {
       banheiros: i.banheiros ?? undefined, vagas: i.vagas ?? undefined, area_util_m2: i.area_util ?? undefined,
       area_total_m2: i.area_total ?? undefined, link: i.url, tem_foto: i.fotos.length > 0,
       custos_mensais_locacao: i.valor_locacao && i.finalidade !== "venda" ? resumoCustos(custosDe(i)) : undefined,
+      acima_do_valor_pedido: teto && valorDoMes(i)! > e.valor_max ? true : undefined,
     })),
   };
 }
