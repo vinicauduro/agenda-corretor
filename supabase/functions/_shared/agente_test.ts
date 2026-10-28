@@ -236,3 +236,25 @@ Deno.test("cartão de aluguel mostra as taxas e o total do mês", async () => {
     claude.restaurar();
   }
 });
+
+Deno.test("valor máximo: inclui até 10% acima e marca quem passou", async () => {
+  Deno.env.set("ANTHROPIC_API_KEY", "teste");
+  const casa = (codigo: string, valor_venda: number) => ({ codigo, tipo: "Casa", tipo_busca: "casa", finalidade: "venda",
+    cidade: "Cocal do Sul", cidade_busca: "cocal do sul", bairro: "", bairro_busca: "", valor_venda, ativo: true, url: "u", fotos: [] });
+  const tabelas: Record<string, Linha[]> = {
+    imoveis: [casa("a", 380000), casa("b", 430000), casa("c", 460000)],
+    wa_conversas: [{ telefone: "5548944445555", nome: "", lead_id: null, modo: "agente" }],
+    wa_mensagens: [{ id: 1, telefone: "5548944445555", autor: "cliente", texto: "casa até 400 mil" }],
+  };
+  const claude = claudeFalso([
+    { stop_reason: "tool_use", content: [usar("t1", "buscar_imoveis", { finalidade: "venda", tipo: "casa", valor_max: 400000 })] },
+    { stop_reason: "end_turn", content: [{ type: "text", text: "ok" }] },
+  ]);
+  try {
+    await responder({ db: bancoFalso(tabelas), telefone: "5548944445555", nome: "", simular: true, saidas: [] });
+    const r = JSON.parse(claude.pedidos[1].corpo.messages.at(-1).content[0].content);
+    assertEquals(r.imoveis.map((i: Linha) => [i.codigo, i.acima_do_valor_pedido ?? false]), [["a", false], ["b", true]]);
+  } finally {
+    claude.restaurar();
+  }
+});
